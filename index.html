@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stippulata · p5.js Stipple Portrait</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <h1>Stippulata</h1>
+      <p class="tagline">MediaPipe × Weighted Voronoi Stippling in p5.js</p>
+    </div>
+    <div class="header-actions">
+      <button id="source-toggle" class="button pill">Use Sample Dance Video</button>
+      <span id="status-label">Initializing…</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="canvas-area">
+      <div id="sketch-container" class="sketch-frame"></div>
+      <video id="input-video" playsinline muted></video>
+      <div class="status-overlay" id="status-overlay">
+        <span id="overlay-text">Loading models…</span>
+      </div>
+    </section>
+    <aside class="control-panel">
+      <div class="panel-header">
+        <h2>Controls</h2>
+        <button id="reset-controls" class="button subtle">Reset</button>
+      </div>
+      <div id="ui-container"></div>
+      <div class="inline-controls">
+        <label class="toggle">
+          <input type="checkbox" id="toggle-video-visibility">
+          <span>Show Source Video</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-mirror" checked>
+          <span>Mirror Webcam</span>
+        </label>
+      </div>
+      <div class="panel-footer">
+        <p>Move, dance, or play the sample clip. Adjust forces to sculpt your stippled portrait.</p>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="app-footer">
+    <span>Particles follow MediaPipe landmarks using weighted Voronoi relaxation.</span>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>
