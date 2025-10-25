@@ -25,6 +25,7 @@ export const defaultConfig = {
   enableCollisions: false,
   collisionFriction: 0.15,
   collisionRestitution: 0.35,
+  neighborRepulsionForce: 160,
   weights: {
     density: 160,
     sampleBias: 55,
@@ -148,6 +149,7 @@ export function createControlUI(initialConfig, onChange) {
   const dynamics = gui.addFolder("Dynamics");
   addNumericInput(dynamics, params, "viscosity", "Viscosity Base");
   addNumericInput(dynamics, params, "repulsionRadius", "Repulsion Radius");
+  addNumericInput(dynamics, params, "neighborRepulsionForce", "p2p Repulsion Force");
 
   const collisions = dynamics.addFolder("Collisions");
   collisions.add(params, "enableCollisions").name("Enable p2p collisions").onChange(notifyChange);

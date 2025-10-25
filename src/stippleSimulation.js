@@ -69,7 +69,7 @@ class Particle {
     this.vy = 0;
   }
 
-  step(dt, neighborForce, voronoiTarget) {
+  step(dt, neighborForce, voronoiTarget, extraRepulsion = 0) {
     const params = this.sim.paramsRef;
     if (!params) return;
 
@@ -122,9 +122,10 @@ class Particle {
       }
     }
 
-    if (neighborForce && repulsionWeight !== 0) {
-      this.vx += neighborForce.x * repulsionWeight * dt;
-      this.vy += neighborForce.y * repulsionWeight * dt;
+    const totalRepulsionWeight = repulsionWeight + (extraRepulsion ?? 0);
+    if (neighborForce && totalRepulsionWeight !== 0) {
+      this.vx += neighborForce.x * totalRepulsionWeight * dt;
+      this.vy += neighborForce.y * totalRepulsionWeight * dt;
     }
 
     if (voronoiTarget && voronoiWeight !== 0) {
@@ -200,6 +201,14 @@ export class StippleSimulation {
     this.lastDimensions = { width: this.width, height: this.height };
     this.latestResults = null;
     this.hasFrame = false;
+    this.segmentationAlpha = null;
+    this.segmentationImageData = null;
+    this.segmentationDisplayCanvas = document.createElement("canvas");
+    this.segmentationDisplayCtx = this.segmentationDisplayCanvas.getContext("2d");
+    this.segmentationNeedsUpdate = false;
+    this.segmentationLastColor = "";
+    this.segmentationLastOpacity = -1;
+    this.segmentationHasMask = false;
 
     this.setDimensions(this.width, this.height);
     this.applyConfig(initialConfig);
@@ -250,6 +259,12 @@ export class StippleSimulation {
     this.densityCDF = new Float32Array(this.fieldBuffer.length);
     this.totalDensity = 0;
     this.frameCounter = 0;
+    this.segmentationDisplayCanvas.width = this.width;
+    this.segmentationDisplayCanvas.height = this.height;
+    this.segmentationImageData = this.segmentationDisplayCtx.createImageData(this.width || 1, this.height || 1);
+    this.segmentationAlpha = new Float32Array((this.width || 1) * (this.height || 1));
+    this.segmentationNeedsUpdate = true;
+    this.segmentationHasMask = false;
 
     this.particles.forEach((particle) => particle.reset(true));
     this.voronoiTargets.forEach((target) => {
@@ -294,11 +309,15 @@ export class StippleSimulation {
     const neighborRadius = Math.max(repulsionRadius, collisionsRadius);
     const neighborData = neighborRadius > 0 ? this.buildSpatialHash(neighborRadius) : null;
 
+    const extraRepulsion = typeof this.paramsRef.neighborRepulsionForce === "number"
+      ? this.paramsRef.neighborRepulsionForce
+      : 0;
+
     for (let i = 0; i < this.particles.length; i++) {
       const particle = this.particles[i];
       const neighborForce = neighborData ? this.computeRepulsionForce(i, neighborData) : null;
       const voronoi = this.voronoiTargets[i] && this.voronoiTargets[i].valid ? this.voronoiTargets[i] : null;
-      particle.step(dt, neighborForce, voronoi);
+      particle.step(dt, neighborForce, voronoi, extraRepulsion);
     }
   }
 
@@ -419,15 +438,36 @@ export class StippleSimulation {
     if (opacity <= 0) {
       return;
     }
+    if (!this.segmentationImageData || !this.segmentationAlpha || !this.segmentationDisplayCanvas) {
+      return;
+    }
+    if (!this.segmentationHasMask) {
+      return;
+    }
     const { r, g, b } = hexToRgb(featureColors.segmentation);
+    const colorKey = `${r},${g},${b}`;
+    const needsColorUpdate = this.segmentationLastColor !== colorKey || this.segmentationLastOpacity !== opacity;
+    if (this.segmentationNeedsUpdate || needsColorUpdate) {
+      const alphaArray = this.segmentationAlpha;
+      const imgData = this.segmentationImageData;
+      const data = imgData.data;
+      const len = alphaArray.length;
+      for (let i = 0; i < len; i++) {
+        const alpha = clamp(alphaArray[i] * opacity, 0, 1);
+        data[i * 4] = r;
+        data[i * 4 + 1] = g;
+        data[i * 4 + 2] = b;
+        data[i * 4 + 3] = Math.round(alpha * 255);
+      }
+      this.segmentationDisplayCtx.putImageData(imgData, 0, 0);
+      this.segmentationNeedsUpdate = false;
+      this.segmentationLastColor = colorKey;
+      this.segmentationLastOpacity = opacity;
+    }
     const ctx = p.drawingContext;
     ctx.save();
-    ctx.globalAlpha = opacity;
-    ctx.drawImage(this.maskCanvas, 0, 0, this.width, this.height);
-    ctx.globalCompositeOperation = "source-in";
     ctx.globalAlpha = 1;
-    ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-    ctx.fillRect(0, 0, this.width, this.height);
+    ctx.drawImage(this.segmentationDisplayCanvas, 0, 0, this.width, this.height);
     ctx.restore();
   }
 
@@ -669,12 +709,15 @@ export class StippleSimulation {
     const segmentationForce = featureForces.segmentation ?? 1;
 
     let hasMask = false;
+    let maskPixelsFull = null;
     if (segmentationMask) {
       this.maskCtx.save();
       this.maskCtx.globalCompositeOperation = "copy";
       this.maskCtx.drawImage(segmentationMask, 0, 0, this.width, this.height);
       this.maskCtx.restore();
       hasMask = true;
+      const fullImageData = this.maskCtx.getImageData(0, 0, this.width, this.height);
+      maskPixelsFull = fullImageData.data;
     } else {
       this.maskCtx.clearRect(0, 0, this.width, this.height);
     }
@@ -699,6 +742,25 @@ export class StippleSimulation {
       for (let i = 0; i < maskValues.length; i++) {
         this.fieldBuffer[i] += maskValues[i] * 0.9 * segmentationForce;
       }
+    }
+
+    if (!this.segmentationAlpha || this.segmentationAlpha.length !== this.width * this.height) {
+      this.segmentationAlpha = new Float32Array(this.width * this.height);
+      this.segmentationNeedsUpdate = true;
+    }
+
+    if (maskPixelsFull && params.useSegmentation) {
+      const alphaArray = this.segmentationAlpha;
+      const pixelCount = alphaArray.length;
+      for (let i = 0; i < pixelCount; i++) {
+        alphaArray[i] = maskPixelsFull[i * 4] / 255;
+      }
+      this.segmentationHasMask = true;
+      this.segmentationNeedsUpdate = true;
+    } else if (this.segmentationAlpha) {
+      this.segmentationAlpha.fill(0);
+      this.segmentationHasMask = false;
+      this.segmentationNeedsUpdate = true;
     }
 
     this.fieldLandmarkInfluence.length = 0;

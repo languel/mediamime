@@ -1,4 +1,4 @@
-const SAMPLE_VIDEO_URL = "https://assets.mixkit.co/videos/preview/mixkit-young-woman-dancing-while-listening-to-music-1015-large.mp4";
+const SAMPLE_VIDEO_URL = "https://storage.googleapis.com/mediapipe-assets/dance.mp4";
 const DEFAULT_VIDEO_WIDTH = 960;
 const DEFAULT_VIDEO_HEIGHT = 720;
 
@@ -18,6 +18,7 @@ export class MediaPipeManager {
     this.video.muted = true;
     this.video.loop = true;
     this.video.setAttribute("playsinline", "");
+    this.video.crossOrigin = "anonymous";
 
     this.holistic = new Holistic({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`

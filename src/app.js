@@ -14,6 +14,19 @@ const sketchContainer = document.getElementById("sketch-container");
 
 let simulation = null;
 
+const applySourceButtonLabel = (mode) => {
+  const label =
+    mode === "camera"
+      ? "Switch to sample dance video"
+      : "Switch to live camera";
+  sourceToggle.setAttribute("aria-label", label);
+  sourceToggle.setAttribute("title", label);
+  const srLabel = sourceToggle.querySelector(".sr-only");
+  if (srLabel) {
+    srLabel.textContent = label;
+  }
+};
+
 const ui = createControlUI(defaultConfig, (updated) => {
   simulation?.applyConfig(updated);
   videoCheckbox.checked = updated.showSource;
@@ -27,6 +40,7 @@ mirrorCheckbox.checked = config.mirrorWebcam;
 
 simulation = new StippleSimulation(config, videoElement);
 simulation.applyConfig(config);
+applySourceButtonLabel("camera");
 
 const sourceManager = new MediaPipeManager(videoElement, {
   onResults: (results) => {
@@ -42,7 +56,7 @@ const sourceManager = new MediaPipeManager(videoElement, {
     }
   },
   onSourceChange: (source) => {
-    sourceToggle.textContent = source === "camera" ? "Use Sample Dance Video" : "Use Live Camera";
+    applySourceButtonLabel(source);
     config.mirrorOutput = source === "camera" ? config.mirrorWebcam : false;
     mirrorCheckbox.disabled = source !== "camera";
     simulation.applyConfig(config);

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stippulata · p5.js Stipple Portrait</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Icons+Outlined">
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js"></script>
 </head>
@@ -14,24 +15,44 @@
       <h1>Stippulata</h1>
       <p class="tagline">MediaPipe × Weighted Voronoi Stippling in p5.js</p>
     </div>
-    <div class="header-actions">
-      <button id="source-toggle" class="button pill">Use Sample Dance Video</button>
-      <span id="status-label">Initializing…</span>
-    </div>
   </header>
 
   <main class="layout">
     <section class="canvas-area">
       <div id="sketch-container" class="sketch-frame"></div>
-      <video id="input-video" playsinline muted></video>
+      <video id="input-video" muted crossorigin="anonymous"></video>
+      <script>
+        (function() {
+          const v = document.getElementById('input-video');
+          if (!v) return;
+          try {
+            v.crossOrigin = 'anonymous';
+            v.playsInline = true;
+            v.setAttribute('playsinline', '');
+            v.setAttribute('webkit-playsinline', '');
+          } catch (e) {}
+        })();
+      </script>
       <div class="status-overlay" id="status-overlay">
         <span id="overlay-text">Loading models…</span>
       </div>
     </section>
     <aside class="control-panel">
       <div class="panel-header">
-        <h2>Controls</h2>
-        <button id="reset-controls" class="button subtle">Reset</button>
+        <div class="panel-title">
+          <h2>Controls</h2>
+          <span id="status-label" class="status-chip">Initializing…</span>
+        </div>
+        <div class="panel-actions">
+          <button id="source-toggle" class="icon-button" title="Toggle video source" aria-label="Toggle video source">
+            <span class="material-icons-outlined" aria-hidden="true">switch_video</span>
+            <span class="sr-only">Toggle video source</span>
+          </button>
+          <button id="reset-controls" class="icon-button" title="Reset controls" aria-label="Reset controls">
+            <span class="material-icons-outlined" aria-hidden="true">refresh</span>
+            <span class="sr-only">Reset controls</span>
+          </button>
+        </div>
       </div>
       <div id="ui-container"></div>
       <div class="inline-controls">
