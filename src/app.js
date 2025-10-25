@@ -89,7 +89,8 @@ let lastTime = performance.now();
 const overlayConfig = {
   pose: true,
   hands: true,
-  face: true
+  face: true,
+  segmentation: true
 };
 
 p5Instance = new p5((p) => {
@@ -111,6 +112,7 @@ p5Instance = new p5((p) => {
     overlayConfig.pose = config.drawPose;
     overlayConfig.hands = config.drawHands;
     overlayConfig.face = config.drawFace;
+    overlayConfig.segmentation = config.drawSegmentation;
 
     const now = performance.now();
     const dt = Math.min((now - lastTime) / 1000, 0.05);

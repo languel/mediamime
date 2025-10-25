@@ -1,32 +1,48 @@
 # Stippulata (p5 Edition)
 
-An interactive art demo that fuses MediaPipe body tracking with weighted Voronoi stippling to render a living portrait made of particles. This iteration targets a p5.js-based implementation with tunable parameters for fast experimentation.
+An interactive art demo that fuses MediaPipe body tracking with weighted Voronoi stippling to render a living portrait made of particles. This p5.js iteration exposes creative controls so you can sculpt the stipple behaviour in real time.
 
 ## Status
 
-Prototype planning in progress. The current repository contains the original vanilla JS proof of concept; the next milestone is a p5.js rewrite with a modular UI for controlling particle behaviour and visual layers.
+Interactive prototype with configurable particle forces, per-feature overlays, and optional particle collisions. Webcam and sample video sources are both supported; UI controls are powered by lil-gui.
 
-## Planned Features
+## Features
 
-- Dual video sources (live webcam or bundled sample clip) routed through MediaPipe Holistic.
-- Stipple-based particle system rendered on p5 canvases, influenced by segmentation masks and landmark attractors.
-- Minimal control panel for particle count, sizing, force weights, and visibility of face/pose/hand features.
-- Switchable render styles (points, motion trails, contour overlays).
-
-## Development Notes
-
-1. Complete the Product Requirements Document (`docs/PRD.md`) for a high-level scope.
-2. Port the runtime to p5.js (likely using the global mode for simplicity).
-3. Encapsulate MediaPipe integration so landmarks can be consumed both by the visual layer and by UI diagnostics.
+- Dual video input: live webcam (mirrored by default) or bundled dance clip for consistent demos.
+- Weighted Voronoi stippling driven by MediaPipe Holistic segmentation and landmarks (pose, hands, face).
+- Per-feature force multipliers, opacity, and colour pickers to tailor the stipple portrait.
+- Adjustable particle dynamics: count, size, viscosity, trail fade, collision friction/restitution, random walk.
+- Optional particle-to-particle collisions using a spatial hash for responsiveness at higher particle counts.
 
 ## Getting Started
 
+Serve the project with any static file server:
+
 ```bash
-npm install --global live-server   # or any static file server
-live-server                        # serve the repository root
+npm install --global live-server   # or use python -m http.server
+live-server                        # serves the repo root
 ```
 
-Then open the served URL, enable camera access when prompted, and flip between live and sample modes via the UI toggle once implemented.
+Open the served URL, allow camera permissions if prompted, and use the control panel to experiment. Toggle the "Use Sample Dance Video" button to load the built-in clip if the webcam is unavailable.
+
+## Controls Overview
+
+The lil-gui panel (right column) provides:
+
+- **Particles:** Count, size, and opacity.
+- **Render:** Style (points/trails/glow), trail fade, source video visibility.
+- **Features:** Enable/disable pose, hands, face, segmentation influence; adjust per-feature force multiplier, overlay opacity, and colour.
+- **Forces:** Density/brightness attraction, Voronoi strength, landmark pull, random walk, speed cap.
+- **Dynamics:** Viscosity, repulsion radius, and optional particle-to-particle collisions with friction/restitution.
+- **Advanced:** Voronoi sample count and update interval.
+
+Press the **Reset** button to restore defaults.
+
+## Development Notes
+
+- Code is organised into ES modules under `src/`: `app.js` orchestrates UI + p5, `mediapipeManager.js` handles video sources, `stippleSimulation.js` runs the particle system, and `ui.js` configures the control surface.
+- No build tooling is required; dependencies (p5.js, MediaPipe Holistic, lil-gui) load via CDN.
+- Collisions are off by default to keep performance predictable; enable them for tighter point packing on capable hardware.
 
 ## License
 

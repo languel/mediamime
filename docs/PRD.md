@@ -2,79 +2,81 @@
 
 ## 1. Vision & Goals
 
-Build a browser-based interactive art experience that transforms human motion into a dynamic stippled portrait. The new iteration leverages p5.js for rendering, MediaPipe Holistic for live landmark extraction, and weighted Voronoi stippling inspired by StippleGen to position particles.
+Deliver a browser-based interactive art experience that transforms human motion into a dynamic stippled portrait. The experience runs entirely in the browser using p5.js for rendering, MediaPipe Holistic for live landmark extraction, and weighted Voronoi stippling (inspired by StippleGen) to position particles.
 
 Primary objectives:
-- Deliver a stable, responsive demo that runs locally in modern browsers without build tooling.
-- Expose creative controls (particle behaviour, render styles, feature visibility) through a minimal UI so artists can experiment quickly.
-- Maintain compatibility with both webcam feeds and a packaged sample dance video for predictable demos.
+- Maintain a fluid 30–60 FPS experience on mid-range laptops at default particle counts.
+- Expose granular creative controls (forces, overlays, collisions) through a minimal UI so artists can experiment live.
+- Support both live webcam and packaged video sources for performances and demos.
 
 ## 2. Users & Use Cases
 
 **Target users**
-- Creative coders exploring generative art workflows.
-- Installation artists and performers who need a browser-proof-of-concept before stage deployment.
-- Educators showcasing computer vision and procedural drawing in the browser.
+- Creative coders exploring computer-vision-driven generative art.
+- Installation artists/performers who need an easily deployable browser proof-of-concept.
+- Educators demonstrating MediaPipe landmarks and procedural drawing.
 
 **Key scenarios**
-1. A user opens the demo, switches to a sample dance video, and observes how the particles form a stippled portrait.
-2. A user grants webcam access and tweaks particle count, force strengths, and render styles to achieve a specific aesthetic.
-3. A user hides individual feature layers (e.g., face mesh or hands) to focus on pose-driven motion.
+1. The artist loads the demo, switches to the sample video, and adjusts force multipliers until a stylised stipple portrait emerges.
+2. A performer grants webcam access and tweaks viscosity/collisions to make particles cling to motion in real time.
+3. An educator disables all overlays except pose to show how landmarks influence particle density.
 
 ## 3. Functional Requirements
 
 ### 3.1 Core Experience
-- Load MediaPipe Holistic via CDN (with graceful fallback messaging) and process frames from either the webcam stream or bundled video.
-- Render particles using p5.js, incorporating weighted Voronoi relaxation to nudge dots toward MediaPipe-derived density.
-- Maintain optional overlays for face mesh, pose, hands, and segmentation mask (toggled independently).
+- Load MediaPipe Holistic via CDN; process frames from webcam or bundled MP4.
+- Generate a weighted density field from segmentation + landmarks and drive particles via Voronoi relaxation.
+- Provide optional overlays for pose, hands, face, and segmentation, each with configurable colours/opacity.
 
 ### 3.2 Controls & UI
-- Provide an always-visible control panel with sliders/toggles for:
-  - Particle count, particle size, trail fade.
-  - Force weights (landmark attraction, Voronoi strength, repulsion).
-  - Feature visibility (face, pose, left/right hand, segmentation outline).
-  - Render styles (e.g., point render, smoothed trail, contour lines).
-- Provide source toggle (webcam vs. sample video) plus optional mirroring on webcam.
-- Show lightweight status text (e.g., model loading, camera blocked, video buffering).
+- Present a lil-gui based control panel containing:
+  - Particle count, size, opacity, trail fade, render style.
+  - Force sliders + free-form numeric inputs (density, landmark pull, Voronoi strength, random walk, speed cap).
+  - Per-feature force multipliers, overlay opacity, and colour pickers.
+  - Dynamics: viscosity, repulsion radius, optional particle-to-particle collisions with friction & restitution.
+  - Advanced controls: Voronoi sample count and update cadence.
+- Supply header actions for source toggling and status text; include reset-to-default button.
+- Mirror the webcam feed unless the user disables it; sample video remains unmirrored.
 
 ### 3.3 Architecture
-- Organise code into p5 sketch modules (`sketch.js`, `controls.js`, `mediapipe.js`, etc.) with ES module imports.
-- Abstract MediaPipe callbacks so controls and render layers can observe the latest landmarks without direct dependency chains.
-- Ensure the sketch resizes responsively, updating particle buffers and weights when the video aspect changes.
+- `src/app.js` wires MediaPipe, UI controls, and the p5 sketch loop.
+- `src/mediapipeManager.js` abstracts source switching, resizing, and Holistic callbacks.
+- `src/stippleSimulation.js` houses particle integration, feature weighting, Voronoi target updates, and collision handling.
+- `src/ui.js` defines default config and emits lil-gui controllers with unrestricted numeric inputs.
 
 ## 4. Non-Functional Requirements
 
-- **Performance:** target ≥30 FPS on mid-range laptops with default particle count (~1k) and webcam feed.
-- **Graceful degradation:** display a readable error panel if MediaPipe fails to load or camera access is denied.
-- **Portability:** run via static hosting without build steps; rely only on CDN-delivered dependencies.
-- **Accessibility:** keyboard-accessible UI controls; provide textual hints for camera permissions.
+- **Performance:** maintain ≥30 FPS with ~1k particles and collisions disabled; degrade gracefully when collisions are enabled.
+- **Resilience:** fall back to sample video if webcam access fails; surface status messages within the UI overlay.
+- **Portability:** run from static hosting with CDN dependencies only.
+- **Accessibility:** all controls should be keyboard accessible via lil-gui focus; provide explanatory copy in README.
 
 ## 5. Milestones
 
-1. **Foundation:** set up p5.js scaffold, integrate MediaPipe input switching, render static particles.  
-2. **Stippling Engine:** port weighted Voronoi loop, add particle forces, ensure convergence.  
-3. **UI Layer:** implement control panel (likely using `dat.GUI` or a minimal custom slider suite).  
-4. **Polish:** add preset saves, refine default forces, document tweaks in README.
+1. **Scaffold (complete):** p5 sketch, MediaPipe manager, and initial particle system with trails.
+2. **Advanced Controls (complete):** add per-feature force/opacity/colour knobs, viscosity, and optional collisions.
+3. **Polish:** preset handling, performance profiling, export options (TBD).
+4. **Stretch:** integrate pose-only fallback, timeline scrubbing for sample video, or recording.
 
 ## 6. Risks & Mitigations
 
-- **Performance bottlenecks:** Weighted Voronoi iterations can be expensive. Mitigate by throttling updates, sampling subset per frame, and exposing controls to reduce particle count.
-- **MediaPipe latency:** Holistic CPU fallback may lag on slower machines. Provide ability to drop to pose-only pipeline if necessary (logged as stretch goal).
-- **Browser permission issues:** Include troubleshooting tips and fall back to sample video automatically.
+- **Collision overhead:** spatial hash keeps complexity manageable; collisions remain optional and off by default.
+- **MediaPipe latency:** allow reducing particle count, lowering Voronoi samples, or disabling face features to recover FPS.
+- **Permission failures:** automatic fallback to sample video plus status messaging.
 
 ## 7. Open Questions
 
-- Should presets be persisted (e.g., `localStorage`) or kept session-only?
-- Would visitors benefit from exporting frames or GIFs (out of scope for MVP)?
-- Do we expose timeline playback controls for the sample video?
+- Should control presets persist via `localStorage`?
+- Do we expose export (PNG/GIF) or recording features in the UI?
+- Would shader-based rendering improve performance at high particle counts?
 
 ## 8. Success Metrics
 
-- Demo sustains ≥30 FPS on a 2020 MacBook Air at default settings.
-- User can toggle between webcam and sample video without full reload.
-- Adjusting particle count and feature visibility updates the sketch within 200 ms.
+- Runs 20+ minutes without freezing or memory creep in Chrome/Edge.
+- UI adjustments reflect onscreen within 200 ms.
+- Collisions off: ≥30 FPS @ 1k particles; collisions on: ≥20 FPS @ 1k particles on baseline hardware.
 
 ---
 
-Prepared by: Codex (GPT-5)  
+Prepared by: Codex (GPT-5)
 Date: 2025-XX-XX

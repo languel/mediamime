@@ -17,18 +17,40 @@ export const defaultConfig = {
   drawPose: true,
   drawFace: true,
   drawHands: true,
-  drawSegmentation: false,
+  drawSegmentation: true,
   voronoiSamples: 1400,
   voronoiInterval: 4,
   repulsionRadius: 28,
+  viscosity: 0.35,
+  enableCollisions: false,
+  collisionFriction: 0.15,
+  collisionRestitution: 0.35,
   weights: {
     density: 160,
     sampleBias: 55,
-    attractor: 420,
+    attractor: 320,
     voronoi: 860,
     repulsion: 420,
     random: 0.45,
     speedLimit: 7.5
+  },
+  featureForces: {
+    pose: 1,
+    hands: 1,
+    face: 1,
+    segmentation: 1
+  },
+  featureOpacity: {
+    pose: 0.85,
+    hands: 0.85,
+    face: 0.75,
+    segmentation: 0.28
+  },
+  featureColors: {
+    pose: "#368bff",
+    hands: "#ff8ad6",
+    face: "#6ad5ff",
+    segmentation: "#0f8ba8"
   }
 };
 
@@ -59,6 +81,19 @@ export function createControlUI(initialConfig, onChange) {
     onChange(params);
   };
 
+  const addNumericInput = (folder, object, key, label) => {
+    const controller = folder.add(object, key).name(label);
+    controller.onFinishChange((value) => {
+      const parsed = parseFloat(value);
+      if (!Number.isFinite(parsed)) {
+        return;
+      }
+      object[key] = parsed;
+      notifyChange();
+    });
+    return controller;
+  };
+
   const particles = gui.addFolder("Particles");
   particles.add(params, "particleCount", 200, 2400, 50).name("Count").onFinishChange(notifyChange);
   particles.add(params, "particleSize", 1.5, 8, 0.1).name("Size").onChange(notifyChange);
@@ -83,19 +118,45 @@ export function createControlUI(initialConfig, onChange) {
   features.add(params, "useSegmentation").name("Segmentation Influence").onChange(notifyChange);
   features.add(params, "drawSegmentation").name("Segmentation Overlay").onChange(notifyChange);
 
+  const featureForces = features.addFolder("Feature Forces");
+  addNumericInput(featureForces, params.featureForces, "pose", "Pose Multiplier");
+  addNumericInput(featureForces, params.featureForces, "hands", "Hands Multiplier");
+  addNumericInput(featureForces, params.featureForces, "face", "Face Multiplier");
+  addNumericInput(featureForces, params.featureForces, "segmentation", "Segmentation Multiplier");
+
+  const featureOpacity = features.addFolder("Feature Opacity");
+  featureOpacity.add(params.featureOpacity, "pose", 0, 1, 0.01).name("Pose Opacity").onChange(notifyChange);
+  featureOpacity.add(params.featureOpacity, "hands", 0, 1, 0.01).name("Hands Opacity").onChange(notifyChange);
+  featureOpacity.add(params.featureOpacity, "face", 0, 1, 0.01).name("Face Opacity").onChange(notifyChange);
+  featureOpacity.add(params.featureOpacity, "segmentation", 0, 1, 0.01).name("Segmentation Opacity").onChange(notifyChange);
+
+  const featureColors = features.addFolder("Feature Colors");
+  featureColors.addColor(params.featureColors, "pose").name("Pose Color").onChange(notifyChange);
+  featureColors.addColor(params.featureColors, "hands").name("Hands Color").onChange(notifyChange);
+  featureColors.addColor(params.featureColors, "face").name("Face Color").onChange(notifyChange);
+  featureColors.addColor(params.featureColors, "segmentation").name("Segmentation Color").onChange(notifyChange);
+
   const forces = gui.addFolder("Forces");
-  forces.add(params.weights, "density", 40, 360, 5).name("Density").onChange(notifyChange);
-  forces.add(params.weights, "sampleBias", 0, 180, 5).name("Bright Pull").onChange(notifyChange);
-  forces.add(params.weights, "attractor", 0, 1200, 10).name("Landmark Pull").onChange(notifyChange);
-  forces.add(params.weights, "voronoi", 0, 1500, 10).name("Voronoi").onChange(notifyChange);
-  forces.add(params.weights, "repulsion", 0, 800, 10).name("Repulsion").onChange(notifyChange);
-  forces.add(params.weights, "random", 0, 3, 0.05).name("Random Walk").onChange(notifyChange);
-  forces.add(params.weights, "speedLimit", 2, 20, 0.5).name("Speed Limit").onChange(notifyChange);
+  addNumericInput(forces, params.weights, "density", "Density");
+  addNumericInput(forces, params.weights, "sampleBias", "Bright Pull");
+  addNumericInput(forces, params.weights, "attractor", "Landmark Pull");
+  addNumericInput(forces, params.weights, "voronoi", "Voronoi");
+  addNumericInput(forces, params.weights, "repulsion", "Repulsion");
+  addNumericInput(forces, params.weights, "random", "Random Walk");
+  addNumericInput(forces, params.weights, "speedLimit", "Speed Limit");
+
+  const dynamics = gui.addFolder("Dynamics");
+  addNumericInput(dynamics, params, "viscosity", "Viscosity Base");
+  addNumericInput(dynamics, params, "repulsionRadius", "Repulsion Radius");
+
+  const collisions = dynamics.addFolder("Collisions");
+  collisions.add(params, "enableCollisions").name("Enable p2p collisions").onChange(notifyChange);
+  addNumericInput(collisions, params, "collisionFriction", "Collision Friction");
+  addNumericInput(collisions, params, "collisionRestitution", "Collision Restitution");
 
   const advanced = gui.addFolder("Advanced");
-  advanced.add(params, "voronoiSamples", 200, 4000, 50).name("Voronoi Samples").onChange(notifyChange);
+  addNumericInput(advanced, params, "voronoiSamples", "Voronoi Samples");
   advanced.add(params, "voronoiInterval", 1, 10, 1).name("Voronoi Interval").onChange(notifyChange);
-  advanced.add(params, "repulsionRadius", 10, 60, 1).name("Repulsion Radius").onChange(notifyChange);
 
   particles.open();
   render.open();
