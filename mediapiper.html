@@ -7,45 +7,77 @@
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Icons+Outlined">
   <style>
+    html, body {
+      height: 100%;
+    }
     body {
+      margin: 0;
+      display: flex;
+      overflow: hidden;
       background: radial-gradient(120% 120% at 10% 10%, #0d1525 0%, #04070d 48%, #02040a 100%);
     }
     .preview-layout {
+      position: relative;
       flex: 1;
-      min-height: 0;
-      display: grid;
-      grid-template-columns: minmax(0, 1.2fr) minmax(320px, 380px);
-      gap: 1.5rem;
-      padding: 1.5rem;
+      display: flex;
+      height: 100vh;
+      min-width: 0;
       align-items: stretch;
+      gap: 0;
     }
     .preview-canvas {
       position: relative;
-      border-radius: 18px;
-      background: linear-gradient(140deg, rgba(16, 25, 41, 0.95) 0%, rgba(5, 9, 18, 0.97) 100%);
-      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+      flex: 1 1 auto;
+      min-width: 0;
+      min-height: 0;
+      background: rgba(6, 10, 20, 0.82);
       overflow: hidden;
-      padding: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #mediapiper-sketch {
+      width: 100%;
+      height: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
     }
     .preview-canvas canvas {
-      max-width: 100%;
+      width: 100%;
+      height: auto;
       max-height: 100%;
     }
     .preview-canvas video {
       display: none;
     }
     .panel {
-      background: rgba(12, 18, 30, 0.9);
-      border-radius: 18px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      padding: 1.25rem;
+      position: absolute;
+      top: 0;
+      right: 0;
+      flex: 0 0 auto;
+      width: clamp(260px, 26vw, 340px);
+      max-width: 380px;
+      background: rgba(10, 14, 24, 0.95);
+      border-left: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 1rem 1.2rem 1.5rem;
       display: flex;
       flex-direction: column;
-      gap: 1rem;
-      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.32);
+      gap: 0.75rem;
+      backdrop-filter: blur(20px);
+      height: 100%;
+      overflow-y: auto;
+      transform: translateX(100%);
+      opacity: 0;
+      pointer-events: none;
+      transition: transform 0.32s ease, opacity 0.32s ease;
+      z-index: 30;
+      box-shadow: -18px 0 48px rgba(0, 0, 0, 0.45);
+    }
+    .panel.is-open {
+      transform: translateX(0);
+      opacity: 1;
+      pointer-events: auto;
     }
     .panel-header {
       display: flex;
@@ -62,6 +94,9 @@
       display: flex;
       gap: 0.5rem;
       align-items: center;
+    }
+    .panel-actions .panel-close {
+      margin-left: 0.25rem;
     }
     .panel-actions .icon-button {
       padding: 0.4rem;
@@ -98,12 +133,12 @@
       color: rgba(245, 247, 255, 0.7);
     }
     .segment-preview {
-      border-radius: 12px;
+      border-radius: 8px;
       overflow: hidden;
       border: 1px solid rgba(255, 255, 255, 0.1);
-      background: rgba(5, 9, 18, 0.85);
+      background: rgba(5, 9, 18, 0.72);
       text-align: center;
-      padding: 0.5rem;
+      padding: 0.4rem;
     }
     .segment-preview canvas {
       width: 100%;
@@ -113,12 +148,12 @@
     .overlay-toggles {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 0.6rem;
+      gap: 0.5rem;
     }
     .toggle-card {
       background: rgba(255, 255, 255, 0.05);
-      border-radius: 12px;
-      padding: 0.7rem 0.8rem;
+      border-radius: 10px;
+      padding: 0.55rem 0.65rem;
       display: flex;
       align-items: center;
       gap: 0.6rem;
@@ -138,6 +173,53 @@
       color: rgba(245, 247, 255, 0.65);
       line-height: 1.4;
     }
+    .panel-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(5, 9, 18, 0.55);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.32s ease;
+      z-index: 20;
+    }
+    .panel-backdrop.is-visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .panel-toggle {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      z-index: 40;
+      width: 2.75rem;
+      height: 2.75rem;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(9, 13, 22, 0.92);
+      color: #f5f7ff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+    }
+    .panel-toggle:hover {
+      background: rgba(13, 19, 30, 0.96);
+      transform: translateY(-1px);
+      border-color: rgba(255, 255, 255, 0.24);
+    }
+    .panel-toggle:active {
+      transform: translateY(0);
+    }
+    .panel-toggle .material-icons-outlined {
+      font-size: 24px;
+    }
+    .panel-toggle.panel-toggle-open {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(0);
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
@@ -145,19 +227,16 @@
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
 </head>
 <body>
-  <header class="app-header">
-    <div>
-      <h1>Mediapiper</h1>
-      <p class="tagline">Holistic stream preview with pose, hands, face, and segmentation</p>
-    </div>
-  </header>
-
   <main class="preview-layout">
     <section class="preview-canvas">
       <div id="mediapiper-sketch"></div>
       <video id="mediapiper-video" muted></video>
     </section>
-    <aside class="panel">
+    <button id="panel-toggle" class="panel-toggle icon-button" type="button" title="Hide control panel" aria-label="Hide control panel" aria-expanded="true" aria-controls="mediapiper-panel">
+      <span class="material-icons-outlined" aria-hidden="true">close</span>
+    </button>
+    <div id="panel-backdrop" class="panel-backdrop is-visible"></div>
+    <aside class="panel is-open" id="mediapiper-panel" role="dialog" aria-modal="false" aria-label="Mediapiper control panel" aria-hidden="false" tabindex="-1">
       <div class="panel-header">
         <h2>Streams</h2>
         <div class="panel-actions">
@@ -167,6 +246,9 @@
           </button>
           <button id="mediapiper-reset" class="icon-button" title="Reset overlays" aria-label="Reset overlays">
             <span class="material-icons-outlined" aria-hidden="true">refresh</span>
+          </button>
+          <button id="panel-close" class="icon-button panel-close" type="button" title="Hide control panel" aria-label="Hide control panel">
+            <span class="material-icons-outlined" aria-hidden="true">close</span>
           </button>
         </div>
       </div>
@@ -218,10 +300,6 @@
     </aside>
   </main>
 
-  <footer class="app-footer">
-    <span>Each layer visualises a MediaPipe Holistic stream. Use this preview to verify camera, pose, hands, face, and segmentation outputs.</span>
-  </footer>
-
   <script type="module">
 // const SAMPLE_VIDEO_URL = "https://thefoxofsky.github.io/project_pages/RealisDance-DiT/video/mv/2.mp4";
 const SAMPLE_VIDEO_URL = "https://thefoxofsky.github.io/project_pages/RealisDance-DiT/video/mv/4.mp4";
@@ -241,6 +319,11 @@ const SAMPLE_VIDEO_URL = "https://thefoxofsky.github.io/project_pages/RealisDanc
     const faceToggle = document.getElementById("overlay-face");
     const segmentationToggle = document.getElementById("overlay-segmentation");
     const depthToggle = document.getElementById("overlay-depth");
+    const panelEl = document.getElementById("mediapiper-panel");
+    const panelToggleBtn = document.getElementById("panel-toggle");
+    const panelCloseBtn = document.getElementById("panel-close");
+    const panelBackdrop = document.getElementById("panel-backdrop");
+    const panelToggleIcon = panelToggleBtn?.querySelector(".material-icons-outlined");
 const segmentationPreviewCanvas = document.getElementById("segmentation-preview");
 const segmentationPreviewCtx = segmentationPreviewCanvas.getContext("2d");
 
@@ -321,6 +404,7 @@ const SAFE_FACEMESH_TESSELATION = typeof FACEMESH_TESSELATION !== "undefined"
     let sampleHandle = null;
     let latestResults = null;
     let holisticBusy = false;
+    let isPanelOpen = panelEl?.classList.contains("is-open");
 let segmentationBuffer = null;
 let segmentationMaskAvailable = false;
 
@@ -347,6 +431,44 @@ const updateOverlayState = () => {
   drawSegmentationPreview();
 };
 
+const setPanelState = (open, { skipFocus = false } = {}) => {
+  if (!panelEl || !panelToggleBtn || !panelBackdrop) {
+    return;
+  }
+  isPanelOpen = open;
+  panelEl.classList.toggle("is-open", open);
+  panelBackdrop.classList.toggle("is-visible", open);
+  panelEl.setAttribute("aria-hidden", open ? "false" : "true");
+  panelToggleBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  panelToggleBtn.setAttribute("title", open ? "Hide control panel" : "Show control panel");
+  panelToggleBtn.setAttribute("aria-label", open ? "Hide control panel" : "Show control panel");
+  panelToggleBtn.classList.toggle("panel-toggle-open", open);
+  if (panelToggleIcon) {
+    panelToggleIcon.textContent = open ? "close" : "tune";
+  }
+  if (panelCloseBtn) {
+    panelCloseBtn.setAttribute("title", "Hide control panel");
+    panelCloseBtn.setAttribute("aria-label", "Hide control panel");
+  }
+  if (open) {
+    try {
+      panelEl.focus({ preventScroll: true });
+    } catch (err) {
+      panelEl.focus();
+    }
+  } else if (!skipFocus) {
+    try {
+      panelToggleBtn.focus({ preventScroll: true });
+    } catch (err) {
+      panelToggleBtn.focus();
+    }
+  }
+};
+
+const openPanel = (options) => setPanelState(true, options);
+const closePanel = (options) => setPanelState(false, options);
+const togglePanel = () => setPanelState(!isPanelOpen);
+
 const waitForHolisticIdle = async () => {
   while (holisticBusy) {
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -363,10 +485,32 @@ const resetHolistic = async () => {
     console.warn("Holistic reset failed", err);
   }
 };
+    setPanelState(Boolean(isPanelOpen), { skipFocus: true });
     updateOverlayState();
 
     [showVideoCheckbox, mirrorCheckbox, poseToggle, leftHandToggle, rightHandToggle, faceToggle, segmentationToggle, depthToggle]
       .forEach((input) => input.addEventListener("change", updateOverlayState));
+
+    if (panelToggleBtn) {
+      panelToggleBtn.addEventListener("click", () => {
+        togglePanel();
+      });
+    }
+    if (panelCloseBtn) {
+      panelCloseBtn.addEventListener("click", () => {
+        closePanel();
+      });
+    }
+    if (panelBackdrop) {
+      panelBackdrop.addEventListener("click", () => {
+        closePanel();
+      });
+    }
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !event.defaultPrevented && isPanelOpen) {
+        closePanel({ skipFocus: true });
+      }
+    });
 
     const applyStatus = (text) => {
       statusLabel.textContent = text;
@@ -446,7 +590,11 @@ holistic.onResults((results) => {
       stopSampleVideo();
       await resetHolistic();
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 960 }, height: { ideal: 720 } },
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          aspectRatio: { ideal: 16 / 9 }
+        },
         audio: false
       });
       videoEl.srcObject = stream;
@@ -591,7 +739,7 @@ holistic.onResults((results) => {
 
     let p5Instance = null;
 
-    const DEFAULT_WIDTH = 960;
+    const DEFAULT_WIDTH = 1280;
     const DEFAULT_HEIGHT = 720;
 
     let canvasWidth = DEFAULT_WIDTH;
