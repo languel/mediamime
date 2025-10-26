@@ -205,7 +205,7 @@
     .panel-backdrop {
       position: absolute;
       inset: 0;
-      background: rgba(5, 9, 18, 0.55);
+      background: transparent;
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.32s ease;
@@ -250,7 +250,6 @@
       transform: translateY(0);
     }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
@@ -512,7 +511,8 @@ const SAFE_FACEMESH_TESSELATION = typeof FACEMESH_TESSELATION !== "undefined"
     let holistic = null;
 
     let currentSource = "camera";
-    let camera = null;
+    let cameraStream = null;
+    let cameraFrameHandle = null;
     let sampleHandle = null;
     let latestResults = null;
     let holisticBusy = false;
@@ -860,6 +860,75 @@ const resetSegmentationData = () => {
   drawPreviewCanvas();
 };
 
+const CAMERA_CONSTRAINTS = {
+  video: {
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+    aspectRatio: { ideal: 16 / 9 },
+    facingMode: "user"
+  },
+  audio: false
+};
+
+const cancelCameraLoop = () => {
+  if (cameraFrameHandle) {
+    cancelAnimationFrame(cameraFrameHandle);
+    cameraFrameHandle = null;
+  }
+};
+
+const ensureCameraStream = async () => {
+  if (cameraStream) {
+    const liveTrack = cameraStream.getVideoTracks().find((track) => track.readyState === "live");
+    if (liveTrack) {
+      return cameraStream;
+    }
+  }
+  cameraStream = await navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS);
+  return cameraStream;
+};
+
+const startCameraLoop = () => {
+  cancelCameraLoop();
+  const loop = async () => {
+    if (currentSource !== "camera") {
+      cameraFrameHandle = requestAnimationFrame(loop);
+      return;
+    }
+    if (!videoEl.videoWidth || !videoEl.videoHeight) {
+      cameraFrameHandle = requestAnimationFrame(loop);
+      return;
+    }
+    if (!holisticBusy) {
+      holisticBusy = true;
+      try {
+        const inferenceStart = performance.now();
+        await holistic.send({ image: videoEl });
+        recordInferenceTime(performance.now() - inferenceStart);
+      } catch (err) {
+        console.warn("Holistic send failed on camera frame", err);
+      } finally {
+        holisticBusy = false;
+      }
+    }
+    cameraFrameHandle = requestAnimationFrame(loop);
+  };
+  cameraFrameHandle = requestAnimationFrame(loop);
+};
+
+const pauseCameraStream = () => {
+  cancelCameraLoop();
+  if (cameraStream) {
+    cameraStream.getVideoTracks().forEach((track) => {
+      track.enabled = false;
+    });
+  }
+  if (videoEl.srcObject === cameraStream) {
+    videoEl.pause();
+    videoEl.srcObject = null;
+  }
+};
+
 function refreshSegmentationTint() {
   if (!segmentationBuffer) {
     segmentationTintCanvas.width = 0;
@@ -923,51 +992,39 @@ holistic = createHolistic();
 
     async function startCamera() {
       stopSampleVideo();
+      const stream = await ensureCameraStream();
+      stream.getVideoTracks().forEach((track) => {
+        track.enabled = true;
+      });
+      if (videoEl.srcObject !== stream) {
+        videoEl.pause();
+        videoEl.srcObject = stream;
+        videoEl.removeAttribute("src");
+      }
+      if (videoEl.readyState < 2) {
+        await new Promise((resolve) => {
+          const handleLoaded = () => {
+            videoEl.removeEventListener("loadedmetadata", handleLoaded);
+            resolve();
+          };
+          videoEl.addEventListener("loadedmetadata", handleLoaded, { once: true });
+        });
+      }
+      await videoEl.play();
       await resetHolistic();
       resetSegmentationData();
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          aspectRatio: { ideal: 16 / 9 }
-        },
-        audio: false
-      });
-      videoEl.srcObject = stream;
-      await videoEl.play();
-      applyStatus("Live camera ready");
-
-      camera = new Camera(videoEl, {
-        onFrame: async () => {
-          if (currentSource !== "camera") {
-            return;
-          }
-          if (!videoEl.videoWidth || !videoEl.videoHeight) {
-            return;
-          }
-          if (holisticBusy) {
-            return;
-          }
-          holisticBusy = true;
-          try {
-            const inferenceStart = performance.now();
-            await holistic.send({ image: videoEl });
-            recordInferenceTime(performance.now() - inferenceStart);
-          } finally {
-            holisticBusy = false;
-          }
-        },
-        width: videoEl.videoWidth || 960,
-        height: videoEl.videoHeight || 720
-      });
       currentSource = "camera";
       resetPerformanceMetrics();
-      camera.start();
+      startCameraLoop();
+      applyStatus("Live camera ready");
     }
 
     async function startSampleVideo() {
-      stopCamera();
-      stopSampleVideo();
+      pauseCameraStream();
+      if (sampleHandle) {
+        cancelAnimationFrame(sampleHandle);
+        sampleHandle = null;
+      }
       await resetHolistic();
       resetSegmentationData();
       videoEl.srcObject = null;
@@ -1014,19 +1071,19 @@ holistic = createHolistic();
     }
 
     function stopCamera() {
+      cancelCameraLoop();
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((track) => track.stop());
+        cameraStream = null;
+      }
+      if (videoEl.srcObject) {
+        videoEl.pause();
+        videoEl.srcObject = null;
+      }
       if (currentSource === "camera") {
         currentSource = "none";
       }
       resetSegmentationData();
-      if (camera) {
-        camera.stop();
-        camera = null;
-      }
-      const stream = videoEl.srcObject;
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-        videoEl.srcObject = null;
-      }
     }
 
     function stopSampleVideo() {
@@ -1038,11 +1095,13 @@ holistic = createHolistic();
         cancelAnimationFrame(sampleHandle);
         sampleHandle = null;
       }
-      if (!videoEl.paused) {
+      if (!videoEl.paused && !videoEl.srcObject) {
         videoEl.pause();
       }
-      videoEl.removeAttribute("src");
-      videoEl.load();
+      if (!videoEl.srcObject && videoEl.src) {
+        videoEl.removeAttribute("src");
+        videoEl.load();
+      }
     }
 
     toggleSourceBtn.addEventListener("click", async () => {
