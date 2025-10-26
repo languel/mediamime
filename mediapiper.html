@@ -320,6 +320,7 @@ const SAFE_FACEMESH_TESSELATION = typeof FACEMESH_TESSELATION !== "undefined"
     let camera = null;
     let sampleHandle = null;
     let latestResults = null;
+    let holisticBusy = false;
 let segmentationBuffer = null;
 let segmentationMaskAvailable = false;
 
@@ -344,6 +345,23 @@ const updateOverlayState = () => {
   overlayState.segmentation = segmentationToggle.checked;
   overlayState.depth = depthToggle.checked;
   drawSegmentationPreview();
+};
+
+const waitForHolisticIdle = async () => {
+  while (holisticBusy) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+};
+
+const resetHolistic = async () => {
+  await waitForHolisticIdle();
+  try {
+    if (typeof holistic.reset === "function") {
+      await holistic.reset();
+    }
+  } catch (err) {
+    console.warn("Holistic reset failed", err);
+  }
 };
     updateOverlayState();
 
@@ -426,6 +444,7 @@ holistic.onResults((results) => {
 
     async function startCamera() {
       stopSampleVideo();
+      await resetHolistic();
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 960 }, height: { ideal: 720 } },
         audio: false
@@ -436,18 +455,33 @@ holistic.onResults((results) => {
 
       camera = new Camera(videoEl, {
         onFrame: async () => {
-          await holistic.send({ image: videoEl });
+          if (currentSource !== "camera") {
+            return;
+          }
+          if (!videoEl.videoWidth || !videoEl.videoHeight) {
+            return;
+          }
+          if (holisticBusy) {
+            return;
+          }
+          holisticBusy = true;
+          try {
+            await holistic.send({ image: videoEl });
+          } finally {
+            holisticBusy = false;
+          }
         },
         width: videoEl.videoWidth || 960,
         height: videoEl.videoHeight || 720
       });
-      camera.start();
       currentSource = "camera";
+      camera.start();
     }
 
     async function startSampleVideo() {
       stopCamera();
       stopSampleVideo();
+      await resetHolistic();
       videoEl.srcObject = null;
       videoEl.src = SAMPLE_VIDEO_URL;
       try {
@@ -459,26 +493,39 @@ holistic.onResults((results) => {
       }
       await videoEl.play();
       applyStatus("Using sample video");
+      currentSource = "sample";
 
       const loop = async () => {
+        if (currentSource !== "sample") {
+          return;
+        }
         if (videoEl.ended) {
           videoEl.currentTime = 0;
           await videoEl.play();
         }
-        if (!videoEl.paused && videoEl.readyState >= 2) {
-          try {
-            await holistic.send({ image: videoEl });
-          } catch (err) {
-            console.warn("Holistic send failed on sample frame", err);
+        if (currentSource === "sample" && !videoEl.paused && videoEl.readyState >= 2) {
+          if (!holisticBusy) {
+            holisticBusy = true;
+            try {
+              await holistic.send({ image: videoEl });
+            } catch (err) {
+              console.warn("Holistic send failed on sample frame", err);
+            } finally {
+              holisticBusy = false;
+            }
           }
         }
-        sampleHandle = requestAnimationFrame(loop);
+        if (currentSource === "sample") {
+          sampleHandle = requestAnimationFrame(loop);
+        }
       };
       sampleHandle = requestAnimationFrame(loop);
-      currentSource = "sample";
     }
 
     function stopCamera() {
+      if (currentSource === "camera") {
+        currentSource = "none";
+      }
       if (camera) {
         camera.stop();
         camera = null;
@@ -491,6 +538,9 @@ holistic.onResults((results) => {
     }
 
     function stopSampleVideo() {
+      if (currentSource === "sample") {
+        currentSource = "none";
+      }
       if (sampleHandle) {
         cancelAnimationFrame(sampleHandle);
         sampleHandle = null;
