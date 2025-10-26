@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mediapiper · Holistic Preview</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Icons+Outlined">
+  <style>
+    body {
+      background: radial-gradient(120% 120% at 10% 10%, #0d1525 0%, #04070d 48%, #02040a 100%);
+    }
+    .preview-layout {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(320px, 380px);
+      gap: 1.5rem;
+      padding: 1.5rem;
+      align-items: stretch;
+    }
+    .preview-canvas {
+      position: relative;
+      border-radius: 18px;
+      background: linear-gradient(140deg, rgba(16, 25, 41, 0.95) 0%, rgba(5, 9, 18, 0.97) 100%);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+      overflow: hidden;
+      padding: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .preview-canvas canvas {
+      max-width: 100%;
+      max-height: 100%;
+    }
+    .preview-canvas video {
+      display: none;
+    }
+    .panel {
+      background: rgba(12, 18, 30, 0.9);
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.32);
+    }
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .panel-header h2 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 600;
+    }
+    .panel-actions {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    .panel-actions .icon-button {
+      padding: 0.4rem;
+    }
+    .panel-content {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      color: rgba(245, 247, 255, 0.8);
+      font-size: 0.92rem;
+    }
+    .control-row label {
+      flex: 1;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .control-row input[type="checkbox"] {
+      accent-color: #ff4081;
+      width: 1.1rem;
+      height: 1.1rem;
+    }
+    .status-chip {
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      padding: 0.15rem 0.65rem;
+      font-size: 0.8rem;
+      color: rgba(245, 247, 255, 0.7);
+    }
+    .segment-preview {
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(5, 9, 18, 0.85);
+      text-align: center;
+      padding: 0.5rem;
+    }
+    .segment-preview canvas {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .overlay-toggles {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.6rem;
+    }
+    .toggle-card {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      padding: 0.7rem 0.8rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+    .toggle-card input[type="checkbox"] {
+      accent-color: #ff4081;
+      width: 1.1rem;
+      height: 1.1rem;
+    }
+    .toggle-card span {
+      flex: 1;
+      color: rgba(245, 247, 255, 0.78);
+      font-size: 0.88rem;
+    }
+    .tip {
+      font-size: 0.83rem;
+      color: rgba(245, 247, 255, 0.65);
+      line-height: 1.4;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <h1>Mediapiper</h1>
+      <p class="tagline">Holistic stream preview with pose, hands, face, and segmentation</p>
+    </div>
+  </header>
+
+  <main class="preview-layout">
+    <section class="preview-canvas">
+      <div id="mediapiper-sketch"></div>
+      <video id="mediapiper-video" muted></video>
+    </section>
+    <aside class="panel">
+      <div class="panel-header">
+        <h2>Streams</h2>
+        <div class="panel-actions">
+          <span id="mediapiper-status" class="status-chip">Initializing…</span>
+          <button id="mediapiper-toggle-source" class="icon-button" title="Toggle video source" aria-label="Toggle video source">
+            <span class="material-icons-outlined" aria-hidden="true">switch_video</span>
+          </button>
+          <button id="mediapiper-reset" class="icon-button" title="Reset overlays" aria-label="Reset overlays">
+            <span class="material-icons-outlined" aria-hidden="true">refresh</span>
+          </button>
+        </div>
+      </div>
+      <div class="panel-content">
+        <div class="control-row">
+          <label>
+            <input type="checkbox" id="mediapiper-show-video" checked>
+            Show source underlay
+          </label>
+          <label>
+            <input type="checkbox" id="mediapiper-mirror" checked>
+            Mirror webcam
+          </label>
+        </div>
+        <div class="overlay-toggles">
+          <label class="toggle-card">
+            <input type="checkbox" id="overlay-pose" checked>
+            <span>Pose Landmarks</span>
+          </label>
+          <label class="toggle-card">
+            <input type="checkbox" id="overlay-left-hand" checked>
+            <span>Left Hand</span>
+          </label>
+          <label class="toggle-card">
+            <input type="checkbox" id="overlay-right-hand" checked>
+            <span>Right Hand</span>
+          </label>
+          <label class="toggle-card">
+            <input type="checkbox" id="overlay-face" checked>
+            <span>Face Mesh</span>
+          </label>
+          <label class="toggle-card">
+            <input type="checkbox" id="overlay-segmentation" checked>
+            <span>Segmentation Mask</span>
+          </label>
+          <label class="toggle-card">
+            <input type="checkbox" id="overlay-depth" checked>
+            <span>Depth (Z)</span>
+          </label>
+        </div>
+        <div class="segment-preview">
+          <canvas id="segmentation-preview" width="320" height="180"></canvas>
+          <div class="tip">Segmentation alpha preview (raw mask). If this is blank, the mask is all zeros.</div>
+        </div>
+        <div class="tip">
+          Toggle overlay layers to confirm MediaPipe output. Pose and hand connectors adapt to mirror settings.
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="app-footer">
+    <span>Each layer visualises a MediaPipe Holistic stream. Use this preview to verify camera, pose, hands, face, and segmentation outputs.</span>
+  </footer>
+
+  <script type="module">
+// const SAMPLE_VIDEO_URL = "https://thefoxofsky.github.io/project_pages/RealisDance-DiT/video/mv/2.mp4";
+const SAMPLE_VIDEO_URL = "https://thefoxofsky.github.io/project_pages/RealisDance-DiT/video/mv/4.mp4";
+// const SAMPLE_VIDEO_URL= "https://media.gettyimages.com/id/1432864804/video/a-man-and-a-woman-dance-outdoors-in-preparation-for-a-performance-healthy-lifestyle.mp4?s=mp4-640x640-gi&k=20&c=QenL_gqhEWh665fqtFCuOXsZCdf-EgTSK2JCf_XnPLM=";
+// const SAMPLE_VIDEO_URL = "https://media.gettyimages.com/id/1481811636/video/for-us-dance-is-a-way-of-life.mp4?s=mp4-640x640-gi&k=20&c=-eEh1Svdu4dKJCEXijI7d4WOfGWVtAe9Gv_5mmqJYQA=";
+
+    const videoEl = document.getElementById("mediapiper-video");
+    const sketchContainer = document.getElementById("mediapiper-sketch");
+    const statusLabel = document.getElementById("mediapiper-status");
+    const toggleSourceBtn = document.getElementById("mediapiper-toggle-source");
+    const resetBtn = document.getElementById("mediapiper-reset");
+    const showVideoCheckbox = document.getElementById("mediapiper-show-video");
+    const mirrorCheckbox = document.getElementById("mediapiper-mirror");
+    const poseToggle = document.getElementById("overlay-pose");
+    const leftHandToggle = document.getElementById("overlay-left-hand");
+    const rightHandToggle = document.getElementById("overlay-right-hand");
+    const faceToggle = document.getElementById("overlay-face");
+    const segmentationToggle = document.getElementById("overlay-segmentation");
+    const depthToggle = document.getElementById("overlay-depth");
+const segmentationPreviewCanvas = document.getElementById("segmentation-preview");
+const segmentationPreviewCtx = segmentationPreviewCanvas.getContext("2d");
+
+const SEGMENTATION_COLOR = { r: 15, g: 139, b: 168 };
+const SEGMENTATION_ALPHA = 0.6;
+
+const segmentationTintCanvas = document.createElement("canvas");
+const segmentationTintCtx = segmentationTintCanvas.getContext("2d");
+
+const waitForVideoReady = (video) => {
+  if (video.readyState >= 2) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    const handleReady = () => {
+      cleanup();
+      resolve();
+    };
+    const handleError = (event) => {
+      cleanup();
+      reject(new Error(event?.message || "Video failed to load"));
+    };
+    const cleanup = () => {
+      video.removeEventListener("loadeddata", handleReady);
+      video.removeEventListener("loadedmetadata", handleReady);
+      video.removeEventListener("error", handleError);
+    };
+    video.addEventListener("loadeddata", handleReady, { once: true });
+    video.addEventListener("loadedmetadata", handleReady, { once: true });
+    video.addEventListener("error", handleError, { once: true });
+  });
+};
+
+const SAFE_POSE_CONNECTIONS = typeof POSE_CONNECTIONS !== "undefined"
+  ? POSE_CONNECTIONS
+  : [
+      [11, 13], [13, 15], [12, 14], [14, 16],
+      [11, 12], [23, 24], [11, 23], [12, 24],
+      [23, 25], [25, 27], [24, 26], [26, 28],
+      [27, 29], [28, 30]
+    ];
+
+const SAFE_HAND_CONNECTIONS = typeof HAND_CONNECTIONS !== "undefined"
+  ? HAND_CONNECTIONS
+  : [
+      [0, 1], [1, 2], [2, 3], [3, 4],
+      [0, 5], [5, 6], [6, 7], [7, 8],
+      [5, 9], [9, 10], [10, 11], [11, 12],
+      [9, 13], [13, 14], [14, 15], [15, 16],
+      [13, 17], [17, 18], [18, 19], [19, 20],
+      [0, 17]
+    ];
+
+const SAFE_FACEMESH_TESSELATION = typeof FACEMESH_TESSELATION !== "undefined"
+  ? FACEMESH_TESSELATION
+  : [];
+
+    videoEl.muted = true;
+    videoEl.loop = true;
+    videoEl.crossOrigin = "anonymous";
+    videoEl.setAttribute("playsinline", "");
+    videoEl.setAttribute("webkit-playsinline", "");
+
+    const holistic = new Holistic({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`
+    });
+    holistic.setOptions({
+      modelComplexity: 1,
+      smoothLandmarks: true,
+      enableSegmentation: true,
+      refineFaceLandmarks: true,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+
+    let currentSource = "camera";
+    let camera = null;
+    let sampleHandle = null;
+    let latestResults = null;
+let segmentationBuffer = null;
+let segmentationMaskAvailable = false;
+
+    const overlayState = {
+      showVideo: true,
+      mirror: true,
+      pose: true,
+      leftHand: true,
+      rightHand: true,
+      face: true,
+      segmentation: true,
+      depth: true
+    };
+
+const updateOverlayState = () => {
+  overlayState.showVideo = showVideoCheckbox.checked;
+  overlayState.mirror = mirrorCheckbox.checked;
+  overlayState.pose = poseToggle.checked;
+  overlayState.leftHand = leftHandToggle.checked;
+  overlayState.rightHand = rightHandToggle.checked;
+  overlayState.face = faceToggle.checked;
+  overlayState.segmentation = segmentationToggle.checked;
+  overlayState.depth = depthToggle.checked;
+  drawSegmentationPreview();
+};
+    updateOverlayState();
+
+    [showVideoCheckbox, mirrorCheckbox, poseToggle, leftHandToggle, rightHandToggle, faceToggle, segmentationToggle, depthToggle]
+      .forEach((input) => input.addEventListener("change", updateOverlayState));
+
+    const applyStatus = (text) => {
+      statusLabel.textContent = text;
+    };
+
+    const segmentationOffscreen = document.createElement("canvas");
+    const segmentationOffCtx = segmentationOffscreen.getContext("2d");
+
+function clearSegmentationPreview() {
+  segmentationPreviewCtx.clearRect(0, 0, segmentationPreviewCanvas.width, segmentationPreviewCanvas.height);
+}
+
+function drawSegmentationPreview() {
+  clearSegmentationPreview();
+  if (!segmentationMaskAvailable || !segmentationTintCanvas.width) {
+    return;
+  }
+  segmentationPreviewCtx.save();
+  if (overlayState.mirror && currentSource === "camera") {
+    segmentationPreviewCtx.translate(segmentationPreviewCanvas.width, 0);
+    segmentationPreviewCtx.scale(-1, 1);
+  }
+  segmentationPreviewCtx.drawImage(
+    segmentationTintCanvas,
+    0,
+    0,
+    segmentationPreviewCanvas.width,
+    segmentationPreviewCanvas.height
+  );
+  segmentationPreviewCtx.restore();
+}
+
+function refreshSegmentationTint() {
+  if (!segmentationBuffer) {
+    segmentationTintCanvas.width = 0;
+    segmentationTintCanvas.height = 0;
+    segmentationMaskAvailable = false;
+    clearSegmentationPreview();
+    return;
+  }
+  const width = segmentationBuffer.width || segmentationOffscreen.width;
+  const height = segmentationBuffer.height || segmentationOffscreen.height;
+  segmentationTintCanvas.width = width;
+  segmentationTintCanvas.height = height;
+  const tinted = segmentationTintCtx.createImageData(width, height);
+  const src = segmentationBuffer.data;
+  const dst = tinted.data;
+  const len = width * height;
+  for (let i = 0; i < len; i++) {
+    const alpha = src[i * 4] / 255;
+    dst[i * 4] = SEGMENTATION_COLOR.r;
+    dst[i * 4 + 1] = SEGMENTATION_COLOR.g;
+    dst[i * 4 + 2] = SEGMENTATION_COLOR.b;
+    dst[i * 4 + 3] = Math.round(alpha * SEGMENTATION_ALPHA * 255);
+  }
+  segmentationTintCtx.putImageData(tinted, 0, 0);
+  segmentationMaskAvailable = true;
+  drawSegmentationPreview();
+}
+
+holistic.onResults((results) => {
+  latestResults = results;
+  if (results.segmentationMask) {
+    segmentationOffscreen.width = results.segmentationMask.width || videoEl.videoWidth || 640;
+    segmentationOffscreen.height = results.segmentationMask.height || videoEl.videoHeight || 480;
+    segmentationOffCtx.globalCompositeOperation = "copy";
+    segmentationOffCtx.drawImage(results.segmentationMask, 0, 0, segmentationOffscreen.width, segmentationOffscreen.height);
+    segmentationBuffer = segmentationOffCtx.getImageData(0, 0, segmentationOffscreen.width, segmentationOffscreen.height);
+    refreshSegmentationTint();
+  } else {
+    segmentationBuffer = null;
+    refreshSegmentationTint();
+  }
+});
+
+    async function startCamera() {
+      stopSampleVideo();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 960 }, height: { ideal: 720 } },
+        audio: false
+      });
+      videoEl.srcObject = stream;
+      await videoEl.play();
+      applyStatus("Live camera ready");
+
+      camera = new Camera(videoEl, {
+        onFrame: async () => {
+          await holistic.send({ image: videoEl });
+        },
+        width: videoEl.videoWidth || 960,
+        height: videoEl.videoHeight || 720
+      });
+      camera.start();
+      currentSource = "camera";
+    }
+
+    async function startSampleVideo() {
+      stopCamera();
+      stopSampleVideo();
+      videoEl.srcObject = null;
+      videoEl.src = SAMPLE_VIDEO_URL;
+      try {
+        await waitForVideoReady(videoEl);
+      } catch (err) {
+        console.error("Sample video failed to load", err);
+        applyStatus("Sample video load failed");
+        return;
+      }
+      await videoEl.play();
+      applyStatus("Using sample video");
+
+      const loop = async () => {
+        if (videoEl.ended) {
+          videoEl.currentTime = 0;
+          await videoEl.play();
+        }
+        if (!videoEl.paused && videoEl.readyState >= 2) {
+          try {
+            await holistic.send({ image: videoEl });
+          } catch (err) {
+            console.warn("Holistic send failed on sample frame", err);
+          }
+        }
+        sampleHandle = requestAnimationFrame(loop);
+      };
+      sampleHandle = requestAnimationFrame(loop);
+      currentSource = "sample";
+    }
+
+    function stopCamera() {
+      if (camera) {
+        camera.stop();
+        camera = null;
+      }
+      const stream = videoEl.srcObject;
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+        videoEl.srcObject = null;
+      }
+    }
+
+    function stopSampleVideo() {
+      if (sampleHandle) {
+        cancelAnimationFrame(sampleHandle);
+        sampleHandle = null;
+      }
+      if (!videoEl.paused) {
+        videoEl.pause();
+      }
+      videoEl.removeAttribute("src");
+      videoEl.load();
+    }
+
+    toggleSourceBtn.addEventListener("click", async () => {
+      toggleSourceBtn.disabled = true;
+      try {
+        if (currentSource === "camera") {
+          applyStatus("Loading sample video…");
+          await startSampleVideo();
+        } else {
+          applyStatus("Requesting camera…");
+          await startCamera();
+        }
+      } catch (err) {
+        console.error("Source switch error", err);
+        applyStatus("Source switch failed");
+      } finally {
+        toggleSourceBtn.disabled = false;
+      }
+    });
+
+    resetBtn.addEventListener("click", () => {
+      poseToggle.checked = true;
+      leftHandToggle.checked = true;
+      rightHandToggle.checked = true;
+      faceToggle.checked = true;
+      segmentationToggle.checked = true;
+      depthToggle.checked = true;
+      showVideoCheckbox.checked = true;
+      if (currentSource === "camera") {
+        mirrorCheckbox.checked = true;
+      }
+      updateOverlayState();
+    });
+
+    window.addEventListener("beforeunload", () => {
+      stopSampleVideo();
+      stopCamera();
+    });
+
+    let p5Instance = null;
+
+    const DEFAULT_WIDTH = 960;
+    const DEFAULT_HEIGHT = 720;
+
+    let canvasWidth = DEFAULT_WIDTH;
+    let canvasHeight = DEFAULT_HEIGHT;
+
+    const setCanvasDimensions = (p, width, height) => {
+      canvasWidth = width || DEFAULT_WIDTH;
+      canvasHeight = height || DEFAULT_HEIGHT;
+      p.resizeCanvas(canvasWidth, canvasHeight);
+    };
+
+    const clampDepth = (value) => Math.max(-0.8, Math.min(0.8, value || 0));
+
+    const hexToRgb = (hex) => {
+      const normalized = hex.replace("#", "");
+      const bigint = parseInt(normalized, 16);
+      return {
+        r: (bigint >> 16) & 255,
+        g: (bigint >> 8) & 255,
+        b: bigint & 255
+      };
+    };
+
+    const interpolateColor = (fromHex, toHex, t) => {
+      const from = hexToRgb(fromHex);
+      const to = hexToRgb(toHex);
+      const mix = (start, end) => Math.round(start + (end - start) * t);
+      return `rgb(${mix(from.r, to.r)}, ${mix(from.g, to.g)}, ${mix(from.b, to.b)})`;
+    };
+
+    const depthStyle = (value) => {
+      const clamped = clampDepth(value);
+      const magnitude = Math.abs(clamped) / 0.8;
+      const pivotProximity = 1 - magnitude;
+      const pivotShrink = Math.pow(pivotProximity, 3);
+      const baseSize = 2.5 + pivotShrink * 2.5;
+      const size = baseSize + magnitude * 58;
+      const pivotColor = "#a855f7";
+      const farColor = "#ff4d4f";
+      const nearColor = "#3b82f6";
+      const color = clamped >= 0
+        ? interpolateColor(pivotColor, farColor, magnitude)
+        : interpolateColor(pivotColor, nearColor, magnitude);
+      return { color, size };
+    };
+
+    const drawLandmarks = (p, results) => {
+      if (!results) return;
+      const { poseLandmarks, leftHandLandmarks, rightHandLandmarks, faceLandmarks } = results;
+
+      const drawConnectorSet = (landmarks, connections, color, weight) => {
+        p.stroke(color);
+        p.strokeWeight(weight);
+        for (let i = 0; i < connections.length; i++) {
+          const [startIndex, endIndex] = connections[i];
+          const start = landmarks[startIndex];
+          const end = landmarks[endIndex];
+          if (!start || !end) continue;
+          p.line(start.x * canvasWidth, start.y * canvasHeight, end.x * canvasWidth, end.y * canvasHeight);
+        }
+      };
+
+      const drawLandmarkPoints = (landmarks, color, size = 6) => {
+        p.fill(color);
+        p.noStroke();
+        for (const lm of landmarks) {
+          p.circle(lm.x * canvasWidth, lm.y * canvasHeight, size);
+        }
+      };
+
+      if (overlayState.pose && poseLandmarks) {
+        drawConnectorSet(poseLandmarks, SAFE_POSE_CONNECTIONS, "#4cc9f0", 3);
+        drawLandmarkPoints(poseLandmarks, "rgba(76, 201, 240, 0.7)", 5);
+      }
+      if (overlayState.leftHand && leftHandLandmarks) {
+        drawConnectorSet(leftHandLandmarks, SAFE_HAND_CONNECTIONS, "#ff7096", 2.5);
+        drawLandmarkPoints(leftHandLandmarks, "rgba(255, 112, 150, 0.9)", 4);
+      }
+      if (overlayState.rightHand && rightHandLandmarks) {
+        drawConnectorSet(rightHandLandmarks, SAFE_HAND_CONNECTIONS, "#ff8fa3", 2.5);
+        drawLandmarkPoints(rightHandLandmarks, "rgba(255, 143, 163, 0.9)", 4);
+      }
+      if (overlayState.face && faceLandmarks) {
+        p.noFill();
+        p.stroke("#f9c74f");
+        p.strokeWeight(1.2);
+        if (SAFE_FACEMESH_TESSELATION.length) {
+          for (let i = 0; i < SAFE_FACEMESH_TESSELATION.length; i++) {
+            const [startIndex, endIndex] = SAFE_FACEMESH_TESSELATION[i];
+            const start = faceLandmarks[startIndex];
+            const end = faceLandmarks[endIndex];
+            if (!start || !end) continue;
+            p.line(start.x * canvasWidth, start.y * canvasHeight, end.x * canvasWidth, end.y * canvasHeight);
+          }
+        } else {
+          drawLandmarkPoints(faceLandmarks, "rgba(249, 199, 79, 0.8)", 3);
+        }
+      }
+      if (overlayState.depth && poseLandmarks) {
+        p.noStroke();
+        for (const lm of poseLandmarks) {
+          const { color, size } = depthStyle(lm.z ?? 0);
+          p.fill(color);
+          p.drawingContext.save();
+          p.drawingContext.globalAlpha = 0.5;
+          p.circle(lm.x * canvasWidth, lm.y * canvasHeight, size);
+          p.drawingContext.restore();
+        }
+      }
+    };
+
+const drawSegmentation = (p) => {
+  if (!overlayState.segmentation || !segmentationMaskAvailable || !segmentationTintCanvas.width) {
+    return;
+  }
+  const ctx = p.drawingContext;
+  ctx.save();
+  ctx.globalAlpha = 1;
+  ctx.drawImage(segmentationTintCanvas, 0, 0, canvasWidth, canvasHeight);
+  ctx.restore();
+};
+
+    p5Instance = new p5((p) => {
+      p.setup = () => {
+        const canvas = p.createCanvas(DEFAULT_WIDTH, DEFAULT_HEIGHT);
+        canvas.parent(sketchContainer);
+        p.background(4, 7, 13);
+        p.noStroke();
+      };
+
+      p.draw = () => {
+        if (!videoEl.videoWidth || !videoEl.videoHeight) {
+          return;
+        }
+
+        if (p.width !== videoEl.videoWidth || p.height !== videoEl.videoHeight) {
+          p.resizeCanvas(videoEl.videoWidth, videoEl.videoHeight);
+        }
+        setCanvasDimensions(p, videoEl.videoWidth, videoEl.videoHeight);
+
+        p.push();
+        if (overlayState.mirror && currentSource === "camera") {
+          p.translate(canvasWidth, 0);
+          p.scale(-1, 1);
+        }
+
+        p.background(4, 7, 13, overlayState.showVideo ? 180 : 255);
+
+        if (overlayState.showVideo && videoEl.readyState >= 2) {
+          const ctx = p.drawingContext;
+          ctx.save();
+          ctx.globalAlpha = 1;
+          ctx.drawImage(videoEl, 0, 0, canvasWidth, canvasHeight);
+          ctx.restore();
+        }
+
+        drawSegmentation(p);
+        drawLandmarks(p, latestResults);
+
+        p.pop();
+      };
+    });
+
+    (async () => {
+      try {
+        applyStatus("Requesting camera…");
+        await startCamera();
+      } catch (err) {
+        console.warn("Camera unavailable, falling back to sample video.", err);
+        applyStatus("Camera blocked — using sample video");
+        await startSampleVideo();
+      }
+    })();
+  </script>
+</body>
+</html>
