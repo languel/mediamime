@@ -10,6 +10,9 @@
     html, body {
       height: 100%;
     }
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
     body {
       margin: 0;
       display: flex;
@@ -20,17 +23,22 @@
       position: relative;
       flex: 1;
       display: flex;
+      width: 100vw;
       height: 100vh;
       min-width: 0;
+      min-height: 0;
       align-items: stretch;
+      justify-content: center;
       gap: 0;
     }
     .preview-canvas {
       position: relative;
       flex: 1 1 auto;
+      width: 100%;
+      height: 100%;
       min-width: 0;
       min-height: 0;
-      background: rgba(6, 10, 20, 0.82);
+      background: #000;
       overflow: hidden;
       display: flex;
       align-items: center;
@@ -42,10 +50,13 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      overflow: hidden;
     }
     .preview-canvas canvas {
-      width: 100%;
+      display: block;
+      width: auto;
       height: auto;
+      max-width: 100%;
       max-height: 100%;
     }
     .preview-canvas video {
@@ -109,8 +120,9 @@
     .control-row {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: flex-start;
       gap: 0.75rem;
+      flex-wrap: wrap;
       color: rgba(245, 247, 255, 0.8);
       font-size: 0.92rem;
     }
@@ -147,26 +159,43 @@
     }
     .overlay-toggles {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 0.5rem;
+      gap: 0.55rem;
     }
-    .toggle-card {
+    .overlay-toggles-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 90px 90px;
+      padding: 0 0.45rem;
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(245, 247, 255, 0.45);
+    }
+    .overlay-toggle {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 90px 90px;
+      align-items: center;
+      gap: 0.35rem;
       background: rgba(255, 255, 255, 0.05);
       border-radius: 10px;
       padding: 0.55rem 0.65rem;
-      display: flex;
+    }
+    .overlay-name {
+      color: rgba(245, 247, 255, 0.82);
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+    .overlay-switch {
+      display: inline-flex;
       align-items: center;
-      gap: 0.6rem;
+      justify-content: center;
+      gap: 0.35rem;
+      color: rgba(245, 247, 255, 0.75);
+      font-size: 0.82rem;
     }
-    .toggle-card input[type="checkbox"] {
+    .overlay-switch input[type="checkbox"] {
       accent-color: #ff4081;
-      width: 1.1rem;
-      height: 1.1rem;
-    }
-    .toggle-card span {
-      flex: 1;
-      color: rgba(245, 247, 255, 0.78);
-      font-size: 0.88rem;
+      width: 1.05rem;
+      height: 1.05rem;
     }
     .tip {
       font-size: 0.83rem;
@@ -255,46 +284,111 @@
       <div class="panel-content">
         <div class="control-row">
           <label>
-            <input type="checkbox" id="mediapiper-show-video" checked>
-            Show source underlay
-          </label>
-          <label>
             <input type="checkbox" id="mediapiper-mirror" checked>
             Mirror webcam
           </label>
         </div>
         <div class="overlay-toggles">
-          <label class="toggle-card">
-            <input type="checkbox" id="overlay-pose" checked>
-            <span>Pose Landmarks</span>
-          </label>
-          <label class="toggle-card">
-            <input type="checkbox" id="overlay-left-hand" checked>
-            <span>Left Hand</span>
-          </label>
-          <label class="toggle-card">
-            <input type="checkbox" id="overlay-right-hand" checked>
-            <span>Right Hand</span>
-          </label>
-          <label class="toggle-card">
-            <input type="checkbox" id="overlay-face" checked>
-            <span>Face Mesh</span>
-          </label>
-          <label class="toggle-card">
-            <input type="checkbox" id="overlay-segmentation" checked>
-            <span>Segmentation Mask</span>
-          </label>
-          <label class="toggle-card">
-            <input type="checkbox" id="overlay-depth" checked>
-            <span>Depth (Z)</span>
-          </label>
+          <div class="overlay-toggles-header">
+            <span>Stream</span>
+            <span>Main</span>
+            <span>Preview</span>
+          </div>
+          <div class="overlay-toggle">
+            <span class="overlay-name">Source Underlay</span>
+            <label class="overlay-switch">
+              <input type="checkbox" id="overlay-underlay-main" checked>
+              <span>Main</span>
+            </label>
+            <label class="overlay-switch">
+              <input type="checkbox" id="overlay-underlay-preview">
+              <span>Preview</span>
+            </label>
+          </div>
+          <div class="overlay-toggle">
+            <span class="overlay-name">Pose Landmarks</span>
+            <label class="overlay-switch">
+              <input type="checkbox" id="overlay-pose-main" checked>
+              <span>Main</span>
+            </label>
+            <label class="overlay-switch">
+              <input type="checkbox" id="overlay-pose-preview">
+              <span>Preview</span>
+            </label>
+          </div>
+          <div class="overlay-toggle">
+            <span class="overlay-name">Left Hand</span>
+            <label class="overlay-switch">
+              <input type="checkbox" id="overlay-left-hand-main" checked>
+              <span>Main</span>
+            </label>
+            <label class="overlay-switch">
+              <input type="checkbox" id="overlay-left-hand-preview">
+              <span>Preview</span>
+            </label>
+          </div>
+          <div class="overlay-toggle">
+            <span class="overlay-name">Right Hand</span>
+            <label class="overlay-switch">
+              <input type="checkbox" id="overlay-right-hand-main" checked>
+              <span>Main</span>
+            </label>
+            <label class="overlay-switch">
+              <input type="checkbox" id="overlay-right-hand-preview">
+              <span>Preview</span>
+            </label>
+          </div>
+          <div class="overlay-toggle">
+            <span class="overlay-name">Face Mesh</span>
+            <label class="overlay-switch">
+              <input type="checkbox" id="overlay-face-main" checked>
+              <span>Main</span>
+            </label>
+            <label class="overlay-switch">
+              <input type="checkbox" id="overlay-face-preview">
+              <span>Preview</span>
+            </label>
+          </div>
+          <div class="overlay-toggle">
+            <span class="overlay-name">Segmentation Mask</span>
+            <label class="overlay-switch">
+              <input type="checkbox" id="overlay-segmentation-main" checked>
+              <span>Main</span>
+            </label>
+            <label class="overlay-switch">
+              <input type="checkbox" id="overlay-segmentation-preview" checked>
+              <span>Preview</span>
+            </label>
+          </div>
+          <div class="overlay-toggle">
+            <span class="overlay-name">Depth (Z)</span>
+            <label class="overlay-switch">
+              <input type="checkbox" id="overlay-depth-main" checked>
+              <span>Main</span>
+            </label>
+            <label class="overlay-switch">
+              <input type="checkbox" id="overlay-depth-preview">
+              <span>Preview</span>
+            </label>
+          </div>
+          <div class="overlay-toggle">
+            <span class="overlay-name">Performance HUD</span>
+            <label class="overlay-switch">
+              <input type="checkbox" id="overlay-performance-main" checked>
+              <span>Main</span>
+            </label>
+            <label class="overlay-switch">
+              <input type="checkbox" id="overlay-performance-preview">
+              <span>Preview</span>
+            </label>
+          </div>
         </div>
-        <div class="segment-preview">
+        <div class="segment-preview" aria-hidden="false">
           <canvas id="segmentation-preview" width="320" height="180"></canvas>
-          <div class="tip">Segmentation alpha preview (raw mask). If this is blank, the mask is all zeros.</div>
+          <!-- <div class="tip">Preview canvas renders any stream with its Preview toggle enabled.</div> -->
         </div>
         <div class="tip">
-          Toggle overlay layers to confirm MediaPipe output. Pose and hand connectors adapt to mirror settings.
+          Toggle Main overlays to affect the canvas, and use Preview toggles to stage diagnostics or capture snapshots.
         </div>
       </div>
     </aside>
@@ -311,27 +405,55 @@ const SAMPLE_VIDEO_URL = "https://thefoxofsky.github.io/project_pages/RealisDanc
     const statusLabel = document.getElementById("mediapiper-status");
     const toggleSourceBtn = document.getElementById("mediapiper-toggle-source");
     const resetBtn = document.getElementById("mediapiper-reset");
-    const showVideoCheckbox = document.getElementById("mediapiper-show-video");
     const mirrorCheckbox = document.getElementById("mediapiper-mirror");
-    const poseToggle = document.getElementById("overlay-pose");
-    const leftHandToggle = document.getElementById("overlay-left-hand");
-    const rightHandToggle = document.getElementById("overlay-right-hand");
-    const faceToggle = document.getElementById("overlay-face");
-    const segmentationToggle = document.getElementById("overlay-segmentation");
-    const depthToggle = document.getElementById("overlay-depth");
+    const overlayControls = {
+      underlay: {
+        main: document.getElementById("overlay-underlay-main"),
+        preview: document.getElementById("overlay-underlay-preview")
+      },
+      pose: {
+        main: document.getElementById("overlay-pose-main"),
+        preview: document.getElementById("overlay-pose-preview")
+      },
+      leftHand: {
+        main: document.getElementById("overlay-left-hand-main"),
+        preview: document.getElementById("overlay-left-hand-preview")
+      },
+      rightHand: {
+        main: document.getElementById("overlay-right-hand-main"),
+        preview: document.getElementById("overlay-right-hand-preview")
+      },
+      face: {
+        main: document.getElementById("overlay-face-main"),
+        preview: document.getElementById("overlay-face-preview")
+      },
+      segmentation: {
+        main: document.getElementById("overlay-segmentation-main"),
+        preview: document.getElementById("overlay-segmentation-preview")
+      },
+      depth: {
+        main: document.getElementById("overlay-depth-main"),
+        preview: document.getElementById("overlay-depth-preview")
+      },
+      performance: {
+        main: document.getElementById("overlay-performance-main"),
+        preview: document.getElementById("overlay-performance-preview")
+      }
+    };
     const panelEl = document.getElementById("mediapiper-panel");
     const panelToggleBtn = document.getElementById("panel-toggle");
     const panelCloseBtn = document.getElementById("panel-close");
     const panelBackdrop = document.getElementById("panel-backdrop");
     const panelToggleIcon = panelToggleBtn?.querySelector(".material-icons-outlined");
-const segmentationPreviewCanvas = document.getElementById("segmentation-preview");
-const segmentationPreviewCtx = segmentationPreviewCanvas.getContext("2d");
+const previewCanvas = document.getElementById("segmentation-preview");
+const previewCtx = previewCanvas.getContext("2d", { willReadFrequently: true }) || previewCanvas.getContext("2d");
+const previewSection = document.querySelector(".segment-preview");
 
 const SEGMENTATION_COLOR = { r: 15, g: 139, b: 168 };
 const SEGMENTATION_ALPHA = 0.6;
 
 const segmentationTintCanvas = document.createElement("canvas");
-const segmentationTintCtx = segmentationTintCanvas.getContext("2d");
+const segmentationTintCtx = segmentationTintCanvas.getContext("2d", { willReadFrequently: true }) || segmentationTintCanvas.getContext("2d");
 
 const waitForVideoReady = (video) => {
   if (video.readyState >= 2) {
@@ -387,17 +509,7 @@ const SAFE_FACEMESH_TESSELATION = typeof FACEMESH_TESSELATION !== "undefined"
     videoEl.setAttribute("playsinline", "");
     videoEl.setAttribute("webkit-playsinline", "");
 
-    const holistic = new Holistic({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`
-    });
-    holistic.setOptions({
-      modelComplexity: 1,
-      smoothLandmarks: true,
-      enableSegmentation: true,
-      refineFaceLandmarks: true,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
-    });
+    let holistic = null;
 
     let currentSource = "camera";
     let camera = null;
@@ -408,27 +520,71 @@ const SAFE_FACEMESH_TESSELATION = typeof FACEMESH_TESSELATION !== "undefined"
 let segmentationBuffer = null;
 let segmentationMaskAvailable = false;
 
-    const overlayState = {
-      showVideo: true,
+    const DEFAULT_OVERLAY_STATE = {
       mirror: true,
-      pose: true,
-      leftHand: true,
-      rightHand: true,
-      face: true,
-      segmentation: true,
-      depth: true
+      underlay: { main: true, preview: false },
+      pose: { main: true, preview: false },
+      leftHand: { main: true, preview: false },
+      rightHand: { main: true, preview: false },
+      face: { main: true, preview: false },
+      segmentation: { main: true, preview: true },
+      depth: { main: true, preview: false },
+      performance: { main: true, preview: false }
     };
 
+    const overlayState = {
+      mirror: mirrorCheckbox?.checked ?? DEFAULT_OVERLAY_STATE.mirror
+    };
+    for (const [key, defaults] of Object.entries(DEFAULT_OVERLAY_STATE)) {
+      if (key === "mirror") continue;
+      overlayState[key] = { main: defaults.main, preview: defaults.preview };
+    }
+
+const performanceMetrics = {
+  fps: 0,
+  frameMs: 0,
+  inferenceMs: 0,
+  source: "camera"
+};
+
+let lastFrameTimestamp = performance.now();
+let smoothedFps = 0;
+let smoothedFrameMs = 0;
+let smoothedInferenceMs = 0;
+
+const resetPerformanceMetrics = () => {
+  performanceMetrics.fps = 0;
+  performanceMetrics.frameMs = 0;
+  performanceMetrics.inferenceMs = 0;
+  performanceMetrics.source = currentSource;
+  smoothedFps = 0;
+  smoothedFrameMs = 0;
+  smoothedInferenceMs = 0;
+  lastFrameTimestamp = performance.now();
+  drawPreviewCanvas();
+};
+
+const recordInferenceTime = (ms) => {
+  if (!Number.isFinite(ms) || ms <= 0) return;
+  smoothedInferenceMs = smoothedInferenceMs ? (smoothedInferenceMs * 0.8 + ms * 0.2) : ms;
+  performanceMetrics.inferenceMs = smoothedInferenceMs;
+};
+
 const updateOverlayState = () => {
-  overlayState.showVideo = showVideoCheckbox.checked;
-  overlayState.mirror = mirrorCheckbox.checked;
-  overlayState.pose = poseToggle.checked;
-  overlayState.leftHand = leftHandToggle.checked;
-  overlayState.rightHand = rightHandToggle.checked;
-  overlayState.face = faceToggle.checked;
-  overlayState.segmentation = segmentationToggle.checked;
-  overlayState.depth = depthToggle.checked;
-  drawSegmentationPreview();
+  for (const [key, controls] of Object.entries(overlayControls)) {
+    if (!overlayState[key]) {
+      overlayState[key] = { main: false, preview: false };
+    }
+    overlayState[key].main = controls.main?.checked ?? false;
+    overlayState[key].preview = controls.preview?.checked ?? false;
+  }
+  overlayState.mirror = mirrorCheckbox?.checked ?? DEFAULT_OVERLAY_STATE.mirror;
+  if (previewSection) {
+    const previewVisible = Object.keys(overlayControls).some((key) => overlayState[key]?.preview);
+    previewSection.style.display = previewVisible ? "" : "none";
+    previewSection.setAttribute("aria-hidden", previewVisible ? "false" : "true");
+  }
+  drawPreviewCanvas();
 };
 
 const setPanelState = (open, { skipFocus = false } = {}) => {
@@ -477,19 +633,30 @@ const waitForHolisticIdle = async () => {
 
 const resetHolistic = async () => {
   await waitForHolisticIdle();
-  try {
-    if (typeof holistic.reset === "function") {
-      await holistic.reset();
+  if (holistic && typeof holistic.close === "function") {
+    try {
+      await holistic.close();
+    } catch (err) {
+      console.warn("Holistic close failed", err);
     }
-  } catch (err) {
-    console.warn("Holistic reset failed", err);
   }
+  holisticBusy = false;
+  holistic = createHolistic();
 };
     setPanelState(Boolean(isPanelOpen), { skipFocus: true });
     updateOverlayState();
 
-    [showVideoCheckbox, mirrorCheckbox, poseToggle, leftHandToggle, rightHandToggle, faceToggle, segmentationToggle, depthToggle]
-      .forEach((input) => input.addEventListener("change", updateOverlayState));
+    const overlayInputs = Object.values(overlayControls)
+      .flatMap((controls) => [controls.main, controls.preview])
+      .filter(Boolean);
+
+    overlayInputs.forEach((input) => {
+      input.addEventListener("change", updateOverlayState);
+    });
+
+    if (mirrorCheckbox) {
+      mirrorCheckbox.addEventListener("change", updateOverlayState);
+    }
 
     if (panelToggleBtn) {
       panelToggleBtn.addEventListener("click", () => {
@@ -517,38 +684,188 @@ const resetHolistic = async () => {
     };
 
     const segmentationOffscreen = document.createElement("canvas");
-    const segmentationOffCtx = segmentationOffscreen.getContext("2d");
+    const segmentationOffCtx = segmentationOffscreen.getContext("2d", { willReadFrequently: true }) || segmentationOffscreen.getContext("2d");
 
-function clearSegmentationPreview() {
-  segmentationPreviewCtx.clearRect(0, 0, segmentationPreviewCanvas.width, segmentationPreviewCanvas.height);
+function clearPreviewCanvas() {
+  if (!previewCtx) return;
+  previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
 }
 
-function drawSegmentationPreview() {
-  clearSegmentationPreview();
-  if (!segmentationMaskAvailable || !segmentationTintCanvas.width) {
+function drawPreviewCanvas() {
+  if (!previewCtx || !previewCanvas) {
     return;
   }
-  segmentationPreviewCtx.save();
-  if (overlayState.mirror && currentSource === "camera") {
-    segmentationPreviewCtx.translate(segmentationPreviewCanvas.width, 0);
-    segmentationPreviewCtx.scale(-1, 1);
+  const previewActive = Object.keys(overlayControls).some((key) => overlayState[key]?.preview);
+  if (!previewActive) {
+    clearPreviewCanvas();
+    return;
   }
-  segmentationPreviewCtx.drawImage(
-    segmentationTintCanvas,
-    0,
-    0,
-    segmentationPreviewCanvas.width,
-    segmentationPreviewCanvas.height
-  );
-  segmentationPreviewCtx.restore();
+  clearPreviewCanvas();
+
+  const ctx = previewCtx;
+  const width = previewCanvas.width;
+  const height = previewCanvas.height;
+
+  ctx.save();
+  ctx.fillStyle = "#050912";
+  ctx.fillRect(0, 0, width, height);
+
+  const shouldMirror = overlayState.mirror && currentSource === "camera";
+  if (shouldMirror) {
+    ctx.translate(width, 0);
+    ctx.scale(-1, 1);
+  }
+
+  if (overlayState.underlay?.preview && videoEl.readyState >= 2) {
+    ctx.globalAlpha = 1;
+    ctx.drawImage(videoEl, 0, 0, width, height);
+  }
+
+  if (overlayState.segmentation?.preview && segmentationMaskAvailable && segmentationTintCanvas.width) {
+    ctx.globalAlpha = 1;
+    ctx.drawImage(segmentationTintCanvas, 0, 0, width, height);
+  }
+
+  if (latestResults) {
+    const { poseLandmarks, leftHandLandmarks, rightHandLandmarks, faceLandmarks } = latestResults;
+
+    const drawConnectorSet = (landmarks, connections, color, lineWidth) => {
+      if (!landmarks) return;
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lineWidth;
+      ctx.globalAlpha = 0.9;
+      for (let i = 0; i < connections.length; i++) {
+        const [startIndex, endIndex] = connections[i];
+        const start = landmarks[startIndex];
+        const end = landmarks[endIndex];
+        if (!start || !end) continue;
+        ctx.beginPath();
+        ctx.moveTo(start.x * width, start.y * height);
+        ctx.lineTo(end.x * width, end.y * height);
+        ctx.stroke();
+      }
+      ctx.restore();
+    };
+
+    const drawLandmarkDots = (landmarks, color, size) => {
+      if (!landmarks) return;
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.9;
+      for (const lm of landmarks) {
+        ctx.beginPath();
+        ctx.arc(lm.x * width, lm.y * height, size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    };
+
+    if (overlayState.pose?.preview && poseLandmarks) {
+      drawConnectorSet(poseLandmarks, SAFE_POSE_CONNECTIONS, "rgba(76, 201, 240, 0.9)", Math.max(1.4, width * 0.0035));
+      drawLandmarkDots(poseLandmarks, "rgba(76, 201, 240, 0.7)", Math.max(2.4, width * 0.01));
+    }
+    if (overlayState.leftHand?.preview && leftHandLandmarks) {
+      drawConnectorSet(leftHandLandmarks, SAFE_HAND_CONNECTIONS, "rgba(255, 112, 150, 0.95)", Math.max(1.2, width * 0.003));
+      drawLandmarkDots(leftHandLandmarks, "rgba(255, 112, 150, 0.9)", Math.max(2.2, width * 0.009));
+    }
+    if (overlayState.rightHand?.preview && rightHandLandmarks) {
+      drawConnectorSet(rightHandLandmarks, SAFE_HAND_CONNECTIONS, "rgba(255, 143, 163, 0.95)", Math.max(1.2, width * 0.003));
+      drawLandmarkDots(rightHandLandmarks, "rgba(255, 143, 163, 0.9)", Math.max(2.2, width * 0.009));
+    }
+    if (overlayState.face?.preview && faceLandmarks) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(249, 199, 79, 0.85)";
+      ctx.lineWidth = Math.max(0.8, width * 0.0025);
+      ctx.globalAlpha = 0.85;
+      if (SAFE_FACEMESH_TESSELATION.length) {
+        ctx.beginPath();
+        for (let i = 0; i < SAFE_FACEMESH_TESSELATION.length; i++) {
+          const [startIndex, endIndex] = SAFE_FACEMESH_TESSELATION[i];
+          const start = faceLandmarks[startIndex];
+          const end = faceLandmarks[endIndex];
+          if (!start || !end) continue;
+          ctx.moveTo(start.x * width, start.y * height);
+          ctx.lineTo(end.x * width, end.y * height);
+        }
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = "rgba(249, 199, 79, 0.75)";
+        for (const lm of faceLandmarks) {
+          ctx.beginPath();
+          ctx.arc(lm.x * width, lm.y * height, Math.max(1.5, width * 0.004), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+    if (overlayState.depth?.preview && poseLandmarks) {
+      ctx.save();
+      ctx.globalAlpha = 0.6;
+      for (const lm of poseLandmarks) {
+        const { color, size } = depthStyle(lm.z ?? 0);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(lm.x * width, lm.y * height, Math.max(size * 0.08, 2.4), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
+  ctx.restore();
+
+  if (overlayState.performance?.preview) {
+    const fpsText = Number.isFinite(performanceMetrics.fps) && performanceMetrics.fps > 0
+      ? performanceMetrics.fps.toFixed(1)
+      : "--";
+    const frameText = Number.isFinite(performanceMetrics.frameMs) && performanceMetrics.frameMs > 0
+      ? performanceMetrics.frameMs.toFixed(1)
+      : "--";
+    const inferenceText = Number.isFinite(performanceMetrics.inferenceMs) && performanceMetrics.inferenceMs > 0
+      ? performanceMetrics.inferenceMs.toFixed(1)
+      : "--";
+    const lines = [
+      `FPS: ${fpsText}`,
+      `Frame: ${frameText} ms`,
+      `Inference: ${inferenceText} ms`,
+      `Source: ${performanceMetrics.source}`
+    ];
+    const padding = 8;
+    const lineHeight = 16;
+    const boxWidth = width - padding * 2;
+    const boxHeight = padding * 2 + lines.length * lineHeight;
+    ctx.save();
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = "rgba(9, 13, 22, 0.86)";
+    ctx.fillRect(padding, padding, boxWidth, boxHeight);
+    ctx.fillStyle = "rgba(245, 247, 255, 0.92)";
+    ctx.font = "12px 'Inter', 'Helvetica Neue', Arial, sans-serif";
+    ctx.textBaseline = "top";
+    ctx.textAlign = "left";
+    lines.forEach((line, index) => {
+      ctx.fillText(line, padding + 10, padding + 6 + index * lineHeight);
+    });
+    ctx.restore();
+  }
 }
+
+const resetSegmentationData = () => {
+  segmentationBuffer = null;
+  segmentationMaskAvailable = false;
+  segmentationTintCanvas.width = 0;
+  segmentationTintCanvas.height = 0;
+  latestResults = null;
+  clearPreviewCanvas();
+  drawPreviewCanvas();
+};
 
 function refreshSegmentationTint() {
   if (!segmentationBuffer) {
     segmentationTintCanvas.width = 0;
     segmentationTintCanvas.height = 0;
     segmentationMaskAvailable = false;
-    clearSegmentationPreview();
+    clearPreviewCanvas();
     return;
   }
   const width = segmentationBuffer.width || segmentationOffscreen.width;
@@ -568,10 +885,10 @@ function refreshSegmentationTint() {
   }
   segmentationTintCtx.putImageData(tinted, 0, 0);
   segmentationMaskAvailable = true;
-  drawSegmentationPreview();
+  drawPreviewCanvas();
 }
 
-holistic.onResults((results) => {
+const handleHolisticResults = (results) => {
   latestResults = results;
   if (results.segmentationMask) {
     segmentationOffscreen.width = results.segmentationMask.width || videoEl.videoWidth || 640;
@@ -584,11 +901,30 @@ holistic.onResults((results) => {
     segmentationBuffer = null;
     refreshSegmentationTint();
   }
-});
+};
+
+const createHolistic = () => {
+  const instance = new Holistic({
+    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`
+  });
+  instance.setOptions({
+    modelComplexity: 1,
+    smoothLandmarks: true,
+    enableSegmentation: true,
+    refineFaceLandmarks: true,
+    minDetectionConfidence: 0.5,
+    minTrackingConfidence: 0.5
+  });
+  instance.onResults(handleHolisticResults);
+  return instance;
+};
+
+holistic = createHolistic();
 
     async function startCamera() {
       stopSampleVideo();
       await resetHolistic();
+      resetSegmentationData();
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 1280 },
@@ -614,7 +950,9 @@ holistic.onResults((results) => {
           }
           holisticBusy = true;
           try {
+            const inferenceStart = performance.now();
             await holistic.send({ image: videoEl });
+            recordInferenceTime(performance.now() - inferenceStart);
           } finally {
             holisticBusy = false;
           }
@@ -623,6 +961,7 @@ holistic.onResults((results) => {
         height: videoEl.videoHeight || 720
       });
       currentSource = "camera";
+      resetPerformanceMetrics();
       camera.start();
     }
 
@@ -630,6 +969,7 @@ holistic.onResults((results) => {
       stopCamera();
       stopSampleVideo();
       await resetHolistic();
+      resetSegmentationData();
       videoEl.srcObject = null;
       videoEl.src = SAMPLE_VIDEO_URL;
       try {
@@ -642,6 +982,7 @@ holistic.onResults((results) => {
       await videoEl.play();
       applyStatus("Using sample video");
       currentSource = "sample";
+      resetPerformanceMetrics();
 
       const loop = async () => {
         if (currentSource !== "sample") {
@@ -655,7 +996,9 @@ holistic.onResults((results) => {
           if (!holisticBusy) {
             holisticBusy = true;
             try {
+              const inferenceStart = performance.now();
               await holistic.send({ image: videoEl });
+              recordInferenceTime(performance.now() - inferenceStart);
             } catch (err) {
               console.warn("Holistic send failed on sample frame", err);
             } finally {
@@ -674,6 +1017,7 @@ holistic.onResults((results) => {
       if (currentSource === "camera") {
         currentSource = "none";
       }
+      resetSegmentationData();
       if (camera) {
         camera.stop();
         camera = null;
@@ -689,6 +1033,7 @@ holistic.onResults((results) => {
       if (currentSource === "sample") {
         currentSource = "none";
       }
+      resetSegmentationData();
       if (sampleHandle) {
         cancelAnimationFrame(sampleHandle);
         sampleHandle = null;
@@ -719,15 +1064,22 @@ holistic.onResults((results) => {
     });
 
     resetBtn.addEventListener("click", () => {
-      poseToggle.checked = true;
-      leftHandToggle.checked = true;
-      rightHandToggle.checked = true;
-      faceToggle.checked = true;
-      segmentationToggle.checked = true;
-      depthToggle.checked = true;
-      showVideoCheckbox.checked = true;
-      if (currentSource === "camera") {
-        mirrorCheckbox.checked = true;
+      for (const [key, controls] of Object.entries(overlayControls)) {
+        const defaults = DEFAULT_OVERLAY_STATE[key];
+        if (!defaults) continue;
+        if (controls.main) {
+          controls.main.checked = defaults.main;
+        }
+        if (controls.preview) {
+          controls.preview.checked = defaults.preview;
+        }
+      }
+      if (mirrorCheckbox) {
+        if (currentSource === "camera") {
+          mirrorCheckbox.checked = true;
+        } else {
+          mirrorCheckbox.checked = DEFAULT_OVERLAY_STATE.mirror;
+        }
       }
       updateOverlayState();
     });
@@ -810,19 +1162,19 @@ holistic.onResults((results) => {
         }
       };
 
-      if (overlayState.pose && poseLandmarks) {
+      if (overlayState.pose?.main && poseLandmarks) {
         drawConnectorSet(poseLandmarks, SAFE_POSE_CONNECTIONS, "#4cc9f0", 3);
         drawLandmarkPoints(poseLandmarks, "rgba(76, 201, 240, 0.7)", 5);
       }
-      if (overlayState.leftHand && leftHandLandmarks) {
+      if (overlayState.leftHand?.main && leftHandLandmarks) {
         drawConnectorSet(leftHandLandmarks, SAFE_HAND_CONNECTIONS, "#ff7096", 2.5);
         drawLandmarkPoints(leftHandLandmarks, "rgba(255, 112, 150, 0.9)", 4);
       }
-      if (overlayState.rightHand && rightHandLandmarks) {
+      if (overlayState.rightHand?.main && rightHandLandmarks) {
         drawConnectorSet(rightHandLandmarks, SAFE_HAND_CONNECTIONS, "#ff8fa3", 2.5);
         drawLandmarkPoints(rightHandLandmarks, "rgba(255, 143, 163, 0.9)", 4);
       }
-      if (overlayState.face && faceLandmarks) {
+      if (overlayState.face?.main && faceLandmarks) {
         p.noFill();
         p.stroke("#f9c74f");
         p.strokeWeight(1.2);
@@ -838,7 +1190,7 @@ holistic.onResults((results) => {
           drawLandmarkPoints(faceLandmarks, "rgba(249, 199, 79, 0.8)", 3);
         }
       }
-      if (overlayState.depth && poseLandmarks) {
+      if (overlayState.depth?.main && poseLandmarks) {
         p.noStroke();
         for (const lm of poseLandmarks) {
           const { color, size } = depthStyle(lm.z ?? 0);
@@ -851,8 +1203,41 @@ holistic.onResults((results) => {
       }
     };
 
+    const drawPerformanceOverlay = (p) => {
+      const fpsText = Number.isFinite(performanceMetrics.fps) && performanceMetrics.fps > 0
+        ? performanceMetrics.fps.toFixed(1)
+        : "--";
+      const frameText = Number.isFinite(performanceMetrics.frameMs) && performanceMetrics.frameMs > 0
+        ? performanceMetrics.frameMs.toFixed(1)
+        : "--";
+      const inferenceText = Number.isFinite(performanceMetrics.inferenceMs) && performanceMetrics.inferenceMs > 0
+        ? performanceMetrics.inferenceMs.toFixed(1)
+        : "--";
+      const lines = [
+        `FPS: ${fpsText}`,
+        `Frame: ${frameText} ms`,
+        `Inference: ${inferenceText} ms`,
+        `Source: ${performanceMetrics.source}`
+      ];
+      const padding = 16;
+      const boxWidth = 240;
+      const lineHeight = 20;
+      const boxHeight = padding * 1.5 + lines.length * lineHeight;
+      p.push();
+      p.noStroke();
+      p.fill(10, 14, 24, 220);
+      p.rect(padding, padding, boxWidth, boxHeight, 12);
+      p.fill(245, 247, 255);
+      p.textSize(15);
+      p.textAlign(p.LEFT, p.TOP);
+      lines.forEach((line, index) => {
+        p.text(line, padding + 12, padding + 10 + index * lineHeight);
+      });
+      p.pop();
+    };
+
 const drawSegmentation = (p) => {
-  if (!overlayState.segmentation || !segmentationMaskAvailable || !segmentationTintCanvas.width) {
+  if (!overlayState.segmentation?.main || !segmentationMaskAvailable || !segmentationTintCanvas.width) {
     return;
   }
   const ctx = p.drawingContext;
@@ -871,14 +1256,35 @@ const drawSegmentation = (p) => {
       };
 
       p.draw = () => {
-        if (!videoEl.videoWidth || !videoEl.videoHeight) {
+        const now = performance.now();
+        const delta = now - lastFrameTimestamp;
+        lastFrameTimestamp = now;
+        if (delta > 0 && delta < 1000) {
+          const instantFps = 1000 / delta;
+          smoothedFps = smoothedFps ? smoothedFps * 0.9 + instantFps * 0.1 : instantFps;
+          smoothedFrameMs = smoothedFrameMs ? smoothedFrameMs * 0.9 + delta * 0.1 : delta;
+          performanceMetrics.fps = smoothedFps;
+          performanceMetrics.frameMs = smoothedFrameMs;
+        }
+        performanceMetrics.source = currentSource;
+
+        const videoWidth = videoEl.videoWidth || DEFAULT_WIDTH;
+        const videoHeight = videoEl.videoHeight || DEFAULT_HEIGHT;
+
+        if (!videoWidth || !videoHeight) {
+          drawPreviewCanvas();
           return;
         }
 
-        if (p.width !== videoEl.videoWidth || p.height !== videoEl.videoHeight) {
-          p.resizeCanvas(videoEl.videoWidth, videoEl.videoHeight);
+        if (p.width !== videoWidth || p.height !== videoHeight) {
+          p.resizeCanvas(videoWidth, videoHeight);
         }
-        setCanvasDimensions(p, videoEl.videoWidth, videoEl.videoHeight);
+        setCanvasDimensions(p, videoWidth, videoHeight);
+
+        p.canvas.style.width = "auto";
+        p.canvas.style.height = "auto";
+        p.canvas.style.maxWidth = "100%";
+        p.canvas.style.maxHeight = "100%";
 
         p.push();
         if (overlayState.mirror && currentSource === "camera") {
@@ -886,9 +1292,9 @@ const drawSegmentation = (p) => {
           p.scale(-1, 1);
         }
 
-        p.background(4, 7, 13, overlayState.showVideo ? 180 : 255);
+        p.background(4, 7, 13, overlayState.underlay?.main ? 180 : 255);
 
-        if (overlayState.showVideo && videoEl.readyState >= 2) {
+        if (overlayState.underlay?.main && videoEl.readyState >= 2) {
           const ctx = p.drawingContext;
           ctx.save();
           ctx.globalAlpha = 1;
@@ -900,6 +1306,12 @@ const drawSegmentation = (p) => {
         drawLandmarks(p, latestResults);
 
         p.pop();
+
+        if (overlayState.performance?.main) {
+          drawPerformanceOverlay(p);
+        }
+
+        drawPreviewCanvas();
       };
     });
 
