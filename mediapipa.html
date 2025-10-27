@@ -147,6 +147,23 @@
       gap: 0.75rem;
       flex: 1;
     }
+    .panel-routing {
+      display: grid;
+      gap: 0.6rem;
+      padding: 0.75rem;
+      margin: 0 0.35rem;
+      border-radius: 12px;
+      background: rgba(12, 18, 30, 0.74);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .panel-routing-row {
+      display: grid;
+      gap: 0.4rem;
+    }
+    .panel-routing-row label {
+      font-size: 0.82rem;
+      color: rgba(245, 247, 255, 0.72);
+    }
     .panel-section {
       display: none;
       flex-direction: column;
@@ -155,25 +172,47 @@
     .panel-section.is-active {
       display: flex;
     }
-    .control-row {
+    .stream-controls {
       display: flex;
       align-items: center;
-      justify-content: flex-start;
-      gap: 0.75rem;
-      flex-wrap: wrap;
-      color: rgba(245, 247, 255, 0.8);
-      font-size: 0.92rem;
+      gap: 0.6rem;
+      padding: 0 0.45rem;
     }
-    .control-row label {
-      flex: 1;
+    .stream-toggle {
       display: inline-flex;
       align-items: center;
-      gap: 0.5rem;
+      justify-content: center;
+      width: 2.25rem;
+      height: 2.25rem;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.04);
+      cursor: pointer;
+      transition: background 0.18s ease, border-color 0.18s ease;
+      position: relative;
     }
-    .control-row input[type="checkbox"] {
-      accent-color: #ff4081;
-      width: 1.1rem;
-      height: 1.1rem;
+    .stream-toggle:hover {
+      background: rgba(255, 255, 255, 0.14);
+      border-color: rgba(255, 255, 255, 0.24);
+    }
+    .stream-toggle input[type="checkbox"] {
+      opacity: 0;
+      position: absolute;
+      inset: 0;
+      margin: 0;
+      cursor: pointer;
+    }
+    .stream-toggle .material-icons-outlined {
+      font-size: 18px;
+      pointer-events: none;
+      color: rgba(245, 247, 255, 0.82);
+    }
+    .stream-toggle input[type="checkbox"]:checked + .material-icons-outlined {
+      color: #f97316;
+    }
+    .stream-toggle input[type="checkbox"]:focus-visible + .material-icons-outlined {
+      outline: 2px solid #f97316;
+      outline-offset: 2px;
     }
     .status-chip {
       background: rgba(255, 255, 255, 0.08);
@@ -226,19 +265,35 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 0.35rem;
-      color: rgba(245, 247, 255, 0.75);
-      font-size: 0.82rem;
+      position: relative;
     }
     .overlay-switch input[type="checkbox"] {
       accent-color: #ff4081;
-      width: 1.05rem;
-      height: 1.05rem;
+      width: 1.1rem;
+      height: 1.1rem;
+      cursor: pointer;
+    }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
     .tip {
       font-size: 0.83rem;
       color: rgba(245, 247, 255, 0.65);
       line-height: 1.4;
+    }
+    .panel-footnote {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      padding: 0 0.45rem 0.75rem;
     }
     .panel-backdrop {
       position: absolute;
@@ -312,12 +367,16 @@
     }
     .gesture-editor-toolbar {
       position: absolute;
-      top: 1rem;
-      left: 1rem;
-      display: inline-flex;
-      flex-direction: column;
+      top: auto;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: center;
       gap: 0.35rem;
-      padding: 0.5rem;
+      padding: 0.5rem 0.65rem;
       border-radius: 16px;
       background: rgba(8, 12, 22, 0.9);
       border: 1px solid rgba(255, 255, 255, 0.08);
@@ -356,10 +415,10 @@
       box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
     }
     .gesture-editor-toolbar .toolbar-divider {
-      width: 100%;
-      height: 1px;
+      width: 1px;
+      height: 2.2rem;
       background: rgba(255, 255, 255, 0.12);
-      margin: 0.3rem 0;
+      margin: 0 0.4rem;
     }
     .gesture-svg-wrapper {
       flex: 1;
@@ -644,6 +703,34 @@
     .editor-detail-actions button.danger:hover {
       background: rgba(244, 63, 94, 0.25);
     }
+    .input-with-button {
+      display: flex;
+      gap: 0.45rem;
+      align-items: stretch;
+    }
+    .input-with-button select,
+    .input-with-button input {
+      flex: 1;
+    }
+    .input-with-button .icon-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.08);
+      color: #f5f7ff;
+      width: 2.3rem;
+      transition: background 0.18s ease;
+    }
+    .input-with-button .icon-button:hover {
+      background: rgba(255, 255, 255, 0.16);
+    }
+    .dual-input-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.45rem;
+    }
     @media (max-width: 1200px) {
       .editor-detail,
       .editor-shape-list {
@@ -665,7 +752,7 @@
             <span class="material-icons-outlined" aria-hidden="true">near_me</span>
           </button>
           <button id="gesture-tool-eraser" type="button" data-tool="eraser" title="Eraser (E)" aria-label="Eraser (E)">
-            <span class="material-icons-outlined" aria-hidden="true">ink_eraser</span>
+            <span class="material-icons-outlined" aria-hidden="true">auto_fix_off</span>
           </button>
           <button id="gesture-tool-rect" type="button" data-tool="rect" title="Rectangle (R)" aria-label="Rectangle (R)">
             <span class="material-icons-outlined" aria-hidden="true">crop_square</span>
@@ -673,11 +760,11 @@
           <button id="gesture-tool-ellipse" type="button" data-tool="ellipse" title="Oval (O)" aria-label="Oval (O)">
             <span class="material-icons-outlined" aria-hidden="true">radio_button_unchecked</span>
           </button>
-          <button id="gesture-tool-polyline" type="button" data-tool="polyline" title="Polyline (P)" aria-label="Polyline (P)">
+          <button id="gesture-tool-line" type="button" data-tool="line" title="Line (L)" aria-label="Line (L)">
             <span class="material-icons-outlined" aria-hidden="true">timeline</span>
           </button>
-          <button id="gesture-polyline-fill" type="button" title="Toggle fill (F)" aria-label="Toggle fill (F)">
-            <span class="material-icons-outlined" aria-hidden="true">format_color_reset</span>
+          <button id="gesture-tool-polygon" type="button" data-tool="polygon" title="Polygon (P)" aria-label="Polygon (P)">
+            <span class="material-icons-outlined" aria-hidden="true">change_history</span>
           </button>
           <div class="toolbar-divider" aria-hidden="true"></div>
           <button id="gesture-mode-toggle" type="button" title="Toggle perform mode" aria-label="Toggle perform mode">
@@ -704,10 +791,6 @@
       <div class="panel-header">
         <h2>Streams</h2>
         <div class="panel-actions">
-          <span id="mediapiper-status" class="status-chip">Initializing…</span>
-          <button id="mediapiper-toggle-source" class="icon-button" title="Toggle video source" aria-label="Toggle video source">
-            <span class="material-icons-outlined" aria-hidden="true">switch_video</span>
-          </button>
           <button id="mediapiper-reset" class="icon-button" title="Reset overlays" aria-label="Reset overlays">
             <span class="material-icons-outlined" aria-hidden="true">refresh</span>
           </button>
@@ -722,11 +805,14 @@
       </div>
       <div class="panel-content">
         <div class="panel-section is-active" data-panel-section="streams" id="panel-streams" role="tabpanel" aria-label="Stream controls">
-          <div class="control-row">
-            <label>
-              <input type="checkbox" id="mediapiper-mirror" checked>
-              Mirror webcam
+          <div class="stream-controls">
+            <label class="stream-toggle" title="Mirror camera">
+              <input type="checkbox" id="mediapiper-mirror" checked aria-label="Mirror camera">
+              <span class="material-icons-outlined" aria-hidden="true">flip_camera_android</span>
             </label>
+            <button id="mediapiper-toggle-source" class="icon-button" title="Toggle media source" aria-label="Toggle media source">
+              <span class="material-icons-outlined" aria-hidden="true">switch_video</span>
+            </button>
           </div>
           <div class="overlay-toggles">
             <div class="overlay-toggles-header">
@@ -735,113 +821,118 @@
               <span>Preview</span>
             </div>
             <div class="overlay-toggle">
-              <span class="overlay-name">Source Underlay</span>
-              <label class="overlay-switch">
-                <input type="checkbox" id="overlay-underlay-main" checked>
-                <span>Main</span>
+              <span class="overlay-name">Source</span>
+              <label class="overlay-switch" title="Source main">
+                <input type="checkbox" id="overlay-underlay-main" checked aria-label="Source main">
               </label>
-              <label class="overlay-switch">
-                <input type="checkbox" id="overlay-underlay-preview">
-                <span>Preview</span>
+              <label class="overlay-switch" title="Source preview">
+                <input type="checkbox" id="overlay-underlay-preview" aria-label="Source preview">
               </label>
             </div>
             <div class="overlay-toggle">
-              <span class="overlay-name">Pose Landmarks</span>
-              <label class="overlay-switch">
-                <input type="checkbox" id="overlay-pose-main" checked>
-                <span>Main</span>
+              <span class="overlay-name">Pose</span>
+              <label class="overlay-switch" title="Pose main">
+                <input type="checkbox" id="overlay-pose-main" checked aria-label="Pose main">
               </label>
-              <label class="overlay-switch">
-                <input type="checkbox" id="overlay-pose-preview">
-                <span>Preview</span>
+              <label class="overlay-switch" title="Pose preview">
+                <input type="checkbox" id="overlay-pose-preview" aria-label="Pose preview">
               </label>
             </div>
             <div class="overlay-toggle">
-              <span class="overlay-name">Left Hand</span>
-              <label class="overlay-switch">
-                <input type="checkbox" id="overlay-left-hand-main" checked>
-                <span>Main</span>
+              <span class="overlay-name">LHand</span>
+              <label class="overlay-switch" title="Left hand main">
+                <input type="checkbox" id="overlay-left-hand-main" checked aria-label="Left hand main">
               </label>
-              <label class="overlay-switch">
-                <input type="checkbox" id="overlay-left-hand-preview">
-                <span>Preview</span>
+              <label class="overlay-switch" title="Left hand preview">
+                <input type="checkbox" id="overlay-left-hand-preview" aria-label="Left hand preview">
               </label>
             </div>
             <div class="overlay-toggle">
-              <span class="overlay-name">Right Hand</span>
-              <label class="overlay-switch">
-                <input type="checkbox" id="overlay-right-hand-main" checked>
-                <span>Main</span>
+              <span class="overlay-name">RHand</span>
+              <label class="overlay-switch" title="Right hand main">
+                <input type="checkbox" id="overlay-right-hand-main" checked aria-label="Right hand main">
               </label>
-              <label class="overlay-switch">
-                <input type="checkbox" id="overlay-right-hand-preview">
-                <span>Preview</span>
+              <label class="overlay-switch" title="Right hand preview">
+                <input type="checkbox" id="overlay-right-hand-preview" aria-label="Right hand preview">
               </label>
             </div>
             <div class="overlay-toggle">
-              <span class="overlay-name">Face Mesh</span>
-              <label class="overlay-switch">
-                <input type="checkbox" id="overlay-face-main" checked>
-                <span>Main</span>
+              <span class="overlay-name">Face</span>
+              <label class="overlay-switch" title="Face main">
+                <input type="checkbox" id="overlay-face-main" checked aria-label="Face main">
               </label>
-              <label class="overlay-switch">
-                <input type="checkbox" id="overlay-face-preview">
-                <span>Preview</span>
+              <label class="overlay-switch" title="Face preview">
+                <input type="checkbox" id="overlay-face-preview" aria-label="Face preview">
               </label>
             </div>
             <div class="overlay-toggle">
-              <span class="overlay-name">Segmentation Mask</span>
-              <label class="overlay-switch">
-                <input type="checkbox" id="overlay-segmentation-main" checked>
-                <span>Main</span>
+              <span class="overlay-name">Segmentation</span>
+              <label class="overlay-switch" title="Segmentation main">
+                <input type="checkbox" id="overlay-segmentation-main" aria-label="Segmentation main">
               </label>
-              <label class="overlay-switch">
-                <input type="checkbox" id="overlay-segmentation-preview" checked>
-                <span>Preview</span>
+              <label class="overlay-switch" title="Segmentation preview">
+                <input type="checkbox" id="overlay-segmentation-preview" checked aria-label="Segmentation preview">
               </label>
             </div>
             <div class="overlay-toggle">
-              <span class="overlay-name">Depth (Z)</span>
-              <label class="overlay-switch">
-                <input type="checkbox" id="overlay-depth-main" checked>
-                <span>Main</span>
+              <span class="overlay-name">Depth</span>
+              <label class="overlay-switch" title="Depth main">
+                <input type="checkbox" id="overlay-depth-main" aria-label="Depth main">
               </label>
-              <label class="overlay-switch">
-                <input type="checkbox" id="overlay-depth-preview">
-                <span>Preview</span>
+              <label class="overlay-switch" title="Depth preview">
+                <input type="checkbox" id="overlay-depth-preview" checked aria-label="Depth preview">
               </label>
             </div>
-          <div class="overlay-toggle">
-            <span class="overlay-name">Performance HUD</span>
-            <label class="overlay-switch">
-              <input type="checkbox" id="overlay-performance-main" checked>
-              <span>Main</span>
-            </label>
-            <label class="overlay-switch">
-              <input type="checkbox" id="overlay-performance-preview">
-              <span>Preview</span>
-            </label>
+            <div class="overlay-toggle">
+              <span class="overlay-name">Performance</span>
+              <label class="overlay-switch" title="Performance main">
+                <input type="checkbox" id="overlay-performance-main" aria-label="Performance main">
+              </label>
+              <label class="overlay-switch" title="Performance preview">
+                <input type="checkbox" id="overlay-performance-preview" checked aria-label="Performance preview">
+              </label>
+            </div>
+            <div class="overlay-toggle">
+              <span class="overlay-name">Score</span>
+              <label class="overlay-switch" title="Score main">
+                <input type="checkbox" id="overlay-score-main" checked aria-label="Score main">
+              </label>
+              <label class="overlay-switch" title="Score preview">
+                <input type="checkbox" id="overlay-score-preview" checked aria-label="Score preview">
+              </label>
+            </div>
           </div>
-          <div class="overlay-toggle">
-            <span class="overlay-name">Score Editor</span>
-            <label class="overlay-switch">
-              <input type="checkbox" id="overlay-score-main" checked>
-              <span>Main</span>
-            </label>
-            <label class="overlay-switch">
-              <input type="checkbox" id="overlay-score-preview">
-              <span>Preview</span>
-            </label>
-          </div>
-        </div>
           <div class="segment-preview" aria-hidden="false">
             <canvas id="segmentation-preview" width="320" height="180"></canvas>
           </div>
-          <div class="tip">
-            Toggle Main overlays to affect the canvas, and use Preview toggles to stage diagnostics or capture snapshots.
+          <div class="panel-footnote">
+            <span id="mediapiper-status" class="status-chip">Initializing…</span>
+            <div class="tip">
+              Toggle Main overlays to affect the canvas, and use Preview toggles to stage diagnostics or capture snapshots.
+            </div>
           </div>
         </div>
         <div class="panel-section" data-panel-section="editor" id="panel-editor" role="tabpanel" aria-label="Score editor">
+          <div class="panel-routing" aria-label="Global routing settings">
+            <div class="panel-routing-row">
+              <label for="editor-midi-port">MIDI Port</label>
+              <div class="input-with-button">
+                <select id="editor-midi-port">
+                  <option value="broadcast">All Outputs</option>
+                </select>
+                <button id="editor-midi-port-refresh" type="button" class="icon-button" title="Refresh MIDI ports" aria-label="Refresh MIDI ports">
+                  <span class="material-icons-outlined" aria-hidden="true">refresh</span>
+                </button>
+              </div>
+            </div>
+            <div class="panel-routing-row">
+              <label>OSC Destination</label>
+              <div class="dual-input-row">
+                <input id="editor-osc-host" type="text" placeholder="127.0.0.1">
+                <input id="editor-osc-port" type="number" min="1" max="65535" placeholder="9000">
+              </div>
+            </div>
+          </div>
           <div class="editor-panel">
             <div class="editor-shape-list" id="editor-shape-list" role="listbox" aria-label="Score elements"></div>
             <div class="editor-detail" id="editor-detail">
@@ -954,6 +1045,17 @@
         <option value="cc">Control Change</option>
       </select>
     </section>
+    <section class="form-group">
+      <label for="assignment-midi-port">MIDI Port</label>
+      <div class="input-with-button">
+        <select id="assignment-midi-port">
+          <option value="broadcast">All Outputs</option>
+        </select>
+        <button id="assignment-midi-port-refresh" type="button" class="icon-button" title="Refresh MIDI ports" aria-label="Refresh MIDI ports">
+          <span class="material-icons-outlined" aria-hidden="true">refresh</span>
+        </button>
+      </div>
+    </section>
     <section class="form-group" id="assignment-midi-channel-group">
       <label for="assignment-midi-channel">MIDI Channel (1-16)</label>
       <input id="assignment-midi-channel" type="number" min="1" max="16" value="1">
@@ -979,6 +1081,13 @@
       <input id="assignment-osc-address" type="text" placeholder="/instrument/parameter">
     </section>
     <section class="form-group">
+      <label>OSC Destination</label>
+      <div class="dual-input-row">
+        <input id="assignment-osc-host" type="text" placeholder="127.0.0.1">
+        <input id="assignment-osc-port" type="number" min="1" max="65535" placeholder="9000">
+      </div>
+    </section>
+    <section class="form-group">
       <label for="assignment-osc-args">OSC Arguments</label>
       <input id="assignment-osc-args" type="text" placeholder="comma separated values">
     </section>
@@ -989,8 +1098,9 @@
   </div>
 
   <script type="module">
-// const SAMPLE_VIDEO_URL = "https://thefoxofsky.github.io/project_pages/RealisDance-DiT/video/mv/2.mp4";
-const SAMPLE_VIDEO_URL = "https://thefoxofsky.github.io/project_pages/RealisDance-DiT/video/mv/4.mp4";
+const SAMPLE_VIDEO_URL = "https://thefoxofsky.github.io/project_pages/RealisDance-DiT/video/mv/2.mp4";
+// const SAMPLE_VIDEO_URL = "https://thefoxofsky.github.io/project_pages/RealisDance-DiT/video/v/0003.mp4";
+// const SAMPLE_VIDEO_URL = "https://thefoxofsky.github.io/project_pages/RealisDance-DiT/video/mv/4.mp4";
 // const SAMPLE_VIDEO_URL= "https://media.gettyimages.com/id/1432864804/video/a-man-and-a-woman-dance-outdoors-in-preparation-for-a-performance-healthy-lifestyle.mp4?s=mp4-640x640-gi&k=20&c=QenL_gqhEWh665fqtFCuOXsZCdf-EgTSK2JCf_XnPLM=";
 // const SAMPLE_VIDEO_URL = "https://media.gettyimages.com/id/1481811636/video/for-us-dance-is-a-way-of-life.mp4?s=mp4-640x640-gi&k=20&c=-eEh1Svdu4dKJCEXijI7d4WOfGWVtAe9Gv_5mmqJYQA=";
 
@@ -1059,9 +1169,9 @@ const gestureToolButtons = {
   eraser: document.getElementById("gesture-tool-eraser"),
   rect: document.getElementById("gesture-tool-rect"),
   ellipse: document.getElementById("gesture-tool-ellipse"),
-  polyline: document.getElementById("gesture-tool-polyline")
+  line: document.getElementById("gesture-tool-line"),
+  polygon: document.getElementById("gesture-tool-polygon")
 };
-const gesturePolylineFillBtn = document.getElementById("gesture-polyline-fill");
 const gestureModeToggle = document.getElementById("gesture-mode-toggle");
 const gestureClearBtn = document.getElementById("gesture-clear");
 const assignmentModal = document.getElementById("assignment-modal");
@@ -1073,12 +1183,16 @@ const assignmentStreamSelect = document.getElementById("assignment-stream");
 const assignmentLandmarkSelect = document.getElementById("assignment-landmark");
 const assignmentTriggerSelect = document.getElementById("assignment-trigger");
 const assignmentMidiTypeSelect = document.getElementById("assignment-midi-type");
+const assignmentMidiPortSelect = document.getElementById("assignment-midi-port");
+const assignmentMidiPortRefreshBtn = document.getElementById("assignment-midi-port-refresh");
 const assignmentMidiChannelInput = document.getElementById("assignment-midi-channel");
 const assignmentMidiNoteInput = document.getElementById("assignment-midi-note");
 const assignmentMidiVelocityInput = document.getElementById("assignment-midi-velocity");
 const assignmentMidiCcInput = document.getElementById("assignment-midi-cc");
 const assignmentMidiCcValueInput = document.getElementById("assignment-midi-cc-value");
 const assignmentOscAddressInput = document.getElementById("assignment-osc-address");
+const assignmentOscHostInput = document.getElementById("assignment-osc-host");
+const assignmentOscPortInput = document.getElementById("assignment-osc-port");
 const assignmentOscArgsInput = document.getElementById("assignment-osc-args");
 const midiNoteGroup = document.getElementById("assignment-midi-note-group");
 const midiVelocityGroup = document.getElementById("assignment-midi-velocity-group");
@@ -1093,6 +1207,8 @@ const editorStreamSelect = document.getElementById("editor-stream-select");
 const editorLandmarkSelect = document.getElementById("editor-landmark-select");
 const editorTriggerSelect = document.getElementById("editor-trigger-select");
 const editorMidiTypeSelect = document.getElementById("editor-midi-type");
+const editorMidiPortSelect = document.getElementById("editor-midi-port");
+const editorMidiPortRefreshBtn = document.getElementById("editor-midi-port-refresh");
 const editorMidiChannelInput = document.getElementById("editor-midi-channel");
 const editorMidiNoteInput = document.getElementById("editor-midi-note");
 const editorMidiVelocityInput = document.getElementById("editor-midi-velocity");
@@ -1100,6 +1216,8 @@ const editorMidiCcInput = document.getElementById("editor-midi-cc");
 const editorMidiCcValueInput = document.getElementById("editor-midi-cc-value");
 const editorOscAddressInput = document.getElementById("editor-osc-address");
 const editorOscArgsInput = document.getElementById("editor-osc-args");
+const editorOscHostInput = document.getElementById("editor-osc-host");
+const editorOscPortInput = document.getElementById("editor-osc-port");
 const editorDeleteShapeBtn = document.getElementById("editor-delete-shape");
 const editorOpenModalBtn = document.getElementById("editor-open-modal");
 const editorMidiChannelGroup = document.getElementById("editor-midi-channel-group");
@@ -1208,18 +1326,18 @@ const SAFE_FACEMESH_TESSELATION = typeof FACEMESH_TESSELATION !== "undefined"
 let segmentationBuffer = null;
 let segmentationMaskAvailable = false;
 
-    const DEFAULT_OVERLAY_STATE = {
-      mirror: true,
-      underlay: { main: true, preview: false },
-      pose: { main: true, preview: false },
-      leftHand: { main: true, preview: false },
-      rightHand: { main: true, preview: false },
-      face: { main: true, preview: false },
-      segmentation: { main: true, preview: true },
-      depth: { main: true, preview: false },
-      performance: { main: true, preview: false },
-      score: { main: true, preview: false }
-    };
+const DEFAULT_OVERLAY_STATE = {
+  mirror: true,
+  underlay: { main: true, preview: false },
+  pose: { main: true, preview: false },
+  leftHand: { main: true, preview: false },
+  rightHand: { main: true, preview: false },
+  face: { main: true, preview: false },
+  segmentation: { main: false, preview: true },
+  depth: { main: false, preview: true },
+  performance: { main: false, preview: true },
+  score: { main: true, preview: true }
+};
 
 const overlayState = {
   mirror: mirrorCheckbox?.checked ?? DEFAULT_OVERLAY_STATE.mirror
@@ -1231,6 +1349,57 @@ for (const [key, defaults] of Object.entries(DEFAULT_OVERLAY_STATE)) {
 
 const isScoreMainEnabled = () => overlayState.score?.main !== false;
 const isScorePreviewEnabled = () => overlayState.score?.preview ?? false;
+
+const CONFIG_STORAGE_KEY = "mediapipa:config";
+const DEFAULT_EDITOR_CONFIG = {
+  midiPort: "broadcast",
+  oscHost: "127.0.0.1",
+  oscPort: 9000
+};
+const editorConfig = { ...DEFAULT_EDITOR_CONFIG };
+let isSyncingConfig = false;
+
+const ACTIVE_STROKE_COLOR = "#f97316";
+const ACTIVE_FILL_COLOR = "rgba(249, 115, 22, 0.32)";
+const ACTIVE_PREVIEW_STROKE_COLOR = "rgba(249, 115, 22, 0.88)";
+const ACTIVE_PREVIEW_FILL_COLOR = "rgba(249, 115, 22, 0.24)";
+
+const loadEditorConfig = () => {
+  if (typeof localStorage === "undefined") {
+    return;
+  }
+  try {
+    const raw = localStorage.getItem(CONFIG_STORAGE_KEY);
+    if (!raw) return;
+    const stored = JSON.parse(raw);
+    if (!stored || typeof stored !== "object") return;
+    if (stored.midiPort) editorConfig.midiPort = String(stored.midiPort);
+    if (stored.oscHost) editorConfig.oscHost = String(stored.oscHost);
+    if (stored.oscPort) {
+      const parsed = clampRange(parseInt(stored.oscPort, 10) || DEFAULT_EDITOR_CONFIG.oscPort, 1, 65535);
+      editorConfig.oscPort = parsed;
+    }
+  } catch (err) {
+    console.warn("Failed to load editor config", err);
+  }
+};
+
+const saveEditorConfig = () => {
+  if (typeof localStorage === "undefined") {
+    return;
+  }
+  try {
+    localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(editorConfig));
+  } catch (err) {
+    console.warn("Failed to save editor config", err);
+  }
+};
+
+const updateEditorConfig = (changes = {}) => {
+  Object.assign(editorConfig, changes);
+  saveEditorConfig();
+  applyGlobalConnectionConfig();
+};
 
 const applyScoreVisibility = () => {
   const visible = isScoreMainEnabled();
@@ -1877,11 +2046,11 @@ holistic = createHolistic();
       didMutate: false,
       activePolylineId: null,
       polylineHoverPoint: null,
-      polylineFill: false,
       eraserActive: false,
       eraserPointerId: null,
       erasedShapeIds: new Set()
     };
+    const isPolylineTool = (tool) => tool === "line" || tool === "polygon";
     const STORAGE_KEY = "mediapipa:gesture-shapes";
     let persistTimer = null;
     let activePanelTab = panelTabs.find((button) => button.classList.contains("is-active"))?.dataset?.panelTab || "streams";
@@ -2106,6 +2275,9 @@ holistic = createHolistic();
       }
       if (!hasShape) {
         updateMidiControlsVisibility(editorMidiTypeSelect?.value || "none", editorMidiContext);
+        populateMidiPortSelect(editorMidiPortSelect, editorConfig.midiPort);
+        if (editorOscHostInput) editorOscHostInput.value = editorConfig.oscHost;
+        if (editorOscPortInput) editorOscPortInput.value = editorConfig.oscPort;
         return;
       }
       const interaction = mergeInteraction(shape.interaction);
@@ -2123,6 +2295,8 @@ holistic = createHolistic();
       if (editorMidiTypeSelect) {
         editorMidiTypeSelect.value = interaction.midi.type;
       }
+      populateMidiPortSelect(editorMidiPortSelect, editorConfig.midiPort);
+      if (editorMidiPortSelect) editorMidiPortSelect.dataset.selectedPort = editorConfig.midiPort;
       if (editorMidiChannelInput) {
         editorMidiChannelInput.value = interaction.midi.channel;
       }
@@ -2140,6 +2314,12 @@ holistic = createHolistic();
       }
       if (editorOscAddressInput) {
         editorOscAddressInput.value = interaction.osc.address || "";
+      }
+      if (editorOscHostInput) {
+        editorOscHostInput.value = editorConfig.oscHost;
+      }
+      if (editorOscPortInput) {
+        editorOscPortInput.value = editorConfig.oscPort;
       }
       if (editorOscArgsInput) {
         editorOscArgsInput.value = interaction.osc.args || "";
@@ -2195,6 +2375,13 @@ holistic = createHolistic();
       }
       if (previousInteraction !== shape.interaction) {
         shape.interaction = mergeInteraction(shape.interaction);
+        if (shape.interaction?.midi) {
+          delete shape.interaction.midi.port;
+        }
+        if (shape.interaction?.osc) {
+          delete shape.interaction.osc.host;
+          delete shape.interaction.osc.port;
+        }
       }
       resetShapeRuntime(shape);
       markEditorSidebarDirty();
@@ -2247,6 +2434,7 @@ holistic = createHolistic();
         osc: { ...defaults.osc, ...(source.osc || {}) }
       };
     };
+    const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (match) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[match]));
     const normalizeVertices = (vertices) => {
       if (!Array.isArray(vertices)) return [];
       return vertices.map((vertex) => ({
@@ -2334,34 +2522,6 @@ holistic = createHolistic();
       }
       return minDistance;
     };
-    const updatePolylineFillButton = () => {
-      if (!gesturePolylineFillBtn) return;
-      gesturePolylineFillBtn.classList.toggle("is-active", editorState.polylineFill);
-      const icon = gesturePolylineFillBtn.querySelector(".material-icons-outlined");
-      if (icon) {
-        icon.textContent = editorState.polylineFill ? "format_color_fill" : "format_color_reset";
-      }
-      const label = editorState.polylineFill ? "Disable fill (F)" : "Enable fill (F)";
-      gesturePolylineFillBtn.setAttribute("aria-label", label);
-      gesturePolylineFillBtn.setAttribute("title", label);
-      gesturePolylineFillBtn.setAttribute("aria-pressed", editorState.polylineFill ? "true" : "false");
-      gesturePolylineFillBtn.disabled = editorState.mode === "perform" || editorState.tool !== "polyline";
-    };
-    const setPolylineFill = (fill) => {
-      editorState.polylineFill = Boolean(fill);
-      updatePolylineFillButton();
-      const activeShape = editorState.activePolylineId ? findShapeById(editorState.activePolylineId) : null;
-      if (activeShape && activeShape.type === "polyline") {
-        activeShape.closed = editorState.polylineFill;
-        ensurePolylineStyle(activeShape);
-        markEditorSidebarDirty();
-        renderEditor();
-      }
-    };
-    const togglePolylineFill = () => {
-      if (editorState.tool !== "polyline") return;
-      setPolylineFill(!editorState.polylineFill);
-    };
     const removeShapeById = (shapeId) => {
       if (!shapeId) return;
       const index = editorState.shapes.findIndex((shape) => shape.id === shapeId);
@@ -2428,7 +2588,7 @@ holistic = createHolistic();
         id: ensureUuid(),
         type: "polyline",
         vertices: [{ ...point }],
-        closed: editorState.polylineFill,
+        closed: editorState.tool === "polygon",
         style: { ...DEFAULT_SHAPE_STYLE },
         interaction: createDefaultInteraction(),
         runtime: { inside: false, lastTriggerAt: 0, noteOn: false, lastContinuousAt: 0 }
@@ -2457,6 +2617,17 @@ holistic = createHolistic();
       markEditorSidebarDirty();
       renderEditor();
     };
+    const sanitizeInteractionForStorage = (interaction) => {
+      const merged = mergeInteraction(interaction);
+      if (merged?.midi) {
+        delete merged.midi.port;
+      }
+      if (merged?.osc) {
+        delete merged.osc.host;
+        delete merged.osc.port;
+      }
+      return merged;
+    };
     const serializeShapes = () => editorState.shapes.map((shape) => ({
       id: shape.id,
       type: shape.type,
@@ -2465,7 +2636,7 @@ holistic = createHolistic();
       width: shape.width,
       height: shape.height,
       style: shape.style,
-      interaction: shape.interaction,
+      interaction: sanitizeInteractionForStorage(shape.interaction),
       vertices: shape.vertices,
       closed: shape.closed ?? false
     }));
@@ -2494,6 +2665,14 @@ holistic = createHolistic();
         if (!Array.isArray(data)) return;
         editorState.shapes = data.map((shape) => {
           const type = shape.type === "ellipse" ? "ellipse" : (shape.type === "polyline" ? "polyline" : "rect");
+          const mergedInteraction = mergeInteraction(shape.interaction);
+          if (mergedInteraction?.midi) {
+            delete mergedInteraction.midi.port;
+          }
+          if (mergedInteraction?.osc) {
+            delete mergedInteraction.osc.host;
+            delete mergedInteraction.osc.port;
+          }
           const normalized = {
             id: shape.id || ensureUuid(),
             type,
@@ -2502,7 +2681,7 @@ holistic = createHolistic();
             width: clampRange(shape.width ?? SHAPE_MIN_SIZE, SHAPE_MIN_SIZE, 1),
             height: clampRange(shape.height ?? SHAPE_MIN_SIZE, SHAPE_MIN_SIZE, 1),
             style: { ...DEFAULT_SHAPE_STYLE, ...(shape.style || {}) },
-            interaction: mergeInteraction(shape.interaction),
+            interaction: mergedInteraction,
             runtime: { inside: false, lastTriggerAt: 0, noteOn: false, lastContinuousAt: 0 }
           };
           if (type === "polyline") {
@@ -2569,10 +2748,6 @@ holistic = createHolistic();
         button.classList.toggle("is-active", editorState.tool === tool);
         button.disabled = editorState.mode === "perform";
       }
-      if (gesturePolylineFillBtn) {
-        gesturePolylineFillBtn.disabled = editorState.mode === "perform" || editorState.tool !== "polyline";
-      }
-      updatePolylineFillButton();
     };
 
     const updateModeToggleLabel = () => {
@@ -2603,9 +2778,12 @@ holistic = createHolistic();
           classes.push("is-active");
         }
         const className = classes.join(" ");
-        const fill = shape.style?.fill ?? DEFAULT_SHAPE_STYLE.fill;
-        const stroke = shape.style?.stroke ?? DEFAULT_SHAPE_STYLE.stroke;
+        const baseFill = shape.style?.fill ?? DEFAULT_SHAPE_STYLE.fill;
+        const baseStroke = shape.style?.stroke ?? DEFAULT_SHAPE_STYLE.stroke;
         const strokeWidth = shape.style?.strokeWidth ?? DEFAULT_SHAPE_STYLE.strokeWidth;
+        const isActive = Boolean(shape.runtime?.inside);
+        const strokeColor = isActive ? ACTIVE_STROKE_COLOR : baseStroke;
+        const fillColor = isActive && baseFill !== "none" ? ACTIVE_FILL_COLOR : baseFill;
         if (shape.type === "polyline") {
           const vertices = normalizeVertices(shape.vertices);
           const pointsAttribute = vertices.map((vertex) => `${vertex.x * width} ${vertex.y * height}`).join(" ");
@@ -2615,15 +2793,16 @@ holistic = createHolistic();
             const lastVertex = vertices[vertices.length - 1];
             const hoverX = hoverPoint.x * width;
             const hoverY = hoverPoint.y * height;
-            previewMarkup += `<line class="gesture-polyline-preview" x1="${lastVertex.x * width}" y1="${lastVertex.y * height}" x2="${hoverX}" y2="${hoverY}" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-dasharray="4 4"></line>`;
+            previewMarkup += `<line class="gesture-polyline-preview" x1="${lastVertex.x * width}" y1="${lastVertex.y * height}" x2="${hoverX}" y2="${hoverY}" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-dasharray="4 4"></line>`;
             if (shape.closed && vertices.length >= 2) {
               const firstVertex = vertices[0];
-              previewMarkup += `<line class="gesture-polyline-preview" x1="${hoverX}" y1="${hoverY}" x2="${firstVertex.x * width}" y2="${firstVertex.y * height}" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-dasharray="4 4"></line>`;
+              previewMarkup += `<line class="gesture-polyline-preview" x1="${hoverX}" y1="${hoverY}" x2="${firstVertex.x * width}" y2="${firstVertex.y * height}" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-dasharray="4 4"></line>`;
             }
           }
-          const commonAttrs = `data-shape-id="${shape.id}" data-shape-type="polyline" class="${className}" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round"`;
+          const commonAttrs = `data-shape-id="${shape.id}" data-shape-type="polyline" class="${className}" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round"`;
           if (shape.closed && vertices.length >= 3) {
-            return `<polygon ${commonAttrs} points="${pointsAttribute}" fill="${fill}"></polygon>`;
+            const polygonFill = fillColor === "none" ? "none" : fillColor;
+            return `<polygon ${commonAttrs} points="${pointsAttribute}" fill="${polygonFill}"></polygon>`;
           }
           return `<polyline ${commonAttrs} points="${pointsAttribute}" fill="none"></polyline>`;
         }
@@ -2634,9 +2813,11 @@ holistic = createHolistic();
         if (shape.type === "ellipse") {
           const cx = x + w / 2;
           const cy = y + h / 2;
-          return `<ellipse data-shape-id="${shape.id}" data-shape-type="ellipse" class="${className}" cx="${cx}" cy="${cy}" rx="${Math.max(w / 2, 1)}" ry="${Math.max(h / 2, 1)}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"></ellipse>`;
+          const ellipseFill = fillColor === "none" ? "none" : fillColor;
+          return `<ellipse data-shape-id="${shape.id}" data-shape-type="ellipse" class="${className}" cx="${cx}" cy="${cy}" rx="${Math.max(w / 2, 1)}" ry="${Math.max(h / 2, 1)}" fill="${ellipseFill}" stroke="${strokeColor}" stroke-width="${strokeWidth}"></ellipse>`;
         }
-        return `<rect data-shape-id="${shape.id}" data-shape-type="rect" class="${className}" x="${x}" y="${y}" width="${Math.max(w, 1)}" height="${Math.max(h, 1)}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"></rect>`;
+        const rectFill = fillColor === "none" ? "none" : fillColor;
+        return `<rect data-shape-id="${shape.id}" data-shape-type="rect" class="${className}" x="${x}" y="${y}" width="${Math.max(w, 1)}" height="${Math.max(h, 1)}" fill="${rectFill}" stroke="${strokeColor}" stroke-width="${strokeWidth}"></rect>`;
       }).join("");
       let handlesMarkup = "";
       const selectedShape = findShapeById(editorState.selectedId);
@@ -2673,9 +2854,12 @@ holistic = createHolistic();
       if (!isScorePreviewEnabled() || !editorState.shapes.length) return;
       ctx.save();
       for (const shape of editorState.shapes) {
-        const fill = shape.style?.fill ?? DEFAULT_SHAPE_STYLE.fill;
-        const stroke = shape.style?.stroke ?? DEFAULT_SHAPE_STYLE.stroke;
+        const baseFill = shape.style?.fill ?? DEFAULT_SHAPE_STYLE.fill;
+        const baseStroke = shape.style?.stroke ?? DEFAULT_SHAPE_STYLE.stroke;
         const strokeWidth = shape.style?.strokeWidth ?? DEFAULT_SHAPE_STYLE.strokeWidth;
+        const isActive = Boolean(shape.runtime?.inside);
+        const strokeColor = isActive ? ACTIVE_PREVIEW_STROKE_COLOR : baseStroke;
+        const fillColor = isActive && baseFill !== "none" ? ACTIVE_PREVIEW_FILL_COLOR : baseFill;
         ctx.globalAlpha = 1;
         if (shape.type === "polyline") {
           const vertices = normalizeVertices(shape.vertices);
@@ -2690,14 +2874,14 @@ holistic = createHolistic();
           }
           if (shape.closed && vertices.length >= 3) {
             ctx.closePath();
-            if (fill && fill !== "none") {
-              ctx.fillStyle = fill;
+            if (fillColor && fillColor !== "none") {
+              ctx.fillStyle = fillColor;
               ctx.globalAlpha = 0.7;
               ctx.fill();
               ctx.globalAlpha = 1;
             }
           }
-          ctx.strokeStyle = stroke;
+          ctx.strokeStyle = strokeColor;
           ctx.lineWidth = strokeWidth;
           ctx.lineJoin = "round";
           ctx.lineCap = "round";
@@ -2713,24 +2897,24 @@ holistic = createHolistic();
           ctx.save();
           ctx.beginPath();
           ctx.ellipse(x + w / 2, y + h / 2, Math.max(w / 2, 1), Math.max(h / 2, 1), 0, 0, Math.PI * 2);
-          if (fill && fill !== "none") {
-            ctx.fillStyle = fill;
+          if (fillColor && fillColor !== "none") {
+            ctx.fillStyle = fillColor;
             ctx.globalAlpha = 0.7;
             ctx.fill();
           }
           ctx.globalAlpha = 1;
-          ctx.strokeStyle = stroke;
+          ctx.strokeStyle = strokeColor;
           ctx.lineWidth = strokeWidth;
           ctx.stroke();
           ctx.restore();
         } else {
-          if (fill && fill !== "none") {
-            ctx.fillStyle = fill;
+          if (fillColor && fillColor !== "none") {
+            ctx.fillStyle = fillColor;
             ctx.globalAlpha = 0.7;
             ctx.fillRect(x, y, w, h);
           }
           ctx.globalAlpha = 1;
-          ctx.strokeStyle = stroke;
+          ctx.strokeStyle = strokeColor;
           ctx.lineWidth = strokeWidth;
           ctx.strokeRect(x, y, w, h);
         }
@@ -2764,7 +2948,7 @@ holistic = createHolistic();
       if (!tool) return;
       const previousTool = editorState.tool;
       editorState.tool = tool;
-      if (previousTool === "polyline" && tool !== "polyline") {
+      if (isPolylineTool(previousTool) && previousTool !== tool) {
         finalizeActivePolyline({ commit: true });
       }
       if (tool !== "eraser") {
@@ -2776,7 +2960,7 @@ holistic = createHolistic();
         clearActivePolylineState();
         setSelectedShape(null, { suppressRender: true });
       }
-      if (tool === "polyline") {
+      if (isPolylineTool(tool)) {
         editorState.polylineHoverPoint = null;
       }
       updateToolButtons();
@@ -2797,16 +2981,16 @@ holistic = createHolistic();
       gestureModeToggle?.classList.toggle("is-active", mode === "perform");
       updateModeToggleLabel();
       updateToolButtons();
-      updatePolylineFillButton();
     };
 
     const beginDrawing = (tool, event) => {
       const svgPoint = toSvgPoint(event);
       if (!svgPoint) return;
       const normalized = toNormalizedPoint(svgPoint);
+      const shapeType = isPolylineTool(tool) ? "polyline" : tool;
       const shape = {
         id: ensureUuid(),
-        type: tool,
+        type: shapeType,
         x: normalized.x,
         y: normalized.y,
         width: 0,
@@ -3057,7 +3241,7 @@ holistic = createHolistic();
         beginErasing(event);
         return;
       }
-      if (editorState.tool === "polyline") {
+      if (isPolylineTool(editorState.tool)) {
         handlePolylinePointerDown(event);
         return;
       }
@@ -3084,7 +3268,7 @@ holistic = createHolistic();
     };
 
     const handleEditorPointerMove = (event) => {
-      if (editorState.tool === "polyline" && editorState.activePolylineId) {
+      if (isPolylineTool(editorState.tool) && editorState.activePolylineId) {
         handlePolylinePointerMove(event);
         return;
       }
@@ -3176,15 +3360,13 @@ holistic = createHolistic();
           setEditorTool("ellipse");
           event.preventDefault();
           break;
-        case "p":
-          setEditorTool("polyline");
+        case "l":
+          setEditorTool("line");
           event.preventDefault();
           break;
-        case "f":
-          if (editorState.tool === "polyline") {
-            togglePolylineFill();
-            event.preventDefault();
-          }
+        case "p":
+          setEditorTool("polygon");
+          event.preventDefault();
           break;
         case "delete":
         case "backspace":
@@ -3197,7 +3379,7 @@ holistic = createHolistic();
           }
           break;
         case "enter":
-          if (editorState.tool === "polyline" && editorState.activePolylineId) {
+          if (isPolylineTool(editorState.tool) && editorState.activePolylineId) {
             finalizeActivePolyline({ commit: true });
             event.preventDefault();
           } else if (editorState.selectedId) {
@@ -3206,7 +3388,7 @@ holistic = createHolistic();
           }
           break;
         case "escape":
-          if (editorState.tool === "polyline" && editorState.activePolylineId) {
+          if (isPolylineTool(editorState.tool) && editorState.activePolylineId) {
             cancelActivePolyline();
             event.preventDefault();
           } else if (editorState.selectedId) {
@@ -3223,6 +3405,7 @@ holistic = createHolistic();
       if (!assignmentModal || !assignmentBackdrop) return;
       const shape = findShapeById(shapeId);
       if (!shape) return;
+      refreshMidiPortOptions();
       activeAssignmentShapeId = shapeId;
       const interaction = mergeInteraction(shape.interaction);
       const stream = interaction.stream || "pose";
@@ -3239,12 +3422,18 @@ holistic = createHolistic();
       }
       const midi = interaction.midi || createDefaultInteraction().midi;
       if (assignmentMidiTypeSelect) assignmentMidiTypeSelect.value = midi.type || "none";
+      populateMidiPortSelect(assignmentMidiPortSelect, editorConfig.midiPort);
+      if (assignmentMidiPortSelect) {
+        assignmentMidiPortSelect.dataset.selectedPort = editorConfig.midiPort;
+      }
       if (assignmentMidiChannelInput) assignmentMidiChannelInput.value = midi.channel ?? 1;
       if (assignmentMidiNoteInput) assignmentMidiNoteInput.value = midi.note ?? 60;
       if (assignmentMidiVelocityInput) assignmentMidiVelocityInput.value = midi.velocity ?? 96;
       if (assignmentMidiCcInput) assignmentMidiCcInput.value = midi.cc ?? 1;
       if (assignmentMidiCcValueInput) assignmentMidiCcValueInput.value = midi.value ?? 100;
       if (assignmentOscAddressInput) assignmentOscAddressInput.value = interaction.osc?.address ?? "";
+      if (assignmentOscHostInput) assignmentOscHostInput.value = editorConfig.oscHost;
+      if (assignmentOscPortInput) assignmentOscPortInput.value = editorConfig.oscPort;
       if (assignmentOscArgsInput) assignmentOscArgsInput.value = interaction.osc?.args ?? "";
       updateMidiControlsVisibility(assignmentMidiTypeSelect?.value || "none", modalMidiContext);
       assignmentBackdrop.classList.add("is-visible");
@@ -3279,13 +3468,19 @@ holistic = createHolistic();
       const landmark = assignmentLandmarkSelect?.value || getStreamDefinition(stream)?.options?.[0]?.key || "";
       const trigger = assignmentTriggerSelect?.value || "enter";
       const midiType = assignmentMidiTypeSelect?.value || "none";
+      const midiPort = assignmentMidiPortSelect?.value || "broadcast";
       const midiChannel = clampRange(parseInt(assignmentMidiChannelInput?.value ?? "1", 10) || 1, 1, 16);
       const midiNote = clampRange(parseInt(assignmentMidiNoteInput?.value ?? "60", 10) || 60, 0, 127);
       const midiVelocity = clampRange(parseInt(assignmentMidiVelocityInput?.value ?? "96", 10) || 96, 0, 127);
       const midiCcNumber = clampRange(parseInt(assignmentMidiCcInput?.value ?? "1", 10) || 1, 0, 127);
       const midiCcValue = clampRange(parseInt(assignmentMidiCcValueInput?.value ?? "100", 10) || 100, 0, 127);
       const oscAddress = assignmentOscAddressInput?.value?.trim() || "";
+      const oscHost = assignmentOscHostInput?.value?.trim() || "127.0.0.1";
+      const oscPort = clampRange(parseInt(assignmentOscPortInput?.value ?? "9000", 10) || 9000, 1, 65535);
       const oscArgs = assignmentOscArgsInput?.value?.trim() || "";
+      if (!isSyncingConfig) {
+        updateEditorConfig({ midiPort, oscHost, oscPort });
+      }
       shape.interaction = {
         stream,
         landmark,
@@ -3316,6 +3511,40 @@ holistic = createHolistic();
       access: null,
       outputs: []
     };
+    const getMidiOutputs = () => Array.isArray(midiManager.outputs) ? midiManager.outputs : [];
+    const midiOptionLabel = (output, index) => {
+      const baseName = output?.name && output.name.trim() ? output.name.trim() : `Port ${index + 1}`;
+      const manufacturer = output?.manufacturer && output.manufacturer.trim() ? output.manufacturer.trim() : "";
+      return manufacturer ? `${baseName} (${manufacturer})` : baseName;
+    };
+    const populateMidiPortSelect = (selectEl, selectedId = editorConfig.midiPort) => {
+      if (!selectEl) return;
+      const outputs = getMidiOutputs();
+      const options = [
+        { id: "broadcast", label: "All Outputs" },
+        ...outputs.map((output, index) => ({ id: output.id || `port-${index}`, label: midiOptionLabel(output, index) }))
+      ];
+      selectEl.innerHTML = options.map((option) => `<option value="${escapeHtml(option.id)}">${escapeHtml(option.label)}</option>`).join("");
+      const normalized = options.some((option) => option.id === selectedId) ? selectedId : "broadcast";
+      selectEl.value = normalized;
+      selectEl.dataset.selectedPort = normalized;
+    };
+    function applyGlobalConnectionConfig() {
+      isSyncingConfig = true;
+      populateMidiPortSelect(assignmentMidiPortSelect, editorConfig.midiPort);
+      populateMidiPortSelect(editorMidiPortSelect, editorConfig.midiPort);
+      if (assignmentMidiPortSelect) assignmentMidiPortSelect.dataset.selectedPort = editorConfig.midiPort;
+      if (editorMidiPortSelect) editorMidiPortSelect.dataset.selectedPort = editorConfig.midiPort;
+      if (assignmentOscHostInput) assignmentOscHostInput.value = editorConfig.oscHost;
+      if (editorOscHostInput) editorOscHostInput.value = editorConfig.oscHost;
+      if (assignmentOscPortInput) assignmentOscPortInput.value = editorConfig.oscPort;
+      if (editorOscPortInput) editorOscPortInput.value = editorConfig.oscPort;
+      isSyncingConfig = false;
+    }
+    const refreshMidiPortOptions = async () => {
+      await ensureMidiAccess();
+      applyGlobalConnectionConfig();
+    };
     const ensureMidiAccess = () => {
       if (!midiManager.supported) {
         return Promise.resolve(null);
@@ -3330,7 +3559,9 @@ holistic = createHolistic();
           midiManager.ready = true;
           access.addEventListener("statechange", () => {
             midiManager.outputs = Array.from(access.outputs.values());
+            applyGlobalConnectionConfig();
           });
+          applyGlobalConnectionConfig();
           return midiManager.outputs;
         }).catch((err) => {
           console.warn("MIDI access unavailable", err);
@@ -3340,17 +3571,24 @@ holistic = createHolistic();
       }
       return midiManager.pending;
     };
-    const sendMidiMessage = (status, data1, data2) => {
+    const sendMidiMessage = (status, data1, data2, portId = "broadcast") => {
       if (!midiManager.supported) {
-        console.info("[MIDI]", { status, data1, data2 });
+        console.info("[MIDI]", { status, data1, data2, port: portId });
         return;
       }
       ensureMidiAccess().then((outputs) => {
         if (!outputs || !outputs.length) {
-          console.info("[MIDI pending output]", { status, data1, data2 });
+          console.info("[MIDI pending output]", { status, data1, data2, port: portId });
           return;
         }
-        outputs.forEach((output) => {
+        const targets = portId && portId !== "broadcast"
+          ? outputs.filter((output) => output.id === portId)
+          : outputs;
+        if (!targets.length) {
+          console.info("[MIDI no matching port]", { port: portId, status, data1, data2 });
+          return;
+        }
+        targets.forEach((output) => {
           try {
             output.send([status, data1, data2]);
           } catch (err) {
@@ -3359,25 +3597,29 @@ holistic = createHolistic();
         });
       });
     };
-    const sendMidiNote = (channel, note, velocity, type = "on") => {
+    const sendMidiNote = (channel, note, velocity, type = "on", portId = editorConfig.midiPort) => {
       const normalizedChannel = clampRange(Math.floor(channel) || 1, 1, 16);
       const normalizedNote = clampRange(Math.floor(note) || 0, 0, 127);
       const normalizedVelocity = clampRange(Math.floor(velocity) || 0, 0, 127);
       const status = (type === "off" ? 0x80 : 0x90) | ((normalizedChannel - 1) & 0x0f);
-      sendMidiMessage(status, normalizedNote, normalizedVelocity);
+      sendMidiMessage(status, normalizedNote, normalizedVelocity, portId);
     };
-    const sendMidiCc = (channel, cc, value) => {
+    const sendMidiCc = (channel, cc, value, portId = editorConfig.midiPort) => {
       const normalizedChannel = clampRange(Math.floor(channel) || 1, 1, 16);
       const normalizedCc = clampRange(Math.floor(cc) || 0, 0, 127);
       const normalizedValue = clampRange(Math.floor(value) || 0, 0, 127);
       const status = 0xb0 | ((normalizedChannel - 1) & 0x0f);
-      sendMidiMessage(status, normalizedCc, normalizedValue);
+      sendMidiMessage(status, normalizedCc, normalizedValue, portId);
     };
-    const parseOscArgs = (input) => {
+    const parseOscArgs = (input, context = {}) => {
       if (!input) return [];
       return input.split(",").map((chunk) => {
         const value = chunk.trim();
         if (!value) return "";
+        if (value === ":value") return context.value ?? 0;
+        if (value === ":phase") return context.phase ?? "";
+        if (value === ":inside") return context.inside ? 1 : 0;
+        if (value === ":timestamp") return context.timestamp ?? Date.now();
         if (value === "true") return true;
         if (value === "false") return false;
         const numeric = Number(value);
@@ -3479,8 +3721,9 @@ holistic = createHolistic();
     };
     const adjustPointForMirror = (point) => {
       if (!point) return null;
-      if (!editorState.mirror) return point;
-      return { ...point, x: 1 - point.x };
+      // Shapes persist in the camera's native coordinate system even when the UI is mirrored,
+      // so incoming landmark points can be compared as-is without flipping them again.
+      return point;
     };
     const evaluateShapeInteractions = (results) => {
       if (!results || !editorState.shapes.length || !isScoreMainEnabled()) return;
@@ -3514,26 +3757,39 @@ holistic = createHolistic();
         const matchesTrigger = phase && (interaction.trigger === phase || (interaction.trigger === "inside" && phase === "inside"));
         if (interaction.midi?.type === "note") {
           if (justEntered) {
-            sendMidiNote(interaction.midi.channel, interaction.midi.note, interaction.midi.velocity, "on");
+            sendMidiNote(interaction.midi.channel, interaction.midi.note, interaction.midi.velocity, "on", editorConfig.midiPort);
             runtime.noteOn = true;
           } else if (justExited && runtime.noteOn) {
-            sendMidiNote(interaction.midi.channel, interaction.midi.note, 0, "off");
+            sendMidiNote(interaction.midi.channel, interaction.midi.note, 0, "off", editorConfig.midiPort);
             runtime.noteOn = false;
           } else if (matchesTrigger && interaction.trigger === "inside" && inside) {
-            sendMidiNote(interaction.midi.channel, interaction.midi.note, interaction.midi.velocity, "on");
+            sendMidiNote(interaction.midi.channel, interaction.midi.note, interaction.midi.velocity, "on", editorConfig.midiPort);
             runtime.noteOn = true;
           }
         } else if (interaction.midi?.type === "cc" && matchesTrigger) {
           const value = phase === "exit" ? 0 : interaction.midi.value;
-          sendMidiCc(interaction.midi.channel, interaction.midi.cc, value);
+          sendMidiCc(interaction.midi.channel, interaction.midi.cc, value, editorConfig.midiPort);
         }
         if (interaction.osc?.address && matchesTrigger) {
-          const args = parseOscArgs(interaction.osc.args);
+          const oscValue = phase === "exit" ? 0 : (inside ? 1 : 0);
+          const args = parseOscArgs(interaction.osc.args, {
+            value: oscValue,
+            phase,
+            inside,
+            timestamp: now
+          });
+          if (!args.length) {
+            args.push(oscValue);
+          }
           sendOscMessage(interaction.osc.address, args, {
             shapeId: shape.id,
             phase,
             stream: interaction.stream,
-            landmark: interaction.landmark
+            landmark: interaction.landmark,
+            host: editorConfig.oscHost,
+            port: editorConfig.oscPort,
+            value: oscValue,
+            inside
           });
         }
         runtime.inside = inside;
@@ -3553,7 +3809,7 @@ holistic = createHolistic();
     };
 
     const handleEditorDoubleClick = (event) => {
-      if (editorState.tool === "polyline" && editorState.activePolylineId) {
+      if (isPolylineTool(editorState.tool) && editorState.activePolylineId) {
         finalizeActivePolyline({ commit: true });
         return;
       }
@@ -3585,13 +3841,6 @@ holistic = createHolistic();
       });
     }
 
-    gesturePolylineFillBtn?.addEventListener("click", () => {
-      if (editorState.mode === "perform") {
-        setEditorMode("edit");
-      }
-      togglePolylineFill();
-    });
-
     gestureModeToggle?.addEventListener("click", () => {
       const nextMode = editorState.mode === "perform" ? "edit" : "perform";
       setEditorMode(nextMode);
@@ -3611,6 +3860,14 @@ holistic = createHolistic();
     });
     assignmentMidiTypeSelect?.addEventListener("change", () => {
       updateMidiControlsVisibility(assignmentMidiTypeSelect.value, modalMidiContext);
+    });
+    assignmentMidiPortSelect?.addEventListener("change", () => {
+      if (isSyncingConfig) return;
+      const value = assignmentMidiPortSelect.value || "broadcast";
+      updateEditorConfig({ midiPort: value });
+    });
+    assignmentMidiPortRefreshBtn?.addEventListener("click", () => {
+      refreshMidiPortOptions();
     });
     assignmentCloseBtn?.addEventListener("click", closeAssignmentModal);
     assignmentCancelBtn?.addEventListener("click", closeAssignmentModal);
@@ -3690,6 +3947,14 @@ holistic = createHolistic();
         target.interaction = interaction;
       }, { skipRender: true });
     });
+    editorMidiPortSelect?.addEventListener("change", () => {
+      if (isSyncingConfig) return;
+      const value = editorMidiPortSelect.value || "broadcast";
+      updateEditorConfig({ midiPort: value });
+    });
+    editorMidiPortRefreshBtn?.addEventListener("click", () => {
+      refreshMidiPortOptions();
+    });
     const bindMidiNumberInput = (input, min, max, property) => {
       if (!input) return;
       input.addEventListener("input", () => {
@@ -3715,16 +3980,51 @@ holistic = createHolistic();
       if (!input) return;
       input.addEventListener("input", () => {
         if (isSyncingEditorForm) return;
-        const value = input.value ?? "";
+        let nextValue = input.value ?? "";
+        if (property === "address" || property === "host") {
+          nextValue = nextValue.trim();
+          if (property === "host" && !nextValue) {
+            nextValue = "127.0.0.1";
+            input.value = nextValue;
+          }
+        } else if (property === "port") {
+          const parsed = clampRange(parseInt(nextValue, 10) || 9000, 1, 65535);
+          if (String(parsed) !== nextValue) {
+            input.value = parsed;
+          }
+          nextValue = parsed;
+        }
         mutateSelectedShape((target) => {
           const interaction = mergeInteraction(target.interaction);
-          interaction.osc[property] = property === "address" ? value.trim() : value;
+          interaction.osc[property] = nextValue;
           target.interaction = interaction;
         }, { skipRender: true });
       });
     };
     bindOscInput(editorOscAddressInput, "address");
     bindOscInput(editorOscArgsInput, "args");
+    const bindGlobalOscConfigInput = (input, key) => {
+      if (!input) return;
+      input.addEventListener("input", () => {
+        if (isSyncingConfig) return;
+        let value = input.value ?? "";
+        if (key === "oscHost") {
+          value = value.trim() || DEFAULT_EDITOR_CONFIG.oscHost;
+          input.value = value;
+        } else if (key === "oscPort") {
+          const parsed = clampRange(parseInt(value, 10) || DEFAULT_EDITOR_CONFIG.oscPort, 1, 65535);
+          value = parsed;
+          if (String(parsed) !== input.value) {
+            input.value = parsed;
+          }
+        }
+        updateEditorConfig({ [key]: value });
+      });
+    };
+    bindGlobalOscConfigInput(assignmentOscHostInput, "oscHost");
+    bindGlobalOscConfigInput(editorOscHostInput, "oscHost");
+    bindGlobalOscConfigInput(assignmentOscPortInput, "oscPort");
+    bindGlobalOscConfigInput(editorOscPortInput, "oscPort");
     editorDeleteShapeBtn?.addEventListener("click", () => {
       deleteSelectedShape();
     });
@@ -3734,8 +4034,11 @@ holistic = createHolistic();
       }
     });
 
+    loadEditorConfig();
     setEditorViewport(DEFAULT_WIDTH, DEFAULT_HEIGHT);
     setEditorVisibility(editorState.isVisible);
+    applyGlobalConnectionConfig();
+    refreshMidiPortOptions();
     loadPersistedShapes();
     setEditorMode(editorState.mode);
     setEditorTool(editorState.tool);
