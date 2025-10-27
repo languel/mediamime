@@ -26,6 +26,11 @@ An interactive score editor for MediaPipe streams. Draw shapes over the live pos
 - The score list shows every drawn shape, highlights the one under the pointer, and reflects the linked stream/trigger metadata.
 - The detail pane keeps landmarks, the event stack, and destructive actions visible even while you tweak shapes on the canvas—no auto-collapse.
 
+### Snapshots
+- The download icon in the routing header exports a snapshot (`.json`) containing every shape, its event stack, and the global MIDI/OSC routing.
+- Use the upload icon to import a snapshot and restore shapes, routing, and stream layer toggles in one step.
+- Snapshots are versioned; keep them in source control alongside your project to track performance setups.
+
 ## Event Cards
 
 - Add as many cards as needed; each card can be a **MIDI Note**, **MIDI CC**, or an **OSC** burst.

@@ -163,6 +163,18 @@
       gap: 0.5rem;
       flex: 1;
     }
+    .panel-routing-actions {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 0.35rem;
+      margin-top: 0.1rem;
+    }
+    .panel-routing-actions .icon-button {
+      width: 1.6rem;
+      height: 1.6rem;
+      border-radius: 2px;
+    }
     .panel-routing {
       display: grid;
       gap: 0.4rem;
@@ -1058,7 +1070,16 @@
                 <input id="editor-osc-port" type="number" min="1" max="65535" placeholder="9000">
               </div>
             </div>
+            <div class="panel-routing-actions">
+              <button id="snapshot-export" type="button" class="icon-button" title="Export snapshot" aria-label="Export snapshot">
+                <span class="material-icons-outlined" aria-hidden="true">download</span>
+              </button>
+              <button id="snapshot-import" type="button" class="icon-button" title="Import snapshot" aria-label="Import snapshot">
+                <span class="material-icons-outlined" aria-hidden="true">upload</span>
+              </button>
+            </div>
           </div>
+          <input id="snapshot-import-input" type="file" accept="application/json" hidden>
           <div class="editor-panel">
             <div class="editor-shape-list" id="editor-shape-list" role="listbox" aria-label="Score elements"></div>
             <div class="editor-detail" id="editor-detail">
@@ -1261,6 +1282,9 @@ const editorEventList = document.getElementById("editor-event-list");
 const editorAddEventBtn = document.getElementById("editor-add-event");
 const editorDeleteShapeBtn = document.getElementById("editor-delete-shape");
 const editorOpenModalBtn = document.getElementById("editor-open-modal");
+const snapshotExportBtn = document.getElementById("snapshot-export");
+const snapshotImportBtn = document.getElementById("snapshot-import");
+const snapshotImportInput = document.getElementById("snapshot-import-input");
 const editorFormInputs = [
   editorStreamSelect,
   editorLandmarkSelect
@@ -1369,6 +1393,8 @@ const DEFAULT_EDITOR_CONFIG = {
   oscHost: "127.0.0.1",
   oscPort: 9000
 };
+const SNAPSHOT_VERSION = 1;
+const SNAPSHOT_FILE_PREFIX = "mediapipa-snapshot";
 const editorConfig = { ...DEFAULT_EDITOR_CONFIG };
 let isSyncingConfig = false;
 
@@ -2975,46 +3001,191 @@ holistic = createHolistic();
         }
       }, 220);
     };
-    const loadPersistedShapes = () => {
-      if (typeof localStorage === "undefined") return;
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return;
-        const data = JSON.parse(raw);
-        if (!Array.isArray(data)) return;
-        editorState.shapes = data.map((shape) => {
-          const type = shape.type === "ellipse" ? "ellipse" : (shape.type === "polyline" ? "polyline" : "rect");
-          const mergedInteraction = migrateLegacyInteraction(shape.interaction);
-          const normalized = {
-            id: shape.id || ensureUuid(),
-            type,
-            x: clampUnit(shape.x ?? 0),
-            y: clampUnit(shape.y ?? 0),
-            width: clampRange(shape.width ?? SHAPE_MIN_SIZE, SHAPE_MIN_SIZE, 1),
-            height: clampRange(shape.height ?? SHAPE_MIN_SIZE, SHAPE_MIN_SIZE, 1),
-            style: { ...DEFAULT_SHAPE_STYLE, ...(shape.style || {}) },
-            interaction: mergedInteraction,
-            runtime: {
-              inside: false,
-              lastTriggerAt: 0,
-              lastContinuousAt: 0,
-              noteOn: false,
-              eventState: {},
-              lastMetrics: { normX: 0, normY: 0, distance: 0 }
-            }
-          };
-          if (type === "polyline") {
-            normalized.vertices = normalizeVertices(shape.vertices);
-            normalized.closed = Boolean(shape.closed);
-            ensurePolylineStyle(normalized);
-            updatePolylineBounds(normalized);
-          }
-          return normalized;
-        });
-        markEditorSidebarDirty();
-      } catch (err) {
-        console.warn("Failed to restore editor state", err);
+    const serializeOverlayState = () => {
+      const snapshot = { mirror: Boolean(overlayState.mirror) };
+      for (const key of Object.keys(overlayControls)) {
+        const source = overlayState[key] || DEFAULT_OVERLAY_STATE[key] || { main: false, preview: false };
+        snapshot[key] = {
+          main: Boolean(source.main),
+          preview: Boolean(source.preview)
+        };
       }
+      return snapshot;
+    };
+    const applyOverlaySnapshot = (snapshot) => {
+      if (!snapshot || typeof snapshot !== "object") return;
+      for (const [key, controls] of Object.entries(overlayControls)) {
+        const defaults = DEFAULT_OVERLAY_STATE[key] || { main: false, preview: false };
+        const target = snapshot[key];
+        const mainValue = typeof target?.main === "boolean" ? target.main : defaults.main;
+        const previewValue = typeof target?.preview === "boolean" ? target.preview : defaults.preview;
+        if (controls.main) controls.main.checked = mainValue;
+        if (controls.preview) controls.preview.checked = previewValue;
+      }
+      if (mirrorCheckbox) {
+        const mirrorValue = typeof snapshot.mirror === "boolean" ? snapshot.mirror : DEFAULT_OVERLAY_STATE.mirror;
+        mirrorCheckbox.checked = mirrorValue;
+      }
+      updateOverlayState();
+    };
+    const createSnapshotPayload = () => ({
+      version: SNAPSHOT_VERSION,
+      createdAt: new Date().toISOString(),
+      config: { ...editorConfig },
+      overlay: serializeOverlayState(),
+      shapes: serializeShapes()
+    });
+    const formatSnapshotFilename = () => {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      return `${SNAPSHOT_FILE_PREFIX}-${timestamp}.json`;
+    };
+    const applySnapshotPayload = (payload) => {
+      if (!payload || typeof payload !== "object") {
+        throw new Error("Invalid snapshot payload");
+      }
+      if (payload.version && payload.version > SNAPSHOT_VERSION) {
+        console.warn(`Snapshot version ${payload.version} is newer than supported version ${SNAPSHOT_VERSION}. Attempting to apply anyway.`);
+      }
+      closeAssignmentModal();
+      const appliedShapes = Array.isArray(payload.shapes)
+        ? loadPersistedShapes(payload.shapes)
+        : false;
+      if (!appliedShapes) {
+        editorState.shapes = [];
+        markEditorSidebarDirty();
+      }
+      const configSource = payload.config;
+      if (configSource && typeof configSource === "object") {
+        const patch = {};
+        if (typeof configSource.midiPort === "string" && configSource.midiPort.trim()) {
+          patch.midiPort = configSource.midiPort.trim();
+        }
+        if (typeof configSource.oscHost === "string" && configSource.oscHost.trim()) {
+          patch.oscHost = configSource.oscHost.trim();
+        }
+        if (configSource.oscPort !== undefined) {
+          patch.oscPort = clampRange(parseInt(configSource.oscPort, 10) || editorConfig.oscPort, 1, 65535);
+        }
+        if (Object.keys(patch).length) {
+          updateEditorConfig(patch);
+        } else {
+          applyGlobalConnectionConfig();
+        }
+      } else {
+        applyGlobalConnectionConfig();
+      }
+      if (payload.overlay && typeof payload.overlay === "object") {
+        applyOverlaySnapshot(payload.overlay);
+      } else {
+        updateOverlayState();
+      }
+      editorState.shapes.forEach((shape) => resetShapeRuntime(shape));
+      editorState.selectedId = null;
+      editorState.activePolylineId = null;
+      editorState.polylineHoverPoint = null;
+      editorState.drawingShapeId = null;
+      editorState.dragHandle = null;
+      markEditorSidebarDirty();
+      if (activePanelTab === "editor") {
+        updateEditorSidebar();
+      }
+      syncEditorDetailForm();
+      renderEditor();
+      queuePersist();
+    };
+    const exportSnapshot = () => {
+      try {
+        const payload = createSnapshotPayload();
+        const json = JSON.stringify(payload, null, 2);
+        const blob = new Blob([json], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = formatSnapshotFilename();
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        URL.revokeObjectURL(url);
+        applyStatus("Snapshot exported");
+      } catch (err) {
+        console.warn("Snapshot export failed", err);
+        applyStatus("Snapshot export failed");
+      }
+    };
+    const handleSnapshotFile = async (file) => {
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const payload = JSON.parse(text);
+        applySnapshotPayload(payload);
+        applyStatus("Snapshot imported");
+      } catch (err) {
+        console.warn("Snapshot import failed", err);
+        applyStatus("Snapshot import failed");
+      }
+    };
+    const handleSnapshotImportChange = async (event) => {
+      const file = event.target?.files?.[0];
+      if (file) {
+        await handleSnapshotFile(file);
+      }
+      if (snapshotImportInput) {
+        snapshotImportInput.value = "";
+      }
+    };
+    const loadPersistedShapes = (providedShapes = null, { persist = false } = {}) => {
+      let data = providedShapes;
+      if (!Array.isArray(data)) {
+        if (typeof localStorage === "undefined") return false;
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return false;
+          data = JSON.parse(raw);
+        } catch (err) {
+          console.warn("Failed to parse stored shapes", err);
+          return false;
+        }
+      }
+      if (!Array.isArray(data)) return false;
+      editorState.shapes = data.map((shape) => {
+        const type = shape.type === "ellipse" ? "ellipse" : (shape.type === "polyline" ? "polyline" : "rect");
+        const mergedInteraction = migrateLegacyInteraction(shape.interaction);
+        const normalized = {
+          id: shape.id || ensureUuid(),
+          type,
+          x: clampUnit(shape.x ?? 0),
+          y: clampUnit(shape.y ?? 0),
+          width: clampRange(shape.width ?? SHAPE_MIN_SIZE, SHAPE_MIN_SIZE, 1),
+          height: clampRange(shape.height ?? SHAPE_MIN_SIZE, SHAPE_MIN_SIZE, 1),
+          style: { ...DEFAULT_SHAPE_STYLE, ...(shape.style || {}) },
+          interaction: mergedInteraction,
+          runtime: {
+            inside: false,
+            lastTriggerAt: 0,
+            lastContinuousAt: 0,
+            noteOn: false,
+            eventState: {},
+            lastMetrics: { normX: 0, normY: 0, distance: 0 }
+          }
+        };
+        if (type === "polyline") {
+          normalized.vertices = normalizeVertices(shape.vertices);
+          normalized.closed = Boolean(shape.closed);
+          ensurePolylineStyle(normalized);
+          updatePolylineBounds(normalized);
+        }
+        return normalized;
+      });
+      editorState.selectedId = null;
+      editorState.activePolylineId = null;
+      editorState.polylineHoverPoint = null;
+      editorState.drawingShapeId = null;
+      editorState.dragHandle = null;
+      markEditorSidebarDirty();
+      if (persist) {
+        queuePersist();
+      }
+      return true;
     };
 
     const ensureUuid = () => (typeof crypto !== "undefined" && crypto?.randomUUID
@@ -4411,6 +4582,13 @@ holistic = createHolistic();
       const value = editorMidiPortSelect.value || "broadcast";
       updateEditorConfig({ midiPort: value });
     });
+    snapshotExportBtn?.addEventListener("click", () => {
+      exportSnapshot();
+    });
+    snapshotImportBtn?.addEventListener("click", () => {
+      snapshotImportInput?.click();
+    });
+    snapshotImportInput?.addEventListener("change", handleSnapshotImportChange);
     editorMidiPortRefreshBtn?.addEventListener("click", () => {
       refreshMidiPortOptions();
     });

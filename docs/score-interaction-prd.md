@@ -62,3 +62,17 @@ We are evolving the score editor so each shape can emit any combination of MIDI 
 2. **UI refresh** – Panel + modal cards, styling pass.
 3. **Docs & polish** – README tokens, QA smoke test with a few shapes.
 
+## 7. Implementation Status (May 2025)
+
+- **Event model shipped.** Shapes now persist an `events[]` array; each card supports MIDI Note, MIDI CC, or OSC with independent triggers (`enter`, `exit`, `enter + exit`, `while inside`). Runtime tracks per-event state to prevent stuck notes and throttles continuous triggers at 220 ms.
+- **Normalized metrics live.** The interaction loop computes `{normX, normY, distance}` per shape using bounding-box math that respects mirrored canvases. Helpers `resolveValueFromMode` and OSC tokens (`{norm_x}`, `{norm_y}`, `{dist_center}`, `{value127}`) power dynamic payloads.
+- **UI refresh complete.** The panel, modal, and toolbar follow the compact Ableton-inspired styling: tight spacing, icon-only buttons with tooltips, bottom-docked toolbar, and editor shapes surfaced as a stream layer. The editor panel stays open during drag edits, and event cards sit in a dense stack.
+- **Global routing unified.** MIDI port selection, OSC host/port, and MediaPipe stream toggles are global per session. Both panel and modal sync to the same config, and localStorage persists shapes plus routing defaults.
+- **Snapshots added.** The editor can export/import a JSON snapshot (versioned, includes shapes, events, routing, overlay toggles). File import updates the canvas, rehydrates config, and resets runtime safely.
+- **Documentation updated.** README now covers value sources, OSC tokens, shortcuts, and the snapshot workflow; the PRD reflects delivered milestones.
+
+### Known Follow-ups
+
+- Add validation/warnings when an imported snapshot references offline MIDI ports (currently soft-fails until the user refreshes ports).
+- Consider preset management UI for quickly toggling between multiple snapshots without leaving the browser sandbox.
+- Expand automated tests around `resolveValueFromMode` edge cases (degenerate shapes, mirrored polylines) and OSC token parsing.
