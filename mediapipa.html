@@ -6,6 +6,7 @@
   <title>Mediapiper · Holistic Preview</title>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Icons+Outlined">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined">
   <style>
     html, body {
       height: 100%;
@@ -18,6 +19,21 @@
       display: flex;
       overflow: hidden;
       background: radial-gradient(120% 120% at 10% 10%, #0d1525 0%, #04070d 48%, #02040a 100%);
+    }
+    .material-symbols-outlined {
+      font-family: "Material Symbols Outlined";
+      font-weight: normal;
+      font-style: normal;
+      font-size: 18px;
+      line-height: 1;
+      letter-spacing: normal;
+      text-transform: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+      direction: ltr;
+      font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
     }
     .preview-layout {
       position: relative;
@@ -67,15 +83,14 @@
       top: 0;
       right: 0;
       flex: 0 0 auto;
-      width: clamp(260px, 26vw, 340px);
-      max-width: 380px;
-      background: rgba(10, 14, 24, 0.95);
-      border-left: 1px solid rgba(255, 255, 255, 0.12);
-      padding: 1rem 1.2rem 1.5rem;
+      width: clamp(240px, 24vw, 320px);
+      max-width: 340px;
+      background: rgba(4, 7, 13, 0.94);
+      border-left: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 0.75rem 0.85rem 1rem;
       display: flex;
       flex-direction: column;
-      gap: 0.75rem;
-      /* backdrop-filter: blur(20px); */
+      gap: 0.55rem;
       height: 100%;
       overflow-y: auto;
       transform: translateX(100%);
@@ -83,7 +98,7 @@
       pointer-events: none;
       transition: transform 0.32s ease, opacity 0.32s ease;
       z-index: 200;
-      box-shadow: -18px 0 48px rgba(0, 0, 0, 0.45);
+      box-shadow: -12px 0 32px rgba(0, 0, 0, 0.4);
     }
     .panel.is-open {
       transform: translateX(0);
@@ -114,60 +129,60 @@
     }
     .panel-tabs {
       display: inline-flex;
-      gap: 0.4rem;
-      padding: 0.35rem;
-      border-radius: 12px;
-      background: rgba(9, 13, 22, 0.72);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      gap: 0.25rem;
+      padding: 0.25rem;
+      border-radius: 3px;
+      background: rgba(9, 13, 22, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.05);
       align-self: flex-start;
     }
     .panel-tabs button {
       appearance: none;
       border: 0;
-      border-radius: 9px;
+      border-radius: 2px;
       background: transparent;
-      padding: 0.35rem 0.8rem;
-      color: rgba(245, 247, 255, 0.68);
-      font-size: 0.82rem;
+      padding: 0.3rem 0.65rem;
+      color: rgba(245, 247, 255, 0.7);
+      font-size: 0.78rem;
       font-weight: 500;
-      letter-spacing: 0.02em;
+      letter-spacing: 0.01em;
       cursor: pointer;
-      transition: background 0.18s ease, color 0.18s ease;
+      transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
     }
     .panel-tabs button:hover {
-      color: rgba(245, 247, 255, 0.9);
+      color: rgba(245, 247, 255, 0.95);
+      background: rgba(255, 255, 255, 0.1);
     }
     .panel-tabs button.is-active {
-      background: rgba(255, 255, 255, 0.14);
-      color: rgba(4, 6, 12, 0.92);
+      background: rgba(255, 255, 255, 0.2);
+      color: rgba(5, 8, 14, 0.92);
     }
     .panel-content {
       display: flex;
       flex-direction: column;
-      gap: 0.75rem;
+      gap: 0.5rem;
       flex: 1;
     }
     .panel-routing {
       display: grid;
-      gap: 0.6rem;
-      padding: 0.75rem;
-      margin: 0 0.35rem;
-      border-radius: 12px;
-      background: rgba(12, 18, 30, 0.74);
+      gap: 0.4rem;
+      padding: 0.5rem;
+      border-radius: 2px;
+      background: rgba(12, 18, 30, 0.7);
       border: 1px solid rgba(255, 255, 255, 0.08);
     }
     .panel-routing-row {
       display: grid;
-      gap: 0.4rem;
+      gap: 0.25rem;
     }
     .panel-routing-row label {
-      font-size: 0.82rem;
+      font-size: 0.78rem;
       color: rgba(245, 247, 255, 0.72);
     }
     .panel-section {
       display: none;
       flex-direction: column;
-      gap: 0.75rem;
+      gap: 0.55rem;
     }
     .panel-section.is-active {
       display: flex;
@@ -175,25 +190,25 @@
     .stream-controls {
       display: flex;
       align-items: center;
-      gap: 0.6rem;
-      padding: 0 0.45rem;
+      gap: 0.35rem;
+      padding: 0 0.2rem;
     }
     .stream-toggle {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 2.25rem;
-      height: 2.25rem;
-      border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      background: rgba(255, 255, 255, 0.04);
+      width: 2rem;
+      height: 2rem;
+      border-radius: 2px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.05);
       cursor: pointer;
-      transition: background 0.18s ease, border-color 0.18s ease;
+      transition: background 0.15s ease, border-color 0.15s ease;
       position: relative;
     }
     .stream-toggle:hover {
-      background: rgba(255, 255, 255, 0.14);
-      border-color: rgba(255, 255, 255, 0.24);
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.22);
     }
     .stream-toggle input[type="checkbox"] {
       opacity: 0;
@@ -205,7 +220,7 @@
     .stream-toggle .material-icons-outlined {
       font-size: 18px;
       pointer-events: none;
-      color: rgba(245, 247, 255, 0.82);
+      color: rgba(245, 247, 255, 0.78);
     }
     .stream-toggle input[type="checkbox"]:checked + .material-icons-outlined {
       color: #f97316;
@@ -216,18 +231,24 @@
     }
     .status-chip {
       background: rgba(255, 255, 255, 0.08);
-      border-radius: 999px;
-      padding: 0.15rem 0.65rem;
-      font-size: 0.8rem;
-      color: rgba(245, 247, 255, 0.7);
+      border-radius: 2px;
+      padding: 0.15rem 0.45rem;
+      font-size: 0.72rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: rgba(245, 247, 255, 0.76);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 1.4rem;
     }
     .segment-preview {
-      border-radius: 8px;
+      border-radius: 2px;
       overflow: hidden;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      background: rgba(5, 9, 18, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(5, 9, 18, 0.68);
       text-align: center;
-      padding: 0.4rem;
+      padding: 0.3rem;
     }
     .segment-preview canvas {
       width: 100%;
@@ -236,14 +257,14 @@
     }
     .overlay-toggles {
       display: grid;
-      gap: 0.55rem;
+      gap: 0.35rem;
     }
     .overlay-toggles-header {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 90px 90px;
-      padding: 0 0.45rem;
-      font-size: 0.72rem;
-      letter-spacing: 0.08em;
+      padding: 0 0.2rem;
+      font-size: 0.68rem;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
       color: rgba(245, 247, 255, 0.45);
     }
@@ -251,14 +272,15 @@
       display: grid;
       grid-template-columns: minmax(0, 1fr) 90px 90px;
       align-items: center;
-      gap: 0.35rem;
-      background: rgba(255, 255, 255, 0.05);
-      border-radius: 10px;
-      padding: 0.55rem 0.65rem;
+      gap: 0.3rem;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 2px;
+      padding: 0.45rem 0.5rem;
     }
     .overlay-name {
       color: rgba(245, 247, 255, 0.82);
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       font-weight: 500;
     }
     .overlay-switch {
@@ -268,9 +290,9 @@
       position: relative;
     }
     .overlay-switch input[type="checkbox"] {
-      accent-color: #ff4081;
-      width: 1.1rem;
-      height: 1.1rem;
+      accent-color: #ff7a1a;
+      width: 1rem;
+      height: 1rem;
       cursor: pointer;
     }
     .sr-only {
@@ -292,8 +314,8 @@
     .panel-footnote {
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
-      padding: 0 0.45rem 0.75rem;
+      gap: 0.35rem;
+      padding: 0 0.2rem 0.5rem;
     }
     .panel-backdrop {
       position: absolute;
@@ -313,29 +335,29 @@
       bottom: 1rem;
       right: 1rem;
       z-index: 50;
-      width: 1.6rem;
-      height: 1.6rem;
-      border-radius: 999px;
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      background: rgba(9, 13, 22, 0.92);
+      width: 1.4rem;
+      height: 1.4rem;
+      border-radius: 3px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(9, 13, 22, 0.9);
       color: #f5f7ff;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
       transition: background 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.32);
     }
     .panel-toggle {
       right: 1rem;
       bottom: 1rem;
     }
     .editor-toggle {
-      right: 3.2rem;
+      right: 2.8rem;
       bottom: 1rem;
     }
     .panel-toggle .material-icons-outlined {
-      font-size: 16px;
+      font-size: 14px;
     }
     .panel-toggle:hover,
     .editor-toggle:hover {
@@ -352,7 +374,7 @@
       pointer-events: none;
     }
     .editor-toggle .material-icons-outlined {
-      font-size: 16px;
+      font-size: 14px;
     }
     .editor-toggle.is-hidden {
       opacity: 0.75;
@@ -368,19 +390,19 @@
     .gesture-editor-toolbar {
       position: absolute;
       top: auto;
-      bottom: 1rem;
+      bottom: 0.75rem;
       left: 50%;
       transform: translateX(-50%);
       display: flex;
       flex-direction: row;
       flex-wrap: wrap;
       align-items: center;
-      gap: 0.35rem;
-      padding: 0.5rem 0.65rem;
-      border-radius: 16px;
-      background: rgba(8, 12, 22, 0.9);
+      gap: 0.25rem;
+      padding: 0.35rem 0.45rem;
+      border-radius: 3px;
+      background: rgba(8, 12, 22, 0.92);
       border: 1px solid rgba(255, 255, 255, 0.08);
-      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.4);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
       pointer-events: auto;
       -webkit-user-select: none;
       user-select: none;
@@ -390,14 +412,14 @@
       border: 1px solid transparent;
       background: transparent;
       color: rgba(245, 247, 255, 0.76);
-      padding: 0.35rem;
-      border-radius: 10px;
+      padding: 0.25rem;
+      border-radius: 2px;
       display: inline-flex;
       gap: 0;
       align-items: center;
       justify-content: center;
-      width: 2.4rem;
-      height: 2.4rem;
+      width: 2.1rem;
+      height: 2.1rem;
       cursor: pointer;
       transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
     }
@@ -405,20 +427,20 @@
       font-size: 18px;
     }
     .gesture-editor-toolbar button:hover {
-      background: rgba(255, 255, 255, 0.08);
-      color: rgba(255, 255, 255, 0.92);
+      background: rgba(255, 255, 255, 0.12);
+      color: #f5f7ff;
     }
     .gesture-editor-toolbar button.is-active {
-      background: rgba(255, 255, 255, 0.12);
-      border-color: rgba(255, 255, 255, 0.18);
-      color: #f5f7ff;
-      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+      background: rgba(82, 213, 255, 0.16);
+      border-color: rgba(82, 213, 255, 0.32);
+      color: #52d5ff;
+      box-shadow: inset 0 0 0 1px rgba(82, 213, 255, 0.24);
     }
     .gesture-editor-toolbar .toolbar-divider {
       width: 1px;
-      height: 2.2rem;
+      height: 2rem;
       background: rgba(255, 255, 255, 0.12);
-      margin: 0 0.4rem;
+      margin: 0 0.3rem;
     }
     .gesture-svg-wrapper {
       flex: 1;
@@ -527,57 +549,59 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 1rem;
-      margin-bottom: 1rem;
+      gap: 0.6rem;
+      margin-bottom: 0.6rem;
     }
     .assignment-modal header h3 {
       margin: 0;
-      font-size: 1.1rem;
+      font-size: 1rem;
     }
     .assignment-modal .form-group {
       display: grid;
-      gap: 0.5rem;
-      margin-bottom: 1rem;
+      gap: 0.35rem;
+      margin-bottom: 0.6rem;
     }
     .assignment-modal label {
-      font-size: 0.86rem;
-      color: rgba(245, 247, 255, 0.78);
+      font-size: 0.78rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: rgba(245, 247, 255, 0.68);
     }
     .assignment-modal select,
     .assignment-modal input[type="text"],
     .assignment-modal input[type="number"] {
       width: 100%;
-      padding: 0.5rem 0.6rem;
-      border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      background: rgba(6, 10, 18, 0.92);
+      padding: 0.4rem 0.45rem;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(6, 10, 18, 0.96);
       color: #f5f7ff;
-      font-size: 0.88rem;
+      font-size: 0.82rem;
     }
     .assignment-modal .modal-actions {
       display: flex;
       justify-content: flex-end;
-      gap: 0.75rem;
-      margin-top: 1rem;
+      gap: 0.6rem;
+      margin-top: 0.8rem;
     }
     .assignment-modal .modal-actions button {
-      padding: 0.5rem 0.85rem;
-      border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      background: rgba(82, 213, 255, 0.1);
+      padding: 0.45rem 0.75rem;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(82, 213, 255, 0.12);
       color: #f5f7ff;
-      font-size: 0.88rem;
+      font-size: 0.82rem;
       cursor: pointer;
       transition: background 0.18s ease;
     }
     .assignment-modal .modal-actions button:hover {
-      background: rgba(82, 213, 255, 0.2);
+      background: rgba(82, 213, 255, 0.22);
     }
     .assignment-modal .modal-actions button.secondary {
       background: rgba(255, 255, 255, 0.08);
     }
     .assignment-modal .modal-actions button.secondary:hover {
-      background: rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.16);
     }
     .no-pointer {
       pointer-events: none;
@@ -585,17 +609,17 @@
     .editor-panel {
       display: flex;
       flex-direction: column;
-      gap: 0.85rem;
+      gap: 0.45rem;
       min-height: 0;
     }
     .editor-shape-list {
       display: flex;
       flex-direction: column;
-      gap: 0.45rem;
-      padding: 0.75rem;
-      border-radius: 12px;
+      gap: 0.3rem;
+      padding: 0.45rem;
+      border-radius: 2px;
       background: rgba(12, 18, 30, 0.74);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.07);
       overflow-y: auto;
       max-height: 22vh;
     }
@@ -603,28 +627,28 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 0.5rem;
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      border-radius: 10px;
+      gap: 0.3rem;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 2px;
       background: rgba(255, 255, 255, 0.02);
-      color: rgba(245, 247, 255, 0.8);
-      padding: 0.55rem 0.7rem;
+      color: rgba(245, 247, 255, 0.78);
+      padding: 0.35rem 0.45rem;
       cursor: pointer;
-      font-size: 0.86rem;
-      transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+      font-size: 0.8rem;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
     }
     .editor-shape-list button:hover {
       background: rgba(255, 255, 255, 0.08);
     }
     .editor-shape-list button.is-active {
-      background: rgba(82, 213, 255, 0.2);
-      border-color: rgba(82, 213, 255, 0.4);
+      background: rgba(82, 213, 255, 0.18);
+      border-color: rgba(82, 213, 255, 0.36);
       color: #f5f7ff;
-      box-shadow: inset 0 0 0 1px rgba(82, 213, 255, 0.32);
+      box-shadow: inset 0 0 0 1px rgba(82, 213, 255, 0.24);
     }
     .editor-shape-list button[data-active="true"]:not(.is-active) {
-      border-color: rgba(82, 213, 255, 0.28);
-      box-shadow: inset 0 0 0 1px rgba(82, 213, 255, 0.18);
+      border-color: rgba(82, 213, 255, 0.22);
+      box-shadow: inset 0 0 0 1px rgba(82, 213, 255, 0.14);
     }
     .editor-shape-list button .shape-meta {
       font-size: 0.72rem;
@@ -633,41 +657,143 @@
     .editor-detail {
       display: flex;
       flex-direction: column;
-      gap: 0.75rem;
-      padding: 0.75rem;
-      border-radius: 12px;
-      background: rgba(12, 18, 30, 0.74);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      max-height: 45vh;
+      gap: 0.35rem;
+      padding: 0.45rem;
+      border-radius: 2px;
+      background: rgba(12, 18, 30, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      max-height: 46vh;
       overflow-y: auto;
     }
     .editor-detail-empty {
-      font-size: 0.88rem;
-      line-height: 1.5;
-      color: rgba(245, 247, 255, 0.65);
+      font-size: 0.82rem;
+      line-height: 1.4;
+      color: rgba(245, 247, 255, 0.58);
     }
     .editor-detail-form {
       display: grid;
-      gap: 0.75rem;
+      gap: 0.3rem;
     }
     .editor-detail-form .form-row {
       display: grid;
-      gap: 0.35rem;
+      gap: 0.15rem;
     }
     .editor-detail-form label {
-      font-size: 0.82rem;
-      color: rgba(245, 247, 255, 0.72);
+      font-size: 0.7rem;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: rgba(245, 247, 255, 0.62);
     }
     .editor-detail-form select,
     .editor-detail-form input[type="text"],
     .editor-detail-form input[type="number"] {
       width: 100%;
-      padding: 0.5rem 0.65rem;
-      border-radius: 8px;
+      padding: 0.28rem 0.4rem;
+      border-radius: 2px;
       border: 1px solid rgba(255, 255, 255, 0.12);
-      background: rgba(6, 10, 18, 0.92);
+      background: rgba(6, 10, 18, 0.94);
       color: #f5f7ff;
-      font-size: 0.88rem;
+      font-size: 0.8rem;
+    }
+    .event-list-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 0.05rem 0;
+      font-size: 0.66rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(245, 247, 255, 0.48);
+    }
+    .event-list-header .icon-button {
+      width: 1.5rem;
+      height: 1.5rem;
+    }
+    .event-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .event-card {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      padding: 0.3rem 0.35rem;
+      border-radius: 2px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(10, 16, 26, 0.86);
+    }
+    .event-card-header {
+      display: flex;
+      align-items: center;
+      gap: 0.2rem;
+    }
+    .event-card-header select {
+      min-width: 0;
+      flex: 1;
+      padding: 0.26rem 0.3rem;
+      font-size: 0.8rem;
+    }
+    .event-card-header button {
+      width: 1.35rem;
+      height: 1.35rem;
+    }
+    .event-body {
+      display: flex;
+      flex-direction: column;
+      gap: 0.12rem;
+    }
+    .event-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.2rem;
+    }
+    .field-compact {
+      display: flex;
+      align-items: center;
+      gap: 0.15rem;
+      flex: 1;
+      min-width: 84px;
+      color: rgba(245, 247, 255, 0.76);
+      font-size: 0.76rem;
+    }
+    .field-compact span {
+      font-size: 0.62rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: rgba(245, 247, 255, 0.52);
+    }
+    .field-compact input,
+    .field-compact select {
+      flex: 1;
+      min-width: 0;
+      padding: 0.24rem 0.3rem;
+      border-radius: 2px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(6, 10, 18, 0.95);
+      color: #f5f7ff;
+      font-size: 0.78rem;
+    }
+    .field-compact.small {
+      flex: 0 0 auto;
+      min-width: 68px;
+    }
+    .event-hint {
+      margin: 0.25rem 0 0;
+      font-size: 0.7rem;
+      color: rgba(245, 247, 255, 0.48);
+      line-height: 1.35;
+    }
+    .event-hint code {
+      font-size: 0.7rem;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 0.05rem 0.25rem;
+      border-radius: 4px;
+    }
+    .event-empty {
+      font-size: 0.72rem;
+      color: rgba(245, 247, 255, 0.45);
+      padding: 0.35rem 0.2rem;
     }
     .editor-detail-actions {
       display: flex;
@@ -705,7 +831,7 @@
     }
     .input-with-button {
       display: flex;
-      gap: 0.45rem;
+      gap: 0.3rem;
       align-items: stretch;
     }
     .input-with-button select,
@@ -716,11 +842,11 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      border-radius: 8px;
+      border-radius: 2px;
       border: 1px solid rgba(255, 255, 255, 0.14);
       background: rgba(255, 255, 255, 0.08);
       color: #f5f7ff;
-      width: 2.3rem;
+      width: 2.1rem;
       transition: background 0.18s ease;
     }
     .input-with-button .icon-button:hover {
@@ -729,7 +855,7 @@
     .dual-input-row {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 0.45rem;
+      gap: 0.3rem;
     }
     @media (max-width: 1200px) {
       .editor-detail,
@@ -752,7 +878,7 @@
             <span class="material-icons-outlined" aria-hidden="true">near_me</span>
           </button>
           <button id="gesture-tool-eraser" type="button" data-tool="eraser" title="Eraser (E)" aria-label="Eraser (E)">
-            <span class="material-icons-outlined" aria-hidden="true">auto_fix_off</span>
+            <span class="material-symbols-outlined" aria-hidden="true">ink_eraser</span>
           </button>
           <button id="gesture-tool-rect" type="button" data-tool="rect" title="Rectangle (R)" aria-label="Rectangle (R)">
             <span class="material-icons-outlined" aria-hidden="true">crop_square</span>
@@ -953,50 +1079,16 @@
                   <label for="editor-landmark-select">Landmark</label>
                   <select id="editor-landmark-select"></select>
                 </div>
-                <div class="form-row">
-                  <label for="editor-trigger-select">Trigger Behavior</label>
-                  <select id="editor-trigger-select">
-                    <option value="enter">Enter shape</option>
-                    <option value="exit">Exit shape</option>
-                    <option value="inside">While inside (continuous)</option>
-                  </select>
+                <div class="event-list-header">
+                  <span>Events</span>
+                  <button type="button" id="editor-add-event" class="icon-button" title="Add event" aria-label="Add event">
+                    <span class="material-icons-outlined" aria-hidden="true">add</span>
+                  </button>
                 </div>
-                <div class="form-row">
-                  <label for="editor-midi-type">MIDI Message</label>
-                  <select id="editor-midi-type">
-                    <option value="none">None</option>
-                    <option value="note">Note</option>
-                    <option value="cc">Control Change</option>
-                  </select>
-                </div>
-                <div class="form-row" id="editor-midi-channel-group">
-                  <label for="editor-midi-channel">MIDI Channel (1-16)</label>
-                  <input id="editor-midi-channel" type="number" min="1" max="16" value="1">
-                </div>
-                <div class="form-row" id="editor-midi-note-group">
-                  <label for="editor-midi-note">Note (0-127)</label>
-                  <input id="editor-midi-note" type="number" min="0" max="127" value="60">
-                </div>
-                <div class="form-row" id="editor-midi-velocity-group">
-                  <label for="editor-midi-velocity">Velocity (0-127)</label>
-                  <input id="editor-midi-velocity" type="number" min="0" max="127" value="96">
-                </div>
-                <div class="form-row" id="editor-midi-cc-group">
-                  <label for="editor-midi-cc">CC Number</label>
-                  <input id="editor-midi-cc" type="number" min="0" max="127" value="1">
-                </div>
-                <div class="form-row" id="editor-midi-cc-value-group">
-                  <label for="editor-midi-cc-value">CC Value</label>
-                  <input id="editor-midi-cc-value" type="number" min="0" max="127" value="100">
-                </div>
-                <div class="form-row">
-                  <label for="editor-osc-address">OSC Address</label>
-                  <input id="editor-osc-address" type="text" placeholder="/instrument/parameter">
-                </div>
-                <div class="form-row">
-                  <label for="editor-osc-args">OSC Arguments</label>
-                  <input id="editor-osc-args" type="text" placeholder="comma separated values">
-                </div>
+                <div id="editor-event-list" class="event-list" role="list"></div>
+                <p class="event-hint">
+                  Velocity, CC values, and OSC payloads can follow constant or normalised sources (X, Y, distance). OSC arguments may reference tokens like <code>{norm_x}</code>, <code>{norm_y}</code>, <code>{dist_center}</code>, or <code>{value127}</code>.
+                </p>
                 <div class="editor-detail-actions">
                   <button type="button" id="editor-open-modal" class="secondary">Pop-out editor</button>
                   <button type="button" id="editor-delete-shape" class="danger">Delete shape</button>
@@ -1030,23 +1122,7 @@
       <select id="assignment-landmark"></select>
     </section>
     <section class="form-group">
-      <label for="assignment-trigger">Trigger Behavior</label>
-      <select id="assignment-trigger">
-        <option value="enter">Enter shape</option>
-        <option value="exit">Exit shape</option>
-        <option value="inside">While inside (continuous)</option>
-      </select>
-    </section>
-    <section class="form-group">
-      <label for="assignment-midi-type">MIDI Message</label>
-      <select id="assignment-midi-type">
-        <option value="none">None</option>
-        <option value="note">Note</option>
-        <option value="cc">Control Change</option>
-      </select>
-    </section>
-    <section class="form-group">
-      <label for="assignment-midi-port">MIDI Port</label>
+      <label>MIDI Port</label>
       <div class="input-with-button">
         <select id="assignment-midi-port">
           <option value="broadcast">All Outputs</option>
@@ -1056,30 +1132,6 @@
         </button>
       </div>
     </section>
-    <section class="form-group" id="assignment-midi-channel-group">
-      <label for="assignment-midi-channel">MIDI Channel (1-16)</label>
-      <input id="assignment-midi-channel" type="number" min="1" max="16" value="1">
-    </section>
-    <section class="form-group" id="assignment-midi-note-group">
-      <label for="assignment-midi-note">Note (0-127)</label>
-      <input id="assignment-midi-note" type="number" min="0" max="127" value="60">
-    </section>
-    <section class="form-group" id="assignment-midi-velocity-group">
-      <label for="assignment-midi-velocity">Velocity (0-127)</label>
-      <input id="assignment-midi-velocity" type="number" min="0" max="127" value="96">
-    </section>
-    <section class="form-group" id="assignment-midi-cc-group">
-      <label for="assignment-midi-cc">CC Number</label>
-      <input id="assignment-midi-cc" type="number" min="0" max="127" value="1">
-    </section>
-    <section class="form-group" id="assignment-midi-cc-value-group">
-      <label for="assignment-midi-cc-value">CC Value</label>
-      <input id="assignment-midi-cc-value" type="number" min="0" max="127" value="100">
-    </section>
-    <section class="form-group">
-      <label for="assignment-osc-address">OSC Address</label>
-      <input id="assignment-osc-address" type="text" placeholder="/instrument/parameter">
-    </section>
     <section class="form-group">
       <label>OSC Destination</label>
       <div class="dual-input-row">
@@ -1087,10 +1139,18 @@
         <input id="assignment-osc-port" type="number" min="1" max="65535" placeholder="9000">
       </div>
     </section>
-    <section class="form-group">
-      <label for="assignment-osc-args">OSC Arguments</label>
-      <input id="assignment-osc-args" type="text" placeholder="comma separated values">
+    <section class="form-group event-list-modal">
+      <div class="event-list-header">
+        <span>Events</span>
+        <button type="button" id="assignment-add-event" class="icon-button" title="Add event" aria-label="Add event">
+          <span class="material-icons-outlined" aria-hidden="true">add</span>
+        </button>
+      </div>
+      <div id="assignment-event-list" class="event-list" role="list"></div>
     </section>
+    <p class="event-hint">
+      Use the stream point to trigger multiple MIDI and OSC actions. Value sources can be constant or normalised (<code>{norm_x}</code>, <code>{norm_y}</code>, <code>{dist_center}</code>, <code>{value127}</code>).
+    </p>
     <div class="modal-actions">
       <button id="assignment-modal-cancel" class="secondary" type="button">Cancel</button>
       <button id="assignment-modal-apply" type="button">Apply</button>
@@ -1181,77 +1241,30 @@ const assignmentCancelBtn = document.getElementById("assignment-modal-cancel");
 const assignmentApplyBtn = document.getElementById("assignment-modal-apply");
 const assignmentStreamSelect = document.getElementById("assignment-stream");
 const assignmentLandmarkSelect = document.getElementById("assignment-landmark");
-const assignmentTriggerSelect = document.getElementById("assignment-trigger");
-const assignmentMidiTypeSelect = document.getElementById("assignment-midi-type");
 const assignmentMidiPortSelect = document.getElementById("assignment-midi-port");
 const assignmentMidiPortRefreshBtn = document.getElementById("assignment-midi-port-refresh");
-const assignmentMidiChannelInput = document.getElementById("assignment-midi-channel");
-const assignmentMidiNoteInput = document.getElementById("assignment-midi-note");
-const assignmentMidiVelocityInput = document.getElementById("assignment-midi-velocity");
-const assignmentMidiCcInput = document.getElementById("assignment-midi-cc");
-const assignmentMidiCcValueInput = document.getElementById("assignment-midi-cc-value");
-const assignmentOscAddressInput = document.getElementById("assignment-osc-address");
 const assignmentOscHostInput = document.getElementById("assignment-osc-host");
 const assignmentOscPortInput = document.getElementById("assignment-osc-port");
-const assignmentOscArgsInput = document.getElementById("assignment-osc-args");
-const midiNoteGroup = document.getElementById("assignment-midi-note-group");
-const midiVelocityGroup = document.getElementById("assignment-midi-velocity-group");
-const midiCcGroup = document.getElementById("assignment-midi-cc-group");
-const midiCcValueGroup = document.getElementById("assignment-midi-cc-value-group");
-const midiChannelGroup = document.getElementById("assignment-midi-channel-group");
+const assignmentEventList = document.getElementById("assignment-event-list");
+const assignmentAddEventBtn = document.getElementById("assignment-add-event");
 const editorShapeList = document.getElementById("editor-shape-list");
 const editorDetailEl = document.getElementById("editor-detail");
 const editorDetailEmpty = document.getElementById("editor-detail-empty");
 const editorDetailForm = document.getElementById("editor-detail-form");
 const editorStreamSelect = document.getElementById("editor-stream-select");
 const editorLandmarkSelect = document.getElementById("editor-landmark-select");
-const editorTriggerSelect = document.getElementById("editor-trigger-select");
-const editorMidiTypeSelect = document.getElementById("editor-midi-type");
 const editorMidiPortSelect = document.getElementById("editor-midi-port");
 const editorMidiPortRefreshBtn = document.getElementById("editor-midi-port-refresh");
-const editorMidiChannelInput = document.getElementById("editor-midi-channel");
-const editorMidiNoteInput = document.getElementById("editor-midi-note");
-const editorMidiVelocityInput = document.getElementById("editor-midi-velocity");
-const editorMidiCcInput = document.getElementById("editor-midi-cc");
-const editorMidiCcValueInput = document.getElementById("editor-midi-cc-value");
-const editorOscAddressInput = document.getElementById("editor-osc-address");
-const editorOscArgsInput = document.getElementById("editor-osc-args");
 const editorOscHostInput = document.getElementById("editor-osc-host");
 const editorOscPortInput = document.getElementById("editor-osc-port");
+const editorEventList = document.getElementById("editor-event-list");
+const editorAddEventBtn = document.getElementById("editor-add-event");
 const editorDeleteShapeBtn = document.getElementById("editor-delete-shape");
 const editorOpenModalBtn = document.getElementById("editor-open-modal");
-const editorMidiChannelGroup = document.getElementById("editor-midi-channel-group");
-const editorMidiNoteGroup = document.getElementById("editor-midi-note-group");
-const editorMidiVelocityGroup = document.getElementById("editor-midi-velocity-group");
-const editorMidiCcGroup = document.getElementById("editor-midi-cc-group");
-const editorMidiCcValueGroup = document.getElementById("editor-midi-cc-value-group");
 const editorFormInputs = [
   editorStreamSelect,
-  editorLandmarkSelect,
-  editorTriggerSelect,
-  editorMidiTypeSelect,
-  editorMidiChannelInput,
-  editorMidiNoteInput,
-  editorMidiVelocityInput,
-  editorMidiCcInput,
-  editorMidiCcValueInput,
-  editorOscAddressInput,
-  editorOscArgsInput
+  editorLandmarkSelect
 ].filter(Boolean);
-const modalMidiContext = {
-  channelGroup: midiChannelGroup,
-  noteGroup: midiNoteGroup,
-  velocityGroup: midiVelocityGroup,
-  ccGroup: midiCcGroup,
-  ccValueGroup: midiCcValueGroup
-};
-const editorMidiContext = {
-  channelGroup: editorMidiChannelGroup,
-  noteGroup: editorMidiNoteGroup,
-  velocityGroup: editorMidiVelocityGroup,
-  ccGroup: editorMidiCcGroup,
-  ccValueGroup: editorMidiCcValueGroup
-};
 
 const SEGMENTATION_COLOR = { r: 15, g: 139, b: 168 };
 const SEGMENTATION_ALPHA = 0.6;
@@ -2055,9 +2068,11 @@ holistic = createHolistic();
     let persistTimer = null;
     let activePanelTab = panelTabs.find((button) => button.classList.contains("is-active"))?.dataset?.panelTab || "streams";
     let activeAssignmentShapeId = null;
+    let assignmentDraftInteraction = null;
     const CONTINUOUS_TRIGGER_INTERVAL_MS = 220;
     let editorSidebarDirty = true;
     let isSyncingEditorForm = false;
+    let isSyncingAssignmentForm = false;
 
     const SHAPE_MIN_SIZE = 0.015;
     const DEFAULT_SHAPE_STYLE = {
@@ -2151,7 +2166,14 @@ holistic = createHolistic();
     };
     const resetShapeRuntime = (shape) => {
       if (!shape) return;
-      shape.runtime = { inside: false, lastTriggerAt: 0, noteOn: false, lastContinuousAt: 0 };
+      shape.runtime = {
+        inside: false,
+        lastTriggerAt: 0,
+        lastContinuousAt: 0,
+        noteOn: false,
+        eventState: {},
+        lastMetrics: { normX: 0, normY: 0, distance: 0 }
+      };
     };
     const getStreamDefinition = (streamId) => STREAM_DEFINITIONS[streamId] ?? STREAM_DEFINITIONS.pose;
     const setElementVisibility = (element, visible) => {
@@ -2176,21 +2198,6 @@ holistic = createHolistic();
         targetSelect.value = definition.options[0].key;
       }
       return targetSelect.value;
-    };
-    const updateMidiControlsVisibility = (type, context = modalMidiContext) => {
-      const {
-        channelGroup,
-        noteGroup,
-        velocityGroup,
-        ccGroup,
-        ccValueGroup
-      } = context || {};
-      const showChannel = type === "note" || type === "cc";
-      setElementVisibility(channelGroup, showChannel);
-      setElementVisibility(noteGroup, type === "note");
-      setElementVisibility(velocityGroup, type === "note");
-      setElementVisibility(ccGroup, type === "cc");
-      setElementVisibility(ccValueGroup, type === "cc");
     };
     const markEditorSidebarDirty = () => {
       editorSidebarDirty = true;
@@ -2274,13 +2281,14 @@ holistic = createHolistic();
         editorOpenModalBtn.disabled = !hasShape;
       }
       if (!hasShape) {
-        updateMidiControlsVisibility(editorMidiTypeSelect?.value || "none", editorMidiContext);
         populateMidiPortSelect(editorMidiPortSelect, editorConfig.midiPort);
         if (editorOscHostInput) editorOscHostInput.value = editorConfig.oscHost;
         if (editorOscPortInput) editorOscPortInput.value = editorConfig.oscPort;
+        if (editorEventList) editorEventList.innerHTML = `<div class="event-empty">Select a shape to configure events.</div>`;
         return;
       }
       const interaction = mergeInteraction(shape.interaction);
+      shape.interaction = interaction;
       isSyncingEditorForm = true;
       if (editorStreamSelect) {
         editorStreamSelect.value = interaction.stream;
@@ -2289,42 +2297,11 @@ holistic = createHolistic();
       if (editorLandmarkSelect && resolvedLandmark) {
         editorLandmarkSelect.value = resolvedLandmark;
       }
-      if (editorTriggerSelect) {
-        editorTriggerSelect.value = interaction.trigger;
-      }
-      if (editorMidiTypeSelect) {
-        editorMidiTypeSelect.value = interaction.midi.type;
-      }
       populateMidiPortSelect(editorMidiPortSelect, editorConfig.midiPort);
       if (editorMidiPortSelect) editorMidiPortSelect.dataset.selectedPort = editorConfig.midiPort;
-      if (editorMidiChannelInput) {
-        editorMidiChannelInput.value = interaction.midi.channel;
-      }
-      if (editorMidiNoteInput) {
-        editorMidiNoteInput.value = interaction.midi.note;
-      }
-      if (editorMidiVelocityInput) {
-        editorMidiVelocityInput.value = interaction.midi.velocity;
-      }
-      if (editorMidiCcInput) {
-        editorMidiCcInput.value = interaction.midi.cc;
-      }
-      if (editorMidiCcValueInput) {
-        editorMidiCcValueInput.value = interaction.midi.value;
-      }
-      if (editorOscAddressInput) {
-        editorOscAddressInput.value = interaction.osc.address || "";
-      }
-      if (editorOscHostInput) {
-        editorOscHostInput.value = editorConfig.oscHost;
-      }
-      if (editorOscPortInput) {
-        editorOscPortInput.value = editorConfig.oscPort;
-      }
-      if (editorOscArgsInput) {
-        editorOscArgsInput.value = interaction.osc.args || "";
-      }
-      updateMidiControlsVisibility(interaction.midi.type, editorMidiContext);
+      if (editorOscHostInput) editorOscHostInput.value = editorConfig.oscHost;
+      if (editorOscPortInput) editorOscPortInput.value = editorConfig.oscPort;
+      renderEventList("editor", interaction.events);
       isSyncingEditorForm = false;
     };
     const updateEditorSidebar = () => {
@@ -2407,32 +2384,144 @@ holistic = createHolistic();
         queuePersist();
       }
     };
+    const VALUE_SOURCE_OPTIONS = [
+      { id: "constant", label: "Constant" },
+      { id: "normX", label: "Norm X" },
+      { id: "normY", label: "Norm Y" },
+      { id: "distance", label: "Distance" }
+    ];
+    const EVENT_TYPE_OPTIONS = [
+      { id: "none", label: "None" },
+      { id: "midiNote", label: "MIDI Note" },
+      { id: "midiCc", label: "MIDI CC" },
+      { id: "osc", label: "OSC" }
+    ];
+    const EVENT_TRIGGER_OPTIONS = [
+      { id: "enter", label: "Enter" },
+      { id: "exit", label: "Exit" },
+      { id: "enterExit", label: "Enter + Exit" },
+      { id: "inside", label: "While Inside" }
+    ];
+    const createDefaultEvent = (type = "none") => {
+      const id = ensureUuid();
+      switch (type) {
+        case "midiNote":
+          return {
+            id,
+            type,
+            trigger: "enter",
+            channel: 1,
+            note: 60,
+            velocityMode: "constant",
+            velocityValue: 96
+          };
+        case "midiCc":
+          return {
+            id,
+            type,
+            trigger: "enter",
+            channel: 1,
+            cc: 1,
+            ccValueMode: "constant",
+            ccValue: 100
+          };
+        case "osc":
+          return {
+            id,
+            type,
+            trigger: "enter",
+            address: "",
+            args: "",
+            oscValueMode: "constant",
+            oscValue: 1
+          };
+        default:
+          return {
+            id,
+            type: "none",
+            trigger: "enter"
+          };
+      }
+    };
+    const cloneEvent = (event) => JSON.parse(JSON.stringify(event));
+    const normalizeEvent = (event) => {
+      if (!event || typeof event !== "object") {
+        return createDefaultEvent("none");
+      }
+      const base = createDefaultEvent(event.type || "none");
+      return {
+        ...base,
+        ...event,
+        id: event.id || base.id
+      };
+    };
     const createDefaultInteraction = () => ({
       stream: "pose",
       landmark: "left_wrist",
-      trigger: "enter",
-      midi: {
-        type: "none",
-        channel: 1,
-        note: 60,
-        velocity: 96,
-        cc: 1,
-        value: 100
-      },
-      osc: {
-        address: "",
-        args: ""
-      }
+      events: [createDefaultEvent("none")]
     });
     const mergeInteraction = (input) => {
       const defaults = createDefaultInteraction();
       const source = input || {};
+      const events = Array.isArray(source.events) && source.events.length
+        ? source.events.map(normalizeEvent)
+        : defaults.events.map(cloneEvent);
       return {
         ...defaults,
         ...source,
-        midi: { ...defaults.midi, ...(source.midi || {}) },
-        osc: { ...defaults.osc, ...(source.osc || {}) }
+        events
       };
+    };
+    const migrateLegacyInteraction = (raw = {}) => {
+      if (raw && Array.isArray(raw.events)) {
+        return mergeInteraction(raw);
+      }
+      const interaction = createDefaultInteraction();
+      if (raw && typeof raw === "object") {
+        if (raw.stream) interaction.stream = raw.stream;
+        if (raw.landmark) interaction.landmark = raw.landmark;
+        const events = [];
+        const legacyTrigger = raw.trigger || "enter";
+        const legacyMidi = raw.midi || {};
+        if (legacyMidi.type === "note") {
+          events.push(
+            normalizeEvent({
+              type: "midiNote",
+              trigger: legacyTrigger,
+              channel: legacyMidi.channel ?? 1,
+              note: legacyMidi.note ?? 60,
+              velocityMode: "constant",
+              velocityValue: legacyMidi.velocity ?? 96
+            })
+          );
+        } else if (legacyMidi.type === "cc") {
+          events.push(
+            normalizeEvent({
+              type: "midiCc",
+              trigger: legacyTrigger,
+              channel: legacyMidi.channel ?? 1,
+              cc: legacyMidi.cc ?? 1,
+              ccValueMode: "constant",
+              ccValue: legacyMidi.value ?? 100
+            })
+          );
+        }
+        const legacyOsc = raw.osc || {};
+        if (legacyOsc.address) {
+          events.push(
+            normalizeEvent({
+              type: "osc",
+              trigger: legacyTrigger,
+              address: legacyOsc.address,
+              args: legacyOsc.args ?? "",
+              oscValueMode: "constant",
+              oscValue: 1
+            })
+          );
+        }
+        interaction.events = events.length ? events : interaction.events;
+      }
+      return mergeInteraction(interaction);
     };
     const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (match) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[match]));
     const normalizeVertices = (vertices) => {
@@ -2591,7 +2680,7 @@ holistic = createHolistic();
         closed: editorState.tool === "polygon",
         style: { ...DEFAULT_SHAPE_STYLE },
         interaction: createDefaultInteraction(),
-        runtime: { inside: false, lastTriggerAt: 0, noteOn: false, lastContinuousAt: 0 }
+        runtime: { inside: false, lastTriggerAt: 0, lastContinuousAt: 0, noteOn: false, eventState: {}, lastMetrics: { normX: 0, normY: 0, distance: 0 } }
       };
       ensurePolylineStyle(shape);
       updatePolylineBounds(shape);
@@ -2619,14 +2708,244 @@ holistic = createHolistic();
     };
     const sanitizeInteractionForStorage = (interaction) => {
       const merged = mergeInteraction(interaction);
-      if (merged?.midi) {
-        delete merged.midi.port;
+      return {
+        stream: merged.stream,
+        landmark: merged.landmark,
+        events: merged.events.map((event) => ({ ...normalizeEvent(event) }))
+      };
+    };
+    const renderOptions = (options, selected) => options.map((option) => `<option value="${escapeHtml(option.id)}"${option.id === selected ? " selected" : ""}>${escapeHtml(option.label)}</option>`).join("");
+    const renderEventCard = (event) => {
+      const normalized = normalizeEvent(event);
+      const typeOptions = renderOptions(EVENT_TYPE_OPTIONS, normalized.type);
+      const triggerOptions = renderOptions(EVENT_TRIGGER_OPTIONS, normalized.trigger || "enter");
+      const renderModeOptions = (mode) => renderOptions(VALUE_SOURCE_OPTIONS, mode || "constant");
+      const velocityValueStyle = normalized.velocityMode === "constant" ? "" : "display:none;";
+      const ccValueStyle = normalized.ccValueMode === "constant" ? "" : "display:none;";
+      const oscValueStyle = normalized.oscValueMode === "constant" ? "" : "display:none;";
+      let bodyMarkup = `<div class="event-body"><div class="event-row"><span class="event-empty">Select an event type.</span></div></div>`;
+      if (normalized.type === "midiNote") {
+        bodyMarkup = `
+          <div class="event-body">
+            <div class="event-row">
+              <label class="field-compact small" title="MIDI Channel">
+                <span>Ch</span>
+                <input type="number" min="1" max="16" value="${clampRange(Math.floor(normalized.channel ?? 1), 1, 16)}" data-field="channel">
+              </label>
+              <label class="field-compact small" title="Note">
+                <span>Note</span>
+                <input type="number" min="0" max="127" value="${clampRange(Math.floor(normalized.note ?? 60), 0, 127)}" data-field="note">
+              </label>
+            </div>
+            <div class="event-row">
+              <label class="field-compact" title="Velocity source">
+                <span>Vel</span>
+                <select data-field="velocityMode">${renderModeOptions(normalized.velocityMode)}</select>
+              </label>
+              <label class="field-compact" title="Velocity value" style="${velocityValueStyle}">
+                <span>Val</span>
+                <input type="number" min="0" max="127" value="${clampRange(Math.round(normalized.velocityValue ?? 96), 0, 127)}" data-field="velocityValue">
+              </label>
+            </div>
+          </div>
+        `;
+      } else if (normalized.type === "midiCc") {
+        bodyMarkup = `
+          <div class="event-body">
+            <div class="event-row">
+              <label class="field-compact small" title="MIDI Channel">
+                <span>Ch</span>
+                <input type="number" min="1" max="16" value="${clampRange(Math.floor(normalized.channel ?? 1), 1, 16)}" data-field="channel">
+              </label>
+              <label class="field-compact small" title="Control Change number">
+                <span>CC#</span>
+                <input type="number" min="0" max="127" value="${clampRange(Math.floor(normalized.cc ?? 1), 0, 127)}" data-field="cc">
+              </label>
+            </div>
+            <div class="event-row">
+              <label class="field-compact" title="Value source">
+                <span>Val</span>
+                <select data-field="ccValueMode">${renderModeOptions(normalized.ccValueMode)}</select>
+              </label>
+              <label class="field-compact" title="Value amount" style="${ccValueStyle}">
+                <span>Amt</span>
+                <input type="number" min="0" max="127" value="${clampRange(Math.round(normalized.ccValue ?? 100), 0, 127)}" data-field="ccValue">
+              </label>
+            </div>
+          </div>
+        `;
+      } else if (normalized.type === "osc") {
+        bodyMarkup = `
+          <div class="event-body">
+            <div class="event-row">
+              <label class="field-compact" title="OSC Address">
+                <span>Addr</span>
+                <input type="text" value="${escapeHtml(normalized.address || "")}" data-field="address" placeholder="/instrument/parameter">
+              </label>
+            </div>
+            <div class="event-row">
+              <label class="field-compact" title="OSC Arguments">
+                <span>Args</span>
+                <input type="text" value="${escapeHtml(normalized.args || "")}" data-field="args" placeholder="comma separated values">
+              </label>
+            </div>
+            <div class="event-row">
+              <label class="field-compact" title="Value source">
+                <span>Val</span>
+                <select data-field="oscValueMode">${renderModeOptions(normalized.oscValueMode)}</select>
+              </label>
+              <label class="field-compact" title="Value amount" style="${oscValueStyle}">
+                <span>Amt</span>
+                <input type="number" min="0" max="1" step="0.01" value="${clampUnit(normalized.oscValue ?? 1)}" data-field="oscValue">
+              </label>
+            </div>
+          </div>
+        `;
       }
-      if (merged?.osc) {
-        delete merged.osc.host;
-        delete merged.osc.port;
+      return `
+        <div class="event-card" data-event-id="${escapeHtml(normalized.id)}" data-event-type="${escapeHtml(normalized.type || "none")}">
+          <div class="event-card-header">
+            <select data-field="type">${typeOptions}</select>
+            <select data-field="trigger">${triggerOptions}</select>
+            <button type="button" class="icon-button event-remove" data-action="remove-event" title="Remove event" aria-label="Remove event">
+              <span class="material-icons-outlined" aria-hidden="true">delete</span>
+            </button>
+          </div>
+          ${bodyMarkup}
+        </div>
+      `;
+    };
+    const renderEventList = (scope, events = []) => {
+      const listEl = scope === "editor" ? editorEventList : assignmentEventList;
+      if (!listEl) return;
+      const normalizedEvents = events.map(normalizeEvent);
+      if (!normalizedEvents.length) {
+        listEl.innerHTML = `<div class="event-empty">No events configured.</div>`;
+        return;
       }
-      return merged;
+      listEl.innerHTML = normalizedEvents.map((event) => renderEventCard(event)).join("");
+    };
+    const addEventToScope = (scope, type = "midiNote") => {
+      if (scope === "editor") {
+        mutateSelectedShape((target) => {
+          const interaction = mergeInteraction(target.interaction);
+          interaction.events = [...interaction.events, createDefaultEvent(type)].map(normalizeEvent);
+          target.interaction = interaction;
+        }, { skipRender: true });
+        syncEditorDetailForm();
+        return;
+      }
+      if (!assignmentDraftInteraction) {
+        assignmentDraftInteraction = createDefaultInteraction();
+      }
+      assignmentDraftInteraction = mergeInteraction({
+        ...assignmentDraftInteraction,
+        events: [...assignmentDraftInteraction.events, createDefaultEvent(type)]
+      });
+      syncAssignmentForm();
+    };
+    const removeEventFromScope = (scope, eventId) => {
+      if (!eventId) return;
+      if (scope === "editor") {
+        mutateSelectedShape((target) => {
+          const interaction = mergeInteraction(target.interaction);
+          interaction.events = interaction.events.filter((event) => event.id !== eventId);
+          target.interaction = interaction;
+        }, { skipRender: true });
+        syncEditorDetailForm();
+        return;
+      }
+      if (!assignmentDraftInteraction) return;
+      assignmentDraftInteraction = mergeInteraction({
+        ...assignmentDraftInteraction,
+        events: assignmentDraftInteraction.events.filter((event) => event.id !== eventId)
+      });
+      syncAssignmentForm();
+    };
+    const updateEventField = (scope, eventId, field, rawValue) => {
+      if (!eventId) return;
+      const applyUpdate = (interaction) => {
+        const working = mergeInteraction(interaction);
+        working.events = working.events.map((event) => {
+          if (event.id !== eventId) return normalizeEvent(event);
+          const current = normalizeEvent(event);
+          switch (field) {
+            case "type": {
+              const nextType = rawValue || "none";
+              const replacement = normalizeEvent(createDefaultEvent(nextType));
+              replacement.id = current.id;
+              replacement.trigger = EVENT_TRIGGER_OPTIONS.some((option) => option.id === current.trigger) ? current.trigger : "enter";
+              return replacement;
+            }
+            case "trigger":
+              return { ...current, trigger: EVENT_TRIGGER_OPTIONS.some((option) => option.id === rawValue) ? rawValue : "enter" };
+            case "channel":
+              return { ...current, channel: clampRange(parseInt(rawValue, 10) || 1, 1, 16) };
+            case "note":
+              return { ...current, note: clampRange(parseInt(rawValue, 10) || 60, 0, 127) };
+            case "velocityMode":
+              return { ...current, velocityMode: rawValue || "constant" };
+            case "velocityValue":
+              return { ...current, velocityValue: clampRange(parseInt(rawValue, 10) || 96, 0, 127) };
+            case "cc":
+              return { ...current, cc: clampRange(parseInt(rawValue, 10) || 1, 0, 127) };
+            case "ccValueMode":
+              return { ...current, ccValueMode: rawValue || "constant" };
+            case "ccValue":
+              return { ...current, ccValue: clampRange(parseInt(rawValue, 10) || 100, 0, 127) };
+            case "address":
+              return { ...current, address: String(rawValue ?? "").trim() };
+            case "args":
+              return { ...current, args: String(rawValue ?? "").trim() };
+            case "oscValueMode":
+              return { ...current, oscValueMode: rawValue || "constant" };
+            case "oscValue":
+              return { ...current, oscValue: clampUnit(parseFloat(rawValue) || 0) };
+            default:
+              return current;
+          }
+        });
+        return working;
+      };
+      if (scope === "editor") {
+        mutateSelectedShape((target) => {
+          const interaction = mergeInteraction(target.interaction);
+          target.interaction = applyUpdate(interaction);
+        }, { skipRender: true });
+        syncEditorDetailForm();
+      } else {
+        if (!assignmentDraftInteraction) return;
+        assignmentDraftInteraction = applyUpdate(assignmentDraftInteraction);
+        syncAssignmentForm();
+      }
+    };
+    const handleEventListMutation = (scope, domEvent) => {
+      const target = domEvent.target;
+      const card = target?.closest('.event-card');
+      if (!card) return;
+      const eventId = card.dataset.eventId;
+      const field = target.dataset.field;
+      if (!eventId || !field) return;
+      if (scope === "editor" && isSyncingEditorForm) return;
+      if (scope === "modal" && isSyncingAssignmentForm) return;
+      updateEventField(scope, eventId, field, target.value);
+    };
+    const syncAssignmentForm = () => {
+      if (!assignmentStreamSelect) return;
+      isSyncingAssignmentForm = true;
+      const draft = assignmentDraftInteraction ? mergeInteraction(assignmentDraftInteraction) : createDefaultInteraction();
+      const stream = draft.stream || "pose";
+      assignmentStreamSelect.value = stream;
+      const resolvedLandmark = populateLandmarkOptions(stream, draft.landmark, assignmentLandmarkSelect) || draft.landmark;
+      if (assignmentLandmarkSelect && resolvedLandmark) {
+        assignmentLandmarkSelect.value = resolvedLandmark;
+      }
+      populateMidiPortSelect(assignmentMidiPortSelect, editorConfig.midiPort);
+      if (assignmentMidiPortSelect) assignmentMidiPortSelect.dataset.selectedPort = editorConfig.midiPort;
+      if (assignmentOscHostInput) assignmentOscHostInput.value = editorConfig.oscHost;
+      if (assignmentOscPortInput) assignmentOscPortInput.value = editorConfig.oscPort;
+      renderEventList("modal", draft.events);
+      isSyncingAssignmentForm = false;
     };
     const serializeShapes = () => editorState.shapes.map((shape) => ({
       id: shape.id,
@@ -2665,14 +2984,7 @@ holistic = createHolistic();
         if (!Array.isArray(data)) return;
         editorState.shapes = data.map((shape) => {
           const type = shape.type === "ellipse" ? "ellipse" : (shape.type === "polyline" ? "polyline" : "rect");
-          const mergedInteraction = mergeInteraction(shape.interaction);
-          if (mergedInteraction?.midi) {
-            delete mergedInteraction.midi.port;
-          }
-          if (mergedInteraction?.osc) {
-            delete mergedInteraction.osc.host;
-            delete mergedInteraction.osc.port;
-          }
+          const mergedInteraction = migrateLegacyInteraction(shape.interaction);
           const normalized = {
             id: shape.id || ensureUuid(),
             type,
@@ -2682,7 +2994,14 @@ holistic = createHolistic();
             height: clampRange(shape.height ?? SHAPE_MIN_SIZE, SHAPE_MIN_SIZE, 1),
             style: { ...DEFAULT_SHAPE_STYLE, ...(shape.style || {}) },
             interaction: mergedInteraction,
-            runtime: { inside: false, lastTriggerAt: 0, noteOn: false, lastContinuousAt: 0 }
+            runtime: {
+              inside: false,
+              lastTriggerAt: 0,
+              lastContinuousAt: 0,
+              noteOn: false,
+              eventState: {},
+              lastMetrics: { normX: 0, normY: 0, distance: 0 }
+            }
           };
           if (type === "polyline") {
             normalized.vertices = normalizeVertices(shape.vertices);
@@ -2997,7 +3316,7 @@ holistic = createHolistic();
         height: 0,
         style: { ...DEFAULT_SHAPE_STYLE },
         interaction: createDefaultInteraction(),
-        runtime: { inside: false, lastTriggerAt: 0, noteOn: false, lastContinuousAt: 0 }
+        runtime: { inside: false, lastTriggerAt: 0, lastContinuousAt: 0, noteOn: false, eventState: {}, lastMetrics: { normX: 0, normY: 0, distance: 0 } }
       };
       editorState.shapes.push(shape);
       setSelectedShape(shape.id, { suppressRender: true });
@@ -3407,35 +3726,8 @@ holistic = createHolistic();
       if (!shape) return;
       refreshMidiPortOptions();
       activeAssignmentShapeId = shapeId;
-      const interaction = mergeInteraction(shape.interaction);
-      const stream = interaction.stream || "pose";
-      const landmark = interaction.landmark || getStreamDefinition(stream)?.options?.[0]?.key || "";
-      if (assignmentStreamSelect) {
-        assignmentStreamSelect.value = stream;
-      }
-      const resolvedLandmark = populateLandmarkOptions(stream, landmark, assignmentLandmarkSelect) || landmark;
-      if (assignmentLandmarkSelect) {
-        assignmentLandmarkSelect.value = resolvedLandmark;
-      }
-      if (assignmentTriggerSelect) {
-        assignmentTriggerSelect.value = interaction.trigger || "enter";
-      }
-      const midi = interaction.midi || createDefaultInteraction().midi;
-      if (assignmentMidiTypeSelect) assignmentMidiTypeSelect.value = midi.type || "none";
-      populateMidiPortSelect(assignmentMidiPortSelect, editorConfig.midiPort);
-      if (assignmentMidiPortSelect) {
-        assignmentMidiPortSelect.dataset.selectedPort = editorConfig.midiPort;
-      }
-      if (assignmentMidiChannelInput) assignmentMidiChannelInput.value = midi.channel ?? 1;
-      if (assignmentMidiNoteInput) assignmentMidiNoteInput.value = midi.note ?? 60;
-      if (assignmentMidiVelocityInput) assignmentMidiVelocityInput.value = midi.velocity ?? 96;
-      if (assignmentMidiCcInput) assignmentMidiCcInput.value = midi.cc ?? 1;
-      if (assignmentMidiCcValueInput) assignmentMidiCcValueInput.value = midi.value ?? 100;
-      if (assignmentOscAddressInput) assignmentOscAddressInput.value = interaction.osc?.address ?? "";
-      if (assignmentOscHostInput) assignmentOscHostInput.value = editorConfig.oscHost;
-      if (assignmentOscPortInput) assignmentOscPortInput.value = editorConfig.oscPort;
-      if (assignmentOscArgsInput) assignmentOscArgsInput.value = interaction.osc?.args ?? "";
-      updateMidiControlsVisibility(assignmentMidiTypeSelect?.value || "none", modalMidiContext);
+      assignmentDraftInteraction = JSON.parse(JSON.stringify(mergeInteraction(shape.interaction)));
+      syncAssignmentForm();
       assignmentBackdrop.classList.add("is-visible");
       assignmentModal.classList.add("is-visible");
       assignmentBackdrop.setAttribute("aria-hidden", "false");
@@ -3452,57 +3744,39 @@ holistic = createHolistic();
       assignmentBackdrop.setAttribute("aria-hidden", "true");
       assignmentModal.setAttribute("aria-hidden", "true");
       activeAssignmentShapeId = null;
+      assignmentDraftInteraction = null;
     };
 
     const applyAssignmentModal = () => {
-      if (!activeAssignmentShapeId) {
+      if (!activeAssignmentShapeId || !assignmentDraftInteraction) {
         closeAssignmentModal();
         return;
       }
-      const shape = findShapeById(activeAssignmentShapeId);
-      if (!shape) {
-        closeAssignmentModal();
-        return;
-      }
-      const stream = assignmentStreamSelect?.value || "pose";
-      const landmark = assignmentLandmarkSelect?.value || getStreamDefinition(stream)?.options?.[0]?.key || "";
-      const trigger = assignmentTriggerSelect?.value || "enter";
-      const midiType = assignmentMidiTypeSelect?.value || "none";
-      const midiPort = assignmentMidiPortSelect?.value || "broadcast";
-      const midiChannel = clampRange(parseInt(assignmentMidiChannelInput?.value ?? "1", 10) || 1, 1, 16);
-      const midiNote = clampRange(parseInt(assignmentMidiNoteInput?.value ?? "60", 10) || 60, 0, 127);
-      const midiVelocity = clampRange(parseInt(assignmentMidiVelocityInput?.value ?? "96", 10) || 96, 0, 127);
-      const midiCcNumber = clampRange(parseInt(assignmentMidiCcInput?.value ?? "1", 10) || 1, 0, 127);
-      const midiCcValue = clampRange(parseInt(assignmentMidiCcValueInput?.value ?? "100", 10) || 100, 0, 127);
-      const oscAddress = assignmentOscAddressInput?.value?.trim() || "";
-      const oscHost = assignmentOscHostInput?.value?.trim() || "127.0.0.1";
-      const oscPort = clampRange(parseInt(assignmentOscPortInput?.value ?? "9000", 10) || 9000, 1, 65535);
-      const oscArgs = assignmentOscArgsInput?.value?.trim() || "";
-      if (!isSyncingConfig) {
-        updateEditorConfig({ midiPort, oscHost, oscPort });
-      }
-      shape.interaction = {
+      const stream = assignmentStreamSelect?.value || assignmentDraftInteraction.stream || "pose";
+      const landmark = assignmentLandmarkSelect?.value || assignmentDraftInteraction.landmark || getStreamDefinition(stream)?.options?.[0]?.key || "";
+      assignmentDraftInteraction = mergeInteraction({
+        ...assignmentDraftInteraction,
         stream,
-        landmark,
-        trigger,
-        midi: {
-          type: midiType,
-          channel: midiChannel,
-          note: midiNote,
-          velocity: midiVelocity,
-          cc: midiCcNumber,
-          value: midiCcValue
-        },
-        osc: {
-          address: oscAddress,
-          args: oscArgs
+        landmark
+      });
+      const targetId = activeAssignmentShapeId;
+      if (editorState.selectedId !== targetId) {
+        setSelectedShape(targetId, { suppressRender: true });
+      }
+      mutateSelectedShape((target) => {
+        if (target.id === targetId) {
+          target.interaction = assignmentDraftInteraction;
         }
-      };
-      resetShapeRuntime(shape);
-      markEditorSidebarDirty();
+      }, { skipRender: true });
+      const oscHostValue = assignmentOscHostInput?.value?.trim() || editorConfig.oscHost;
+      const oscPortValue = clampRange(parseInt(assignmentOscPortInput?.value ?? `${editorConfig.oscPort}`, 10) || editorConfig.oscPort, 1, 65535);
+      updateEditorConfig({
+        midiPort: assignmentMidiPortSelect?.value || editorConfig.midiPort,
+        oscHost: oscHostValue,
+        oscPort: oscPortValue
+      });
+      syncEditorDetailForm();
       closeAssignmentModal();
-      renderEditor();
-      queuePersist();
     };
     const midiManager = {
       supported: typeof navigator !== "undefined" && typeof navigator.requestMIDIAccess === "function",
@@ -3622,6 +3896,13 @@ holistic = createHolistic();
         if (value === ":timestamp") return context.timestamp ?? Date.now();
         if (value === "true") return true;
         if (value === "false") return false;
+        if (value.startsWith("{") && value.endsWith("}")) {
+          const token = value.slice(1, -1).toLowerCase();
+          if (token === "norm_x" || token === "norm_x_bound") return context.normX ?? 0;
+          if (token === "norm_y" || token === "norm_y_bound") return context.normY ?? 0;
+          if (token === "dist_center" || token === "distance") return context.distance ?? 0;
+          if (token === "value127") return clampRange(Math.round((context.value ?? 0) * 127), 0, 127);
+        }
         const numeric = Number(value);
         if (!Number.isNaN(numeric)) return numeric;
         return value;
@@ -3725,13 +4006,81 @@ holistic = createHolistic();
       // so incoming landmark points can be compared as-is without flipping them again.
       return point;
     };
+    const DEFAULT_METRICS = Object.freeze({ normX: 0, normY: 0, distance: 0 });
+    const MIN_METRIC_SPAN = 1e-4;
+    const computeShapeBounds = (shape) => {
+      if (!shape) {
+        return { minX: 0, minY: 0, width: 1, height: 1, centerX: 0.5, centerY: 0.5 };
+      }
+      if (shape.type === "polyline") {
+        const { minX, minY, maxX, maxY } = computePolylineBounds(shape.vertices || []);
+        const width = Math.max(maxX - minX, MIN_METRIC_SPAN);
+        const height = Math.max(maxY - minY, MIN_METRIC_SPAN);
+        const centerX = clampUnit(minX + width / 2);
+        const centerY = clampUnit(minY + height / 2);
+        return { minX, minY, width, height, centerX, centerY };
+      }
+      const minX = clampUnit(shape.x ?? 0);
+      const minY = clampUnit(shape.y ?? 0);
+      const width = Math.max(shape.width ?? 0, MIN_METRIC_SPAN);
+      const height = Math.max(shape.height ?? 0, MIN_METRIC_SPAN);
+      const centerX = clampUnit(minX + width / 2);
+      const centerY = clampUnit(minY + height / 2);
+      return { minX, minY, width, height, centerX, centerY };
+    };
+    const computeShapeMetrics = (shape, point) => {
+      if (!shape || !point) {
+        return { ...DEFAULT_METRICS };
+      }
+      const bounds = computeShapeBounds(shape);
+      const px = clampUnit(point.x ?? 0);
+      const py = clampUnit(point.y ?? 0);
+      const hasWidth = bounds.width > MIN_METRIC_SPAN;
+      const hasHeight = bounds.height > MIN_METRIC_SPAN;
+      const normX = hasWidth ? clampUnit((px - bounds.minX) / bounds.width) : 0.5;
+      const normY = hasHeight ? clampUnit((py - bounds.minY) / bounds.height) : 0.5;
+      const radius = Math.max(bounds.width, bounds.height) / 2;
+      const distance = radius > MIN_METRIC_SPAN
+        ? clampUnit(Math.hypot(px - bounds.centerX, py - bounds.centerY) / radius)
+        : 0;
+      return { normX, normY, distance };
+    };
+    const resolveValueFromMode = (mode, metrics, constantValue, { midi = false } = {}) => {
+      const safeMetrics = { ...DEFAULT_METRICS, ...(metrics || {}) };
+      const asUnit = (value) => clampUnit(Number.isFinite(value) ? value : 0);
+      const asMidi = (value) => clampRange(Math.round(Number.isFinite(value) ? value : 0), 0, 127);
+      switch (mode) {
+        case "normX": {
+          const scalar = asUnit(safeMetrics.normX);
+          return midi ? asMidi(scalar * 127) : scalar;
+        }
+        case "normY": {
+          const scalar = asUnit(safeMetrics.normY);
+          return midi ? asMidi(scalar * 127) : scalar;
+        }
+        case "distance": {
+          const scalar = asUnit(safeMetrics.distance);
+          return midi ? asMidi(scalar * 127) : scalar;
+        }
+        case "constant":
+        default: {
+          if (midi) {
+            return asMidi(Number(constantValue));
+          }
+          return asUnit(Number(constantValue));
+        }
+      }
+    };
     const evaluateShapeInteractions = (results) => {
       if (!results || !editorState.shapes.length || !isScoreMainEnabled()) return;
       const now = typeof performance !== "undefined" && performance?.now ? performance.now() : Date.now();
       const pointCache = new Map();
       for (const shape of editorState.shapes) {
         if (!shape.interaction) continue;
+        shape.interaction = mergeInteraction(shape.interaction);
         const interaction = shape.interaction;
+        const events = interaction.events?.filter((event) => event && event.type && event.type !== "none") || [];
+        if (!events.length) continue;
         const cacheKey = `${interaction.stream}:${interaction.landmark}`;
         if (!pointCache.has(cacheKey)) {
           const point = resolveStreamPoint(interaction.stream, interaction.landmark, results);
@@ -3739,61 +4088,156 @@ holistic = createHolistic();
         }
         const targetPoint = pointCache.get(cacheKey);
         const inside = targetPoint ? shapeContainsPoint(shape, targetPoint) : false;
-        const runtime = shape.runtime || (shape.runtime = { inside: false, lastTriggerAt: 0, noteOn: false, lastContinuousAt: 0 });
+        const runtime = shape.runtime || (shape.runtime = {
+          inside: false,
+          lastTriggerAt: 0,
+          lastContinuousAt: 0,
+          noteOn: false,
+          eventState: {},
+          lastMetrics: { normX: 0, normY: 0, distance: 0 }
+        });
+        if (!runtime.eventState) runtime.eventState = {};
+        if (!runtime.lastMetrics) runtime.lastMetrics = { normX: 0, normY: 0, distance: 0 };
         const justEntered = inside && !runtime.inside;
         const justExited = !inside && runtime.inside;
-        const continuousReady = inside && (now - (runtime.lastContinuousAt || 0) >= CONTINUOUS_TRIGGER_INTERVAL_MS);
-        let phase = null;
-        if (justEntered) {
-          phase = "enter";
-        } else if (justExited) {
-          phase = "exit";
-        } else if (continuousReady) {
-          phase = "inside";
+        let metrics = runtime.lastMetrics;
+        if (inside && targetPoint) {
+          metrics = computeShapeMetrics(shape, targetPoint);
+          runtime.lastMetrics = metrics;
         }
-        if (phase === "inside" && inside) {
-          runtime.lastContinuousAt = now;
-        }
-        const matchesTrigger = phase && (interaction.trigger === phase || (interaction.trigger === "inside" && phase === "inside"));
-        if (interaction.midi?.type === "note") {
-          if (justEntered) {
-            sendMidiNote(interaction.midi.channel, interaction.midi.note, interaction.midi.velocity, "on", editorConfig.midiPort);
-            runtime.noteOn = true;
-          } else if (justExited && runtime.noteOn) {
-            sendMidiNote(interaction.midi.channel, interaction.midi.note, 0, "off", editorConfig.midiPort);
-            runtime.noteOn = false;
-          } else if (matchesTrigger && interaction.trigger === "inside" && inside) {
-            sendMidiNote(interaction.midi.channel, interaction.midi.note, interaction.midi.velocity, "on", editorConfig.midiPort);
-            runtime.noteOn = true;
+        events.forEach((event) => {
+          const normalizedEvent = normalizeEvent(event);
+          const eventState = runtime.eventState[normalizedEvent.id] || (runtime.eventState[normalizedEvent.id] = { noteOn: false, lastContinuousAt: 0 });
+          const trigger = normalizedEvent.trigger || "enter";
+          switch (normalizedEvent.type) {
+            case "midiNote": {
+              const channel = normalizedEvent.channel ?? 1;
+              const note = normalizedEvent.note ?? 60;
+              const velocity = resolveValueFromMode(normalizedEvent.velocityMode, metrics, normalizedEvent.velocityValue ?? 96, { midi: true });
+              if (trigger === "enterExit") {
+                if (justEntered) {
+                  sendMidiNote(channel, note, velocity, "on", editorConfig.midiPort);
+                  eventState.noteOn = true;
+                }
+                if (justExited && eventState.noteOn) {
+                  sendMidiNote(channel, note, 0, "off", editorConfig.midiPort);
+                  eventState.noteOn = false;
+                }
+                break;
+              }
+              if (trigger === "enter" && justEntered) {
+                sendMidiNote(channel, note, velocity, "on", editorConfig.midiPort);
+                eventState.noteOn = true;
+                break;
+              }
+              if (trigger === "exit" && justExited) {
+                sendMidiNote(channel, note, 0, "off", editorConfig.midiPort);
+                eventState.noteOn = false;
+                break;
+              }
+              if (trigger === "inside" && inside) {
+                if (now - (eventState.lastContinuousAt || 0) >= CONTINUOUS_TRIGGER_INTERVAL_MS) {
+                  eventState.lastContinuousAt = now;
+                  sendMidiNote(channel, note, velocity, "on", editorConfig.midiPort);
+                  eventState.noteOn = true;
+                }
+              }
+              if (justExited && eventState.noteOn) {
+                sendMidiNote(channel, note, 0, "off", editorConfig.midiPort);
+                eventState.noteOn = false;
+              }
+              break;
+            }
+            case "midiCc": {
+              const channel = normalizedEvent.channel ?? 1;
+              const ccNumber = normalizedEvent.cc ?? 1;
+              const value = resolveValueFromMode(normalizedEvent.ccValueMode, metrics, normalizedEvent.ccValue ?? 100, { midi: true });
+              const sendValue = (val) => sendMidiCc(channel, ccNumber, val, editorConfig.midiPort);
+              if (trigger === "enterExit") {
+                if (justEntered) sendValue(value);
+                if (justExited) sendValue(0);
+                break;
+              }
+              if (trigger === "enter" && justEntered) {
+                sendValue(value);
+                break;
+              }
+              if (trigger === "exit" && justExited) {
+                sendValue(0);
+                break;
+              }
+              if (trigger === "inside" && inside) {
+                if (now - (eventState.lastContinuousAt || 0) >= CONTINUOUS_TRIGGER_INTERVAL_MS) {
+                  eventState.lastContinuousAt = now;
+                  sendValue(value);
+                }
+              }
+              break;
+            }
+            case "osc": {
+              const address = normalizedEvent.address || "";
+              if (!address) break;
+              const oscValue = resolveValueFromMode(normalizedEvent.oscValueMode, metrics, normalizedEvent.oscValue ?? 1, { midi: false });
+              const sendOscWithPhase = (phaseLabel, overrideValue) => {
+                const computedValue = overrideValue !== undefined ? overrideValue : oscValue;
+                const args = parseOscArgs(normalizedEvent.args, {
+                  value: computedValue,
+                  phase: phaseLabel,
+                  inside,
+                  timestamp: now,
+                  normX: metrics.normX,
+                  normY: metrics.normY,
+                  distance: metrics.distance
+                });
+                const finalArgs = args.length ? args : [computedValue];
+                sendOscMessage(address, finalArgs, {
+                  shapeId: shape.id,
+                  eventId: normalizedEvent.id,
+                  phase: phaseLabel,
+                  stream: interaction.stream,
+                  landmark: interaction.landmark,
+                  host: editorConfig.oscHost,
+                  port: editorConfig.oscPort,
+                  value: computedValue,
+                  inside,
+                  normX: metrics.normX,
+                  normY: metrics.normY,
+                  distance: metrics.distance
+                });
+              };
+              if (trigger === "enterExit") {
+                if (justEntered) sendOscWithPhase("enter");
+                if (justExited) sendOscWithPhase("exit", 0);
+                break;
+              }
+              if (trigger === "enter" && justEntered) {
+                sendOscWithPhase("enter");
+                break;
+              }
+              if (trigger === "exit" && justExited) {
+                sendOscWithPhase("exit", 0);
+                break;
+              }
+              if (trigger === "inside" && inside) {
+                if (now - (eventState.lastContinuousAt || 0) >= CONTINUOUS_TRIGGER_INTERVAL_MS) {
+                  eventState.lastContinuousAt = now;
+                  sendOscWithPhase("inside");
+                }
+              }
+              break;
+            }
+            default:
+              break;
           }
-        } else if (interaction.midi?.type === "cc" && matchesTrigger) {
-          const value = phase === "exit" ? 0 : interaction.midi.value;
-          sendMidiCc(interaction.midi.channel, interaction.midi.cc, value, editorConfig.midiPort);
-        }
-        if (interaction.osc?.address && matchesTrigger) {
-          const oscValue = phase === "exit" ? 0 : (inside ? 1 : 0);
-          const args = parseOscArgs(interaction.osc.args, {
-            value: oscValue,
-            phase,
-            inside,
-            timestamp: now
-          });
-          if (!args.length) {
-            args.push(oscValue);
-          }
-          sendOscMessage(interaction.osc.address, args, {
-            shapeId: shape.id,
-            phase,
-            stream: interaction.stream,
-            landmark: interaction.landmark,
-            host: editorConfig.oscHost,
-            port: editorConfig.oscPort,
-            value: oscValue,
-            inside
-          });
-        }
+        });
         runtime.inside = inside;
         runtime.lastTriggerAt = now;
+        if (!inside && runtime.eventState) {
+          Object.values(runtime.eventState).forEach((state) => {
+            state.lastContinuousAt = 0;
+            state.noteOn = false;
+          });
+        }
         if (activePanelTab === "editor") {
           const item = document.getElementById(`editor-shape-${shape.id}`);
           if (item) {
@@ -3807,6 +4251,7 @@ holistic = createHolistic();
       }
       renderEditor();
     };
+
 
     const handleEditorDoubleClick = (event) => {
       if (isPolylineTool(editorState.tool) && editorState.activePolylineId) {
@@ -3854,12 +4299,28 @@ holistic = createHolistic();
       queuePersist();
     });
     assignmentStreamSelect?.addEventListener("change", () => {
+      if (isSyncingAssignmentForm) return;
       const streamId = assignmentStreamSelect.value || "pose";
       const currentLandmark = assignmentLandmarkSelect?.value || null;
-      populateLandmarkOptions(streamId, currentLandmark, assignmentLandmarkSelect);
+      const landmarkValue = populateLandmarkOptions(streamId, currentLandmark, assignmentLandmarkSelect) || currentLandmark;
+      if (assignmentDraftInteraction) {
+        assignmentDraftInteraction = mergeInteraction({
+          ...assignmentDraftInteraction,
+          stream: streamId,
+          landmark: landmarkValue
+        });
+        syncAssignmentForm();
+      }
     });
-    assignmentMidiTypeSelect?.addEventListener("change", () => {
-      updateMidiControlsVisibility(assignmentMidiTypeSelect.value, modalMidiContext);
+    assignmentLandmarkSelect?.addEventListener("change", () => {
+      if (isSyncingAssignmentForm) return;
+      const landmark = assignmentLandmarkSelect.value || "";
+      if (!assignmentDraftInteraction) return;
+      assignmentDraftInteraction = mergeInteraction({
+        ...assignmentDraftInteraction,
+        landmark
+      });
+      syncAssignmentForm();
     });
     assignmentMidiPortSelect?.addEventListener("change", () => {
       if (isSyncingConfig) return;
@@ -3868,6 +4329,23 @@ holistic = createHolistic();
     });
     assignmentMidiPortRefreshBtn?.addEventListener("click", () => {
       refreshMidiPortOptions();
+    });
+    assignmentAddEventBtn?.addEventListener("click", () => {
+      addEventToScope("modal", "midiNote");
+    });
+    assignmentEventList?.addEventListener("click", (event) => {
+      const target = event.target?.closest('[data-action="remove-event"]');
+      if (!target) return;
+      const card = target.closest('.event-card');
+      const eventId = card?.dataset?.eventId;
+      if (!eventId) return;
+      removeEventFromScope("modal", eventId);
+    });
+    assignmentEventList?.addEventListener("change", (event) => {
+      handleEventListMutation("modal", event);
+    });
+    assignmentEventList?.addEventListener("input", (event) => {
+      handleEventListMutation("modal", event);
     });
     assignmentCloseBtn?.addEventListener("click", closeAssignmentModal);
     assignmentCancelBtn?.addEventListener("click", closeAssignmentModal);
@@ -3928,25 +4406,6 @@ holistic = createHolistic();
         target.interaction = interaction;
       }, { skipRender: true });
     });
-    editorTriggerSelect?.addEventListener("change", () => {
-      if (isSyncingEditorForm) return;
-      const trigger = editorTriggerSelect.value || "enter";
-      mutateSelectedShape((target) => {
-        const interaction = mergeInteraction(target.interaction);
-        interaction.trigger = trigger;
-        target.interaction = interaction;
-      }, { skipRender: true });
-    });
-    editorMidiTypeSelect?.addEventListener("change", () => {
-      if (isSyncingEditorForm) return;
-      const midiType = editorMidiTypeSelect.value || "none";
-      updateMidiControlsVisibility(midiType, editorMidiContext);
-      mutateSelectedShape((target) => {
-        const interaction = mergeInteraction(target.interaction);
-        interaction.midi.type = midiType;
-        target.interaction = interaction;
-      }, { skipRender: true });
-    });
     editorMidiPortSelect?.addEventListener("change", () => {
       if (isSyncingConfig) return;
       const value = editorMidiPortSelect.value || "broadcast";
@@ -3955,54 +4414,23 @@ holistic = createHolistic();
     editorMidiPortRefreshBtn?.addEventListener("click", () => {
       refreshMidiPortOptions();
     });
-    const bindMidiNumberInput = (input, min, max, property) => {
-      if (!input) return;
-      input.addEventListener("input", () => {
-        if (isSyncingEditorForm) return;
-        const parsed = parseInt(input.value ?? "", 10);
-        const clamped = clampRange(Number.isFinite(parsed) ? parsed : min, min, max);
-        if (!Number.isFinite(parsed) || parsed !== clamped) {
-          input.value = clamped;
-        }
-        mutateSelectedShape((target) => {
-          const interaction = mergeInteraction(target.interaction);
-          interaction.midi[property] = clamped;
-          target.interaction = interaction;
-        }, { skipRender: true });
-      });
-    };
-    bindMidiNumberInput(editorMidiChannelInput, 1, 16, "channel");
-    bindMidiNumberInput(editorMidiNoteInput, 0, 127, "note");
-    bindMidiNumberInput(editorMidiVelocityInput, 0, 127, "velocity");
-    bindMidiNumberInput(editorMidiCcInput, 0, 127, "cc");
-    bindMidiNumberInput(editorMidiCcValueInput, 0, 127, "value");
-    const bindOscInput = (input, property) => {
-      if (!input) return;
-      input.addEventListener("input", () => {
-        if (isSyncingEditorForm) return;
-        let nextValue = input.value ?? "";
-        if (property === "address" || property === "host") {
-          nextValue = nextValue.trim();
-          if (property === "host" && !nextValue) {
-            nextValue = "127.0.0.1";
-            input.value = nextValue;
-          }
-        } else if (property === "port") {
-          const parsed = clampRange(parseInt(nextValue, 10) || 9000, 1, 65535);
-          if (String(parsed) !== nextValue) {
-            input.value = parsed;
-          }
-          nextValue = parsed;
-        }
-        mutateSelectedShape((target) => {
-          const interaction = mergeInteraction(target.interaction);
-          interaction.osc[property] = nextValue;
-          target.interaction = interaction;
-        }, { skipRender: true });
-      });
-    };
-    bindOscInput(editorOscAddressInput, "address");
-    bindOscInput(editorOscArgsInput, "args");
+    editorAddEventBtn?.addEventListener("click", () => {
+      addEventToScope("editor", "midiNote");
+    });
+    editorEventList?.addEventListener("click", (event) => {
+      const target = event.target?.closest('[data-action="remove-event"]');
+      if (!target) return;
+      const card = target.closest('.event-card');
+      const eventId = card?.dataset?.eventId;
+      if (!eventId) return;
+      removeEventFromScope("editor", eventId);
+    });
+    editorEventList?.addEventListener("change", (event) => {
+      handleEventListMutation("editor", event);
+    });
+    editorEventList?.addEventListener("input", (event) => {
+      handleEventListMutation("editor", event);
+    });
     const bindGlobalOscConfigInput = (input, key) => {
       if (!input) return;
       input.addEventListener("input", () => {
@@ -4045,8 +4473,6 @@ holistic = createHolistic();
     setActivePanelTab(activePanelTab);
     populateLandmarkOptions("pose", "left_wrist", assignmentLandmarkSelect);
     populateLandmarkOptions("pose", "left_wrist", editorLandmarkSelect);
-    updateMidiControlsVisibility(assignmentMidiTypeSelect?.value || "none", modalMidiContext);
-    updateMidiControlsVisibility(editorMidiTypeSelect?.value || "none", editorMidiContext);
     syncEditorDetailForm();
     renderEditor();
     updateOverlayState();

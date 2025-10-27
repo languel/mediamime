@@ -1,49 +1,78 @@
-# Stippulata (p5 Edition)
+# Stippulata Score Editor
 
-An interactive art demo that fuses MediaPipe body tracking with weighted Voronoi stippling to render a living portrait made of particles. This p5.js iteration exposes creative controls so you can sculpt the stipple behaviour in real time.
+An interactive score editor for MediaPipe streams. Draw shapes over the live pose, route multiple MIDI/OSC events per shape, and monitor diagnostic layers in a compact, Ableton-inspired UI.
 
-## Status
+## Quick Start
 
-Interactive prototype with configurable particle forces, per-feature overlays, and optional particle collisions. Webcam and sample video sources are both supported; UI controls are powered by lil-gui.
+1. Serve the repository with any static file server:
+   ```bash
+   npm install --global live-server
+   live-server
+   ```
+2. Open the served URL, grant webcam access if prompted, and keep the control panel open on the right.
+3. Use the stream toggles to expose the feeds you need (`Main` affects the canvas, `Preview` feeds the diagnostic mini-map).
 
-## Features
+## Panel Layout
 
-- Dual video input: live webcam (mirrored by default) or bundled dance clip for consistent demos.
-- Weighted Voronoi stippling driven by MediaPipe Holistic segmentation and landmarks (pose, hands, face).
-- Per-feature force multipliers, opacity, and colour pickers to tailor the stipple portrait.
-- Adjustable particle dynamics: count, size, viscosity, trail fade, collision friction/restitution, random walk.
-- Optional particle-to-particle collisions using a spatial hash for responsiveness at higher particle counts.
+### Streams Tab
+- `Mirror` toggle flips the camera feed; the adjacent `Source` button switches between webcam and the bundled sample clip.
+- Each row exposes a MediaPipe layer with separate `Main` and `Preview` toggles. Default mains: `Source`, `Pose`, `LHand`, `RHand`, `Face`, `Score`. Default previews: `Segmentation`, `Depth`, `Performance`, `Score`.
+- The preview canvas at the bottom mirrors the active preview layers, and the status chip reports camera/sample state.
 
-## Getting Started
+### Editor Tab
+- Global routing lives directly under the tabs:
+  - **MIDI Port** dropdown (with refresh) points all events at a WebMIDI output or broadcasts to every device.
+  - **OSC Destination** stores a global host + port per browser session.
+- The score list shows every drawn shape, highlights the one under the pointer, and reflects the linked stream/trigger metadata.
+- The detail pane keeps landmarks, the event stack, and destructive actions visible even while you tweak shapes on the canvas—no auto-collapse.
 
-Serve the project with any static file server:
+## Event Cards
 
-```bash
-npm install --global live-server   # or use python -m http.server
-live-server                        # serves the repo root
-```
+- Add as many cards as needed; each card can be a **MIDI Note**, **MIDI CC**, or an **OSC** burst.
+- Triggers:
+  - `Enter` – fires once when the tracked landmark crosses the shape boundary.
+  - `Exit` – fires once when the landmark leaves.
+  - `Enter + Exit` – emits paired on/off logic (note-on/off or value/zero).
+  - `While Inside` – throttled loop (220 ms floor) while the landmark stays in the region.
+- MIDI notes clear themselves on exit, even for continuous triggers, to avoid hanging notes.
+- OSC dispatch includes metadata (`shapeId`, `eventId`, `phase`, `stream`, `landmark`) so downstream receivers can react contextually.
 
-Open the served URL, allow camera permissions if prompted, and use the control panel to experiment. Toggle the "Use Sample Dance Video" button to load the built-in clip if the webcam is unavailable.
+## Value Sources
 
-## Controls Overview
+| Source    | MIDI Output                     | OSC Output | Description |
+|-----------|---------------------------------|------------|-------------|
+| `constant`| Stored integer (0–127)          | Stored float (0.0–1.0) | Static value, ideal for fixed velocities or note-off complements. |
+| `normX`   | Normalised X × 127              | Normalised X | Landmark X within the shape bounds (0.0 at the left edge, 1.0 at the right). |
+| `normY`   | Normalised Y × 127              | Normalised Y | Landmark Y within the shape bounds (0.0 at the top, 1.0 at the bottom). |
+| `distance`| Normalised radius × 127         | Normalised radius | Euclidean distance from the shape centroid, clamped to the bounding box radius. |
 
-The lil-gui panel (right column) provides:
+## OSC Argument Tokens
 
-- **Particles:** Count, size, and opacity.
-- **Render:** Style (points/trails/glow), trail fade, source video visibility.
-- **Features:** Enable/disable pose, hands, face, segmentation influence; adjust per-feature force multiplier, overlay opacity, and colour.
-- **Forces:** Density/brightness attraction, Voronoi strength, landmark pull, random walk, speed cap.
-- **Dynamics:** Viscosity, repulsion radius, and optional particle-to-particle collisions with friction/restitution.
-- **Advanced:** Voronoi sample count and update interval.
+Comma-separated argument strings can mix literals, tokens, and booleans. Available placeholders:
 
-Press the **Reset** button to restore defaults.
+| Token / Placeholder | Expands To |
+|---------------------|-----------|
+| `:value`            | Active OSC value (post-normalisation). |
+| `:phase`            | Interaction phase: `enter`, `exit`, or `inside`. |
+| `:inside`           | `1` while the landmark is inside, `0` otherwise. |
+| `:timestamp`        | `performance.now()` (ms). |
+| `{norm_x}` / `{norm_x_bound}` | Same as `normX` value. |
+| `{norm_y}` / `{norm_y_bound}` | Same as `normY` value. |
+| `{dist_center}` / `{distance}`| Distance metric (0–1). |
+| `{value127}`        | OSC value scaled to the MIDI 0–127 range. |
 
-## Development Notes
+If no arguments resolve, the dispatcher sends the computed value as a single float.
 
-- Code is organised into ES modules under `src/`: `app.js` orchestrates UI + p5, `mediapipeManager.js` handles video sources, `stippleSimulation.js` runs the particle system, and `ui.js` configures the control surface.
-- No build tooling is required; dependencies (p5.js, MediaPipe Holistic, lil-gui) load via CDN.
-- Collisions are off by default to keep performance predictable; enable them for tighter point packing on capable hardware.
+## Canvas Tools & Shortcuts
 
-## License
+- `Cmd/Ctrl + ,` – toggle the control panel.
+- `Cmd/Ctrl + E` – toggle the tool palette without hiding the score layer.
+- Tool shortcuts: `V` (Select), `E` (Eraser), `R` (Rectangle), `O` (Oval), `L` (Polyline), `P` (Polygon).
+- `Enter` pops the assignment modal for the active shape; `Esc` clears selection; `Delete/Backspace` removes the current shape.
+- The editor toolbar stays pinned to the bottom edge; tooltips reveal icon meanings.
 
-Proprietary – do not distribute without permission.
+## Notes & Troubleshooting
+
+- MIDI port refresh is deferred until the mapping modal opens or you click the refresh buttons—attach devices first.
+- `While Inside` triggers respect the global throttling window; adjust expressions on the receiving end if tighter timing is required.
+- Mirror mode only affects rendering; shape math always runs in camera-native coordinates for consistent OSC/MIDI output.
