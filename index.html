@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mediapiper · Holistic Preview</title>
-  <link rel="stylesheet" href="style.css">
+  <title>Mediamime · Holistic Preview</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Icons+Outlined">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined">
   <style>
@@ -14,11 +14,62 @@
     *, *::before, *::after {
       box-sizing: border-box;
     }
+    :root {
+      color-scheme: dark;
+      --bg-primary: #04070d;
+      --bg-panel: rgba(12, 18, 30, 0.9);
+      --bg-overlay: rgba(5, 9, 18, 0.68);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.16);
+      --accent: #ff4081;
+      --accent-strong: #f97316;
+      --text-primary: #f5f7ff;
+      --text-secondary: rgba(245, 247, 255, 0.7);
+      --shadow-strong: 0 18px 40px rgba(0, 0, 0, 0.35);
+    }
     body {
       margin: 0;
       display: flex;
       overflow: hidden;
       background: radial-gradient(120% 120% at 10% 10%, #0d1525 0%, #04070d 48%, #02040a 100%);
+      background: transparent;
+      color: var(--text-primary);
+      font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+      min-height: 100vh;
+      letter-spacing: 0.01em;
+    }
+    button,
+    input,
+    select {
+      font-family: inherit;
+      color: inherit;
+    }
+    .icon-button {
+      appearance: none;
+      border: none;
+      background: transparent;
+      color: rgba(245, 247, 255, 0.74);
+      width: 1.4rem;
+      height: 1.4rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: color 0.18s ease, transform 0.18s ease;
+    }
+    .icon-button:hover,
+    .icon-button:focus-visible {
+      color: var(--accent-strong);
+      transform: translateY(-1px);
+    }
+    .icon-button:active {
+      transform: translateY(0);
+    }
+    .icon-button .material-icons-outlined,
+    .icon-button .material-symbols-outlined {
+      font-size: 18px;
+      line-height: 1;
     }
     .material-symbols-outlined {
       font-family: "Material Symbols Outlined";
@@ -54,13 +105,13 @@
       height: 100%;
       min-width: 0;
       min-height: 0;
-      background: #000;
+      background: var(--bg-primary);
       overflow: hidden;
       display: flex;
       align-items: center;
       justify-content: center;
     }
-    #mediapiper-sketch {
+    #mediamime-sketch {
       width: 100%;
       height: 100%;
       display: flex;
@@ -86,8 +137,9 @@
       flex: 0 0 auto;
       width: clamp(240px, 24vw, 320px);
       max-width: 340px;
-      background: rgba(4, 7, 13, 0.94);
-      border-left: 1px solid rgba(255, 255, 255, 0.08);
+      background: var(--bg-panel);
+      border-left: 1px solid var(--border-subtle);
+      color: var(--text-primary);
       padding: 0.75rem 0.85rem 1rem;
       display: flex;
       flex-direction: column;
@@ -116,6 +168,7 @@
       margin: 0;
       font-size: 1.05rem;
       font-weight: 600;
+      color: var(--text-primary);
     }
     .panel-actions {
       display: flex;
@@ -134,7 +187,7 @@
       padding: 0.25rem;
       border-radius: 3px;
       background: rgba(9, 13, 22, 0.6);
-      border: 1px solid rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
       align-self: flex-start;
     }
     .panel-tabs button {
@@ -155,7 +208,7 @@
       background: rgba(255, 255, 255, 0.1);
     }
     .panel-tabs button.is-active {
-      background: rgba(255, 255, 255, 0.2);
+      background: var(--accent-strong);
       color: rgba(5, 8, 14, 0.92);
     }
     .panel-content {
@@ -172,8 +225,8 @@
       margin-top: 0.1rem;
     }
     .panel-routing-actions .icon-button {
-      width: 1.6rem;
-      height: 1.6rem;
+      width: 1.4rem;
+      height: 1.4rem;
       border-radius: 2px;
     }
     .panel-routing {
@@ -182,7 +235,7 @@
       padding: 0.5rem;
       border-radius: 2px;
       background: rgba(12, 18, 30, 0.7);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--border-subtle);
     }
     .panel-routing-row {
       display: grid;
@@ -190,12 +243,13 @@
     }
     .panel-routing-row label {
       font-size: 0.78rem;
-      color: rgba(245, 247, 255, 0.72);
+      color: var(--text-secondary);
     }
     .panel-section {
       display: none;
       flex-direction: column;
       gap: 0.55rem;
+      color: var(--text-primary);
     }
     .panel-section.is-active {
       display: flex;
@@ -214,7 +268,7 @@
       height: 2rem;
       border-radius: 2px;
       border: 1px solid rgba(255, 255, 255, 0.14);
-      background: rgba(255, 255, 255, 0.05);
+      background: rgba(255, 255, 255, 0.08);
       cursor: pointer;
       transition: background 0.15s ease, border-color 0.15s ease;
       position: relative;
@@ -258,8 +312,8 @@
     .segment-preview {
       border-radius: 2px;
       overflow: hidden;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(5, 9, 18, 0.68);
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-overlay);
       text-align: center;
       padding: 0.3rem;
     }
@@ -351,8 +405,8 @@
       width: 1.4rem;
       height: 1.4rem;
       border-radius: 3px;
-      border: 1px solid rgba(255, 255, 255, 0.16);
-      background: rgba(9, 13, 22, 0.9);
+      border: 1px solid var(--border-subtle);
+      background: rgba(9, 13, 22, 0.92);
       color: #f5f7ff;
       display: inline-flex;
       align-items: center;
@@ -418,7 +472,7 @@
       z-index: 80;
     }
     .gesture-editor-toolbar button {
-      border: 1px solid transparent;
+      border: none;
       background: transparent;
       color: rgba(245, 247, 255, 0.76);
       padding: 0.25rem;
@@ -430,7 +484,7 @@
       width: 2.1rem;
       height: 2.1rem;
       cursor: pointer;
-      transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+      transition: background 0.18s ease, color 0.18s ease;
     }
     .gesture-editor-toolbar button .material-icons-outlined {
       font-size: 18px;
@@ -441,9 +495,7 @@
     }
     .gesture-editor-toolbar button.is-active {
       background: rgba(82, 213, 255, 0.16);
-      border-color: rgba(82, 213, 255, 0.32);
       color: #52d5ff;
-      box-shadow: inset 0 0 0 1px rgba(82, 213, 255, 0.24);
     }
     .gesture-editor-toolbar .toolbar-divider {
       width: 1px;
@@ -463,6 +515,9 @@
       height: 100%;
       pointer-events: auto;
       touch-action: none;
+    }
+    .gesture-svg:focus {
+      outline: none;
     }
     .gesture-svg-wrapper.is-mirrored .gesture-svg {
       transform: scaleX(-1);
@@ -513,9 +568,6 @@
     }
     .gesture-editor.is-performing .gesture-svg {
       pointer-events: none;
-    }
-    .gesture-editor.is-hidden {
-      display: none;
     }
     .modal-backdrop {
       position: fixed;
@@ -574,7 +626,7 @@
       font-size: 0.78rem;
       letter-spacing: 0.05em;
       text-transform: uppercase;
-      color: rgba(245, 247, 255, 0.68);
+      color: var(--text-secondary);
     }
     .assignment-modal select,
     .assignment-modal input[type="text"],
@@ -582,7 +634,7 @@
       width: 100%;
       padding: 0.4rem 0.45rem;
       border-radius: 4px;
-      border: 1px solid rgba(255, 255, 255, 0.14);
+      border: 1px solid var(--border-subtle);
       background: rgba(6, 10, 18, 0.96);
       color: #f5f7ff;
       font-size: 0.82rem;
@@ -628,7 +680,7 @@
       padding: 0.45rem;
       border-radius: 2px;
       background: rgba(12, 18, 30, 0.74);
-      border: 1px solid rgba(255, 255, 255, 0.07);
+      border: 1px solid var(--border-subtle);
       overflow-y: auto;
       max-height: 22vh;
     }
@@ -637,7 +689,7 @@
       justify-content: space-between;
       align-items: center;
       gap: 0.3rem;
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--border-subtle);
       border-radius: 2px;
       background: rgba(255, 255, 255, 0.02);
       color: rgba(245, 247, 255, 0.78);
@@ -670,7 +722,7 @@
       padding: 0.45rem;
       border-radius: 2px;
       background: rgba(12, 18, 30, 0.8);
-      border: 1px solid rgba(255, 255, 255, 0.07);
+      border: 1px solid var(--border-subtle);
       max-height: 46vh;
       overflow-y: auto;
     }
@@ -691,7 +743,7 @@
       font-size: 0.7rem;
       letter-spacing: 0.03em;
       text-transform: uppercase;
-      color: rgba(245, 247, 255, 0.62);
+      color: var(--text-secondary);
     }
     .editor-detail-form select,
     .editor-detail-form input[type="text"],
@@ -699,7 +751,7 @@
       width: 100%;
       padding: 0.28rem 0.4rem;
       border-radius: 2px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      border: 1px solid var(--border-subtle);
       background: rgba(6, 10, 18, 0.94);
       color: #f5f7ff;
       font-size: 0.8rem;
@@ -715,8 +767,8 @@
       color: rgba(245, 247, 255, 0.48);
     }
     .event-list-header .icon-button {
-      width: 1.5rem;
-      height: 1.5rem;
+      width: 1.4rem;
+      height: 1.4rem;
     }
     .event-list {
       display: flex;
@@ -848,18 +900,7 @@
       flex: 1;
     }
     .input-with-button .icon-button {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 2px;
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      background: rgba(255, 255, 255, 0.08);
-      color: #f5f7ff;
-      width: 2.1rem;
-      transition: background 0.18s ease;
-    }
-    .input-with-button .icon-button:hover {
-      background: rgba(255, 255, 255, 0.16);
+      width: 1.4rem;
     }
     .dual-input-row {
       display: grid;
@@ -880,7 +921,7 @@
 <body>
   <main class="preview-layout">
     <section class="preview-canvas">
-      <div id="mediapiper-sketch"></div>
+      <div id="mediamime-sketch"></div>
       <div id="gesture-editor" class="gesture-editor" aria-label="Interactive score editor">
         <div id="gesture-toolbar" class="gesture-editor-toolbar" role="toolbar" aria-label="Editor tools">
           <button id="gesture-tool-select" class="is-active" type="button" data-tool="select" title="Select (V)" aria-label="Select (V)">
@@ -913,20 +954,20 @@
           <svg id="gesture-svg" class="gesture-svg" tabindex="0" role="presentation" aria-label="Score canvas" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid meet"></svg>
         </div>
       </div>
-      <video id="mediapiper-video" muted></video>
+      <video id="mediamime-video" muted></video>
     </section>
-    <button id="editor-toggle" class="editor-toggle icon-button" type="button" title="Hide score editor" aria-label="Hide score editor" aria-pressed="true">
-      <span class="material-icons-outlined" aria-hidden="true">gesture</span>
+    <button id="editor-toggle" class="editor-toggle icon-button" type="button" title="Show tool palette" aria-label="Show tool palette" aria-pressed="false">
+      <span class="material-icons-outlined" aria-hidden="true">visibility_off</span>
     </button>
-    <button id="panel-toggle" class="panel-toggle icon-button" type="button" title="Show control panel" aria-label="Show control panel" aria-expanded="false" aria-controls="mediapiper-panel">
+    <button id="panel-toggle" class="panel-toggle icon-button" type="button" title="Show control panel" aria-label="Show control panel" aria-expanded="false" aria-controls="mediamime-panel">
       <span class="material-icons-outlined" aria-hidden="true">tune</span>
     </button>
     <div id="panel-backdrop" class="panel-backdrop"></div>
-    <aside class="panel" id="mediapiper-panel" role="dialog" aria-modal="false" aria-label="Mediapiper control panel" aria-hidden="true" tabindex="-1">
+    <aside class="panel" id="mediamime-panel" role="dialog" aria-modal="false" aria-label="Mediamime control panel" aria-hidden="true" tabindex="-1">
       <div class="panel-header">
         <h2>Streams</h2>
         <div class="panel-actions">
-          <button id="mediapiper-reset" class="icon-button" title="Reset overlays" aria-label="Reset overlays">
+          <button id="mediamime-reset" class="icon-button" title="Reset overlays" aria-label="Reset overlays">
             <span class="material-icons-outlined" aria-hidden="true">refresh</span>
           </button>
           <button id="panel-close" class="icon-button panel-close" type="button" title="Hide control panel" aria-label="Hide control panel">
@@ -935,17 +976,17 @@
         </div>
       </div>
       <div class="panel-tabs" role="tablist" aria-label="Panel sections">
-        <button type="button" class="is-active" data-panel-tab="streams" role="tab" aria-selected="true" aria-controls="panel-streams">Streams</button>
-        <button type="button" data-panel-tab="editor" role="tab" aria-selected="false" aria-controls="panel-editor">Editor</button>
+        <button type="button" data-panel-tab="streams" role="tab" aria-selected="false" aria-controls="panel-streams">Streams</button>
+        <button type="button" class="is-active" data-panel-tab="editor" role="tab" aria-selected="true" aria-controls="panel-editor">Editor</button>
       </div>
       <div class="panel-content">
-        <div class="panel-section is-active" data-panel-section="streams" id="panel-streams" role="tabpanel" aria-label="Stream controls">
+        <div class="panel-section" data-panel-section="streams" id="panel-streams" role="tabpanel" aria-label="Stream controls">
           <div class="stream-controls">
             <label class="stream-toggle" title="Mirror camera">
-              <input type="checkbox" id="mediapiper-mirror" checked aria-label="Mirror camera">
+              <input type="checkbox" id="mediamime-mirror" checked aria-label="Mirror camera">
               <span class="material-icons-outlined" aria-hidden="true">flip_camera_android</span>
             </label>
-            <button id="mediapiper-toggle-source" class="icon-button" title="Toggle media source" aria-label="Toggle media source">
+            <button id="mediamime-toggle-source" class="icon-button" title="Toggle media source" aria-label="Toggle media source">
               <span class="material-icons-outlined" aria-hidden="true">switch_video</span>
             </button>
           </div>
@@ -1041,13 +1082,13 @@
             <canvas id="segmentation-preview" width="320" height="180"></canvas>
           </div>
           <div class="panel-footnote">
-            <span id="mediapiper-status" class="status-chip">Initializing…</span>
+            <span id="mediamime-status" class="status-chip">Initializing…</span>
             <div class="tip">
               Toggle Main overlays to affect the canvas, and use Preview toggles to stage diagnostics or capture snapshots.
             </div>
           </div>
         </div>
-        <div class="panel-section" data-panel-section="editor" id="panel-editor" role="tabpanel" aria-label="Score editor">
+        <div class="panel-section is-active" data-panel-section="editor" id="panel-editor" role="tabpanel" aria-label="Score editor">
           <div class="panel-routing" aria-label="Global routing settings">
             <div class="panel-routing-row">
               <label for="editor-midi-port">MIDI Port</label>
@@ -1058,13 +1099,6 @@
                 <button id="editor-midi-port-refresh" type="button" class="icon-button" title="Refresh MIDI ports" aria-label="Refresh MIDI ports">
                   <span class="material-icons-outlined" aria-hidden="true">refresh</span>
                 </button>
-              </div>
-            </div>
-            <div class="panel-routing-row">
-              <label>OSC Destination</label>
-              <div class="dual-input-row">
-                <input id="editor-osc-host" type="text" placeholder="127.0.0.1">
-                <input id="editor-osc-port" type="number" min="1" max="65535" placeholder="9000">
               </div>
             </div>
             <div class="panel-routing-actions">
@@ -1081,7 +1115,7 @@
             <div class="editor-shape-list" id="editor-shape-list" role="listbox" aria-label="Score elements"></div>
             <div class="editor-detail" id="editor-detail">
               <div class="editor-detail-empty" id="editor-detail-empty">
-                Draw a shape to begin. Select it to edit MIDI and OSC mappings.
+                Draw a shape to begin. Select it to edit MIDI mappings.
               </div>
               <form id="editor-detail-form" class="editor-detail-form" autocomplete="off">
                 <div class="form-row">
@@ -1105,7 +1139,7 @@
                 </div>
                 <div id="editor-event-list" class="event-list" role="list"></div>
                 <p class="event-hint">
-                  Velocity, CC values, and OSC payloads can follow constant or normalised sources (X, Y, distance). OSC arguments may reference tokens like <code>{norm_x}</code>, <code>{norm_y}</code>, <code>{dist_center}</code>, or <code>{value127}</code>.
+                  Velocity and CC values can follow constant or normalised sources (X, Y, distance).
                 </p>
                 <div class="editor-detail-actions">
                   <button type="button" id="editor-open-modal" class="secondary">Pop-out editor</button>
@@ -1150,13 +1184,6 @@
         </button>
       </div>
     </section>
-    <section class="form-group">
-      <label>OSC Destination</label>
-      <div class="dual-input-row">
-        <input id="assignment-osc-host" type="text" placeholder="127.0.0.1">
-        <input id="assignment-osc-port" type="number" min="1" max="65535" placeholder="9000">
-      </div>
-    </section>
     <section class="form-group event-list-modal">
       <div class="event-list-header">
         <span>Events</span>
@@ -1167,7 +1194,7 @@
       <div id="assignment-event-list" class="event-list" role="list"></div>
     </section>
     <p class="event-hint">
-      Use the stream point to trigger multiple MIDI and OSC actions. Value sources can be constant or normalised (<code>{norm_x}</code>, <code>{norm_y}</code>, <code>{dist_center}</code>, <code>{value127}</code>).
+      Use the stream point to trigger multiple MIDI actions. Value sources can be constant or normalised (X, Y, distance).
     </p>
     <div class="modal-actions">
       <button id="assignment-modal-cancel" class="secondary" type="button">Cancel</button>
@@ -1182,12 +1209,12 @@ const SAMPLE_VIDEO_URL = "https://thefoxofsky.github.io/project_pages/RealisDanc
 // const SAMPLE_VIDEO_URL= "https://media.gettyimages.com/id/1432864804/video/a-man-and-a-woman-dance-outdoors-in-preparation-for-a-performance-healthy-lifestyle.mp4?s=mp4-640x640-gi&k=20&c=QenL_gqhEWh665fqtFCuOXsZCdf-EgTSK2JCf_XnPLM=";
 // const SAMPLE_VIDEO_URL = "https://media.gettyimages.com/id/1481811636/video/for-us-dance-is-a-way-of-life.mp4?s=mp4-640x640-gi&k=20&c=-eEh1Svdu4dKJCEXijI7d4WOfGWVtAe9Gv_5mmqJYQA=";
 
-    const videoEl = document.getElementById("mediapiper-video");
-    const sketchContainer = document.getElementById("mediapiper-sketch");
-    const statusLabel = document.getElementById("mediapiper-status");
-    const toggleSourceBtn = document.getElementById("mediapiper-toggle-source");
-    const resetBtn = document.getElementById("mediapiper-reset");
-    const mirrorCheckbox = document.getElementById("mediapiper-mirror");
+    const videoEl = document.getElementById("mediamime-video");
+    const sketchContainer = document.getElementById("mediamime-sketch");
+    const statusLabel = document.getElementById("mediamime-status");
+    const toggleSourceBtn = document.getElementById("mediamime-toggle-source");
+    const resetBtn = document.getElementById("mediamime-reset");
+    const mirrorCheckbox = document.getElementById("mediamime-mirror");
     const overlayControls = {
       underlay: {
         main: document.getElementById("overlay-underlay-main"),
@@ -1226,7 +1253,7 @@ const SAMPLE_VIDEO_URL = "https://thefoxofsky.github.io/project_pages/RealisDanc
         preview: document.getElementById("overlay-score-preview")
       }
     };
-    const panelEl = document.getElementById("mediapiper-panel");
+    const panelEl = document.getElementById("mediamime-panel");
     const panelToggleBtn = document.getElementById("panel-toggle");
     const panelCloseBtn = document.getElementById("panel-close");
     const panelBackdrop = document.getElementById("panel-backdrop");
@@ -1261,8 +1288,6 @@ const assignmentStreamSelect = document.getElementById("assignment-stream");
 const assignmentLandmarkSelect = document.getElementById("assignment-landmark");
 const assignmentMidiPortSelect = document.getElementById("assignment-midi-port");
 const assignmentMidiPortRefreshBtn = document.getElementById("assignment-midi-port-refresh");
-const assignmentOscHostInput = document.getElementById("assignment-osc-host");
-const assignmentOscPortInput = document.getElementById("assignment-osc-port");
 const assignmentEventList = document.getElementById("assignment-event-list");
 const assignmentAddEventBtn = document.getElementById("assignment-add-event");
 const editorShapeList = document.getElementById("editor-shape-list");
@@ -1273,8 +1298,6 @@ const editorStreamSelect = document.getElementById("editor-stream-select");
 const editorLandmarkSelect = document.getElementById("editor-landmark-select");
 const editorMidiPortSelect = document.getElementById("editor-midi-port");
 const editorMidiPortRefreshBtn = document.getElementById("editor-midi-port-refresh");
-const editorOscHostInput = document.getElementById("editor-osc-host");
-const editorOscPortInput = document.getElementById("editor-osc-port");
 const editorEventList = document.getElementById("editor-event-list");
 const editorAddEventBtn = document.getElementById("editor-add-event");
 const editorDeleteShapeBtn = document.getElementById("editor-delete-shape");
@@ -1384,17 +1407,14 @@ for (const [key, defaults] of Object.entries(DEFAULT_OVERLAY_STATE)) {
 const isScoreMainEnabled = () => overlayState.score?.main !== false;
 const isScorePreviewEnabled = () => overlayState.score?.preview ?? false;
 
-const CONFIG_STORAGE_KEY = "mediapipa:config";
+const CONFIG_STORAGE_KEY = "mediamime:config";
 const DEFAULT_EDITOR_CONFIG = {
-  midiPort: "broadcast",
-  oscHost: "127.0.0.1",
-  oscPort: 9000
+  midiPort: "broadcast"
 };
 const SNAPSHOT_VERSION = 1;
-const SNAPSHOT_FILE_PREFIX = "mediapipa-snapshot";
+const SNAPSHOT_FILE_PREFIX = "mediamime-snapshot";
 const editorConfig = { ...DEFAULT_EDITOR_CONFIG };
 let isSyncingConfig = false;
-let pendingConnectionSync = null;
 
 const ACTIVE_STROKE_COLOR = "#f97316";
 const ACTIVE_FILL_COLOR = "rgba(249, 115, 22, 0.32)";
@@ -1411,11 +1431,6 @@ const loadEditorConfig = () => {
     const stored = JSON.parse(raw);
     if (!stored || typeof stored !== "object") return;
     if (stored.midiPort) editorConfig.midiPort = String(stored.midiPort);
-    if (stored.oscHost) editorConfig.oscHost = String(stored.oscHost);
-    if (stored.oscPort) {
-      const parsed = clampRange(parseInt(stored.oscPort, 10) || DEFAULT_EDITOR_CONFIG.oscPort, 1, 65535);
-      editorConfig.oscPort = parsed;
-    }
   } catch (err) {
     console.warn("Failed to load editor config", err);
   }
@@ -1432,20 +1447,7 @@ const saveEditorConfig = () => {
   }
 };
 
-const scheduleGlobalConnectionConfig = () => {
-  if (pendingConnectionSync !== null) return;
-  pendingConnectionSync = globalThis.setTimeout(() => {
-    pendingConnectionSync = null;
-    if (activeConfigInput) {
-      scheduleGlobalConnectionConfig();
-      return;
-    }
-    applyGlobalConnectionConfig();
-  }, 120);
-};
-
 const updateEditorConfig = (changes = {}, options = {}) => {
-  const { immediate = false } = options;
   let didChange = false;
   for (const [key, value] of Object.entries(changes || {})) {
     if (value === undefined) continue;
@@ -1455,11 +1457,7 @@ const updateEditorConfig = (changes = {}, options = {}) => {
   }
   if (!didChange) return;
   saveEditorConfig();
-  if (immediate || !activeConfigInput) {
-    applyGlobalConnectionConfig();
-  } else {
-    scheduleGlobalConnectionConfig();
-  }
+  applyGlobalConnectionConfig();
 };
 
 const applyScoreVisibility = () => {
@@ -1467,19 +1465,6 @@ const applyScoreVisibility = () => {
   if (gestureSvg) {
     gestureSvg.style.visibility = visible ? "visible" : "hidden";
     gestureSvg.style.pointerEvents = visible ? "auto" : "none";
-  }
-};
-
-let activeConfigInput = null;
-const updateConfigInputValue = (input, nextValue) => {
-  if (!input) return;
-  const normalized = nextValue ?? "";
-  const stringValue = String(normalized);
-  if (input === activeConfigInput || document.activeElement === input) {
-    return;
-  }
-  if (input.value !== stringValue) {
-    input.value = stringValue;
   }
 };
 
@@ -2115,7 +2100,7 @@ holistic = createHolistic();
       initialVertices: null,
       viewport: { width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT },
       mirror: false,
-      isVisible: true,
+      isVisible: false,
       didMutate: false,
       activePolylineId: null,
       polylineHoverPoint: null,
@@ -2124,7 +2109,7 @@ holistic = createHolistic();
       erasedShapeIds: new Set()
     };
     const isPolylineTool = (tool) => tool === "line" || tool === "polygon";
-    const STORAGE_KEY = "mediapipa:gesture-shapes";
+    const STORAGE_KEY = "mediamime:gesture-shapes";
     let persistTimer = null;
     let activePanelTab = panelTabs.find((button) => button.classList.contains("is-active"))?.dataset?.panelTab || "streams";
     let activeAssignmentShapeId = null;
@@ -2342,8 +2327,6 @@ holistic = createHolistic();
       }
       if (!hasShape) {
         populateMidiPortSelect(editorMidiPortSelect, editorConfig.midiPort);
-        updateConfigInputValue(editorOscHostInput, editorConfig.oscHost);
-        updateConfigInputValue(editorOscPortInput, editorConfig.oscPort);
         if (editorEventList) editorEventList.innerHTML = `<div class="event-empty">Select a shape to configure events.</div>`;
         return;
       }
@@ -2359,8 +2342,6 @@ holistic = createHolistic();
       }
       populateMidiPortSelect(editorMidiPortSelect, editorConfig.midiPort);
       if (editorMidiPortSelect) editorMidiPortSelect.dataset.selectedPort = editorConfig.midiPort;
-      updateConfigInputValue(editorOscHostInput, editorConfig.oscHost);
-      updateConfigInputValue(editorOscPortInput, editorConfig.oscPort);
       renderEventList("editor", interaction.events);
       isSyncingEditorForm = false;
     };
@@ -2415,10 +2396,6 @@ holistic = createHolistic();
         if (shape.interaction?.midi) {
           delete shape.interaction.midi.port;
         }
-        if (shape.interaction?.osc) {
-          delete shape.interaction.osc.host;
-          delete shape.interaction.osc.port;
-        }
       }
       resetShapeRuntime(shape);
       if (!skipDirty) {
@@ -2455,8 +2432,7 @@ holistic = createHolistic();
     const EVENT_TYPE_OPTIONS = [
       { id: "none", label: "None" },
       { id: "midiNote", label: "MIDI Note" },
-      { id: "midiCc", label: "MIDI CC" },
-      { id: "osc", label: "OSC" }
+      { id: "midiCc", label: "MIDI CC" }
     ];
     const EVENT_TRIGGER_OPTIONS = [
       { id: "enter", label: "Enter" },
@@ -2486,16 +2462,6 @@ holistic = createHolistic();
             cc: 1,
             ccValueMode: "constant",
             ccValue: 100
-          };
-        case "osc":
-          return {
-            id,
-            type,
-            trigger: "enter",
-            address: "",
-            args: "",
-            oscValueMode: "constant",
-            oscValue: 1
           };
         default:
           return {
@@ -2565,19 +2531,6 @@ holistic = createHolistic();
               cc: legacyMidi.cc ?? 1,
               ccValueMode: "constant",
               ccValue: legacyMidi.value ?? 100
-            })
-          );
-        }
-        const legacyOsc = raw.osc || {};
-        if (legacyOsc.address) {
-          events.push(
-            normalizeEvent({
-              type: "osc",
-              trigger: legacyTrigger,
-              address: legacyOsc.address,
-              args: legacyOsc.args ?? "",
-              oscValueMode: "constant",
-              oscValue: 1
             })
           );
         }
@@ -2784,7 +2737,6 @@ holistic = createHolistic();
       const renderModeOptions = (mode) => renderOptions(VALUE_SOURCE_OPTIONS, mode || "constant");
       const velocityValueStyle = normalized.velocityMode === "constant" ? "" : "display:none;";
       const ccValueStyle = normalized.ccValueMode === "constant" ? "" : "display:none;";
-      const oscValueStyle = normalized.oscValueMode === "constant" ? "" : "display:none;";
       let bodyMarkup = `<div class="event-body"><div class="event-row"><span class="event-empty">Select an event type.</span></div></div>`;
       if (normalized.type === "midiNote") {
         bodyMarkup = `
@@ -2832,33 +2784,6 @@ holistic = createHolistic();
               <label class="field-compact" title="Value amount" style="${ccValueStyle}">
                 <span>Amt</span>
                 <input type="number" min="0" max="127" value="${clampRange(Math.round(normalized.ccValue ?? 100), 0, 127)}" data-field="ccValue">
-              </label>
-            </div>
-          </div>
-        `;
-      } else if (normalized.type === "osc") {
-        bodyMarkup = `
-          <div class="event-body">
-            <div class="event-row">
-              <label class="field-compact" title="OSC Address">
-                <span>Addr</span>
-                <input type="text" value="${escapeHtml(normalized.address || "")}" data-field="address" placeholder="/instrument/parameter">
-              </label>
-            </div>
-            <div class="event-row">
-              <label class="field-compact" title="OSC Arguments">
-                <span>Args</span>
-                <input type="text" value="${escapeHtml(normalized.args || "")}" data-field="args" placeholder="comma separated values">
-              </label>
-            </div>
-            <div class="event-row">
-              <label class="field-compact" title="Value source">
-                <span>Val</span>
-                <select data-field="oscValueMode">${renderModeOptions(normalized.oscValueMode)}</select>
-              </label>
-              <label class="field-compact" title="Value amount" style="${oscValueStyle}">
-                <span>Amt</span>
-                <input type="number" min="0" max="1" step="0.01" value="${clampUnit(normalized.oscValue ?? 1)}" data-field="oscValue">
               </label>
             </div>
           </div>
@@ -2942,7 +2867,7 @@ holistic = createHolistic();
         activeEl.value = stringValue;
       }
     };
-    const EVENT_CARD_REFRESH_FIELDS = new Set(["velocityMode", "ccValueMode", "oscValueMode"]);
+    const EVENT_CARD_REFRESH_FIELDS = new Set(["velocityMode", "ccValueMode"]);
     const addEventToScope = (scope, type = "midiNote") => {
       if (scope === "editor") {
         mutateSelectedShape((target) => {
@@ -3037,26 +2962,6 @@ holistic = createHolistic();
               syncActiveEventFieldValue(eventId, field, ccValueAmount);
               return { ...current, ccValue: ccValueAmount };
             }
-            case "address": {
-              const addressValue = String(rawValue ?? "").trim();
-              syncActiveEventFieldValue(eventId, field, addressValue);
-              return { ...current, address: addressValue };
-            }
-            case "args": {
-              const argsValue = String(rawValue ?? "").trim();
-              syncActiveEventFieldValue(eventId, field, argsValue);
-              return { ...current, args: argsValue };
-            }
-            case "oscValueMode": {
-              const nextOscValueMode = rawValue || "constant";
-              syncActiveEventFieldValue(eventId, field, nextOscValueMode);
-              return { ...current, oscValueMode: nextOscValueMode };
-            }
-            case "oscValue": {
-              const oscValue = clampUnit(parseFloat(rawValue) || 0);
-              syncActiveEventFieldValue(eventId, field, oscValue);
-              return { ...current, oscValue };
-            }
             default:
               return current;
           }
@@ -3114,8 +3019,6 @@ holistic = createHolistic();
       }
       populateMidiPortSelect(assignmentMidiPortSelect, editorConfig.midiPort);
       if (assignmentMidiPortSelect) assignmentMidiPortSelect.dataset.selectedPort = editorConfig.midiPort;
-      updateConfigInputValue(assignmentOscHostInput, editorConfig.oscHost);
-      updateConfigInputValue(assignmentOscPortInput, editorConfig.oscPort);
       renderEventList("modal", draft.events);
       isSyncingAssignmentForm = false;
     };
@@ -3201,22 +3104,8 @@ holistic = createHolistic();
         markEditorSidebarDirty();
       }
       const configSource = payload.config;
-      if (configSource && typeof configSource === "object") {
-        const patch = {};
-        if (typeof configSource.midiPort === "string" && configSource.midiPort.trim()) {
-          patch.midiPort = configSource.midiPort.trim();
-        }
-        if (typeof configSource.oscHost === "string" && configSource.oscHost.trim()) {
-          patch.oscHost = configSource.oscHost.trim();
-        }
-        if (configSource.oscPort !== undefined) {
-          patch.oscPort = clampRange(parseInt(configSource.oscPort, 10) || editorConfig.oscPort, 1, 65535);
-        }
-        if (Object.keys(patch).length) {
-          updateEditorConfig(patch);
-        } else {
-          applyGlobalConnectionConfig();
-        }
+      if (configSource && typeof configSource === "object" && typeof configSource.midiPort === "string" && configSource.midiPort.trim()) {
+        updateEditorConfig({ midiPort: configSource.midiPort.trim() });
       } else {
         applyGlobalConnectionConfig();
       }
@@ -4089,10 +3978,6 @@ holistic = createHolistic();
       assignmentModal.classList.remove("is-visible");
       assignmentBackdrop.setAttribute("aria-hidden", "true");
       assignmentModal.setAttribute("aria-hidden", "true");
-      if (activeConfigInput && (activeConfigInput === assignmentOscHostInput || activeConfigInput === assignmentOscPortInput)) {
-        activeConfigInput = null;
-        scheduleGlobalConnectionConfig();
-      }
       activeAssignmentShapeId = null;
       assignmentDraftInteraction = null;
     };
@@ -4118,12 +4003,8 @@ holistic = createHolistic();
           target.interaction = assignmentDraftInteraction;
         }
       }, { skipRender: true });
-      const oscHostValue = assignmentOscHostInput?.value?.trim() || editorConfig.oscHost;
-      const oscPortValue = clampRange(parseInt(assignmentOscPortInput?.value ?? `${editorConfig.oscPort}`, 10) || editorConfig.oscPort, 1, 65535);
       updateEditorConfig({
-        midiPort: assignmentMidiPortSelect?.value || editorConfig.midiPort,
-        oscHost: oscHostValue,
-        oscPort: oscPortValue
+        midiPort: assignmentMidiPortSelect?.value || editorConfig.midiPort
       });
       syncEditorDetailForm();
       closeAssignmentModal();
@@ -4154,19 +4035,11 @@ holistic = createHolistic();
       selectEl.dataset.selectedPort = normalized;
     };
     function applyGlobalConnectionConfig() {
-      if (pendingConnectionSync !== null) {
-        globalThis.clearTimeout(pendingConnectionSync);
-        pendingConnectionSync = null;
-      }
       isSyncingConfig = true;
       populateMidiPortSelect(assignmentMidiPortSelect, editorConfig.midiPort);
       populateMidiPortSelect(editorMidiPortSelect, editorConfig.midiPort);
       if (assignmentMidiPortSelect) assignmentMidiPortSelect.dataset.selectedPort = editorConfig.midiPort;
       if (editorMidiPortSelect) editorMidiPortSelect.dataset.selectedPort = editorConfig.midiPort;
-      updateConfigInputValue(assignmentOscHostInput, editorConfig.oscHost);
-      updateConfigInputValue(editorOscHostInput, editorConfig.oscHost);
-      updateConfigInputValue(assignmentOscPortInput, editorConfig.oscPort);
-      updateConfigInputValue(editorOscPortInput, editorConfig.oscPort);
       isSyncingConfig = false;
     }
     const refreshMidiPortOptions = async () => {
@@ -4239,68 +4112,6 @@ holistic = createHolistic();
       const status = 0xb0 | ((normalizedChannel - 1) & 0x0f);
       sendMidiMessage(status, normalizedCc, normalizedValue, portId);
     };
-    const parseOscArgs = (input, context = {}) => {
-      if (!input) return [];
-      return input.split(",").map((chunk) => {
-        const value = chunk.trim();
-        if (!value) return "";
-        if (value === ":value") return context.value ?? 0;
-        if (value === ":phase") return context.phase ?? "";
-        if (value === ":inside") return context.inside ? 1 : 0;
-        if (value === ":timestamp") return context.timestamp ?? Date.now();
-        if (value === "true") return true;
-        if (value === "false") return false;
-        if (value.startsWith("{") && value.endsWith("}")) {
-          const token = value.slice(1, -1).toLowerCase();
-          if (token === "norm_x" || token === "norm_x_bound") return context.normX ?? 0;
-          if (token === "norm_y" || token === "norm_y_bound") return context.normY ?? 0;
-          if (token === "dist_center" || token === "distance") return context.distance ?? 0;
-          if (token === "value127") return clampRange(Math.round((context.value ?? 0) * 127), 0, 127);
-        }
-        const numeric = Number(value);
-        if (!Number.isNaN(numeric)) return numeric;
-        return value;
-      });
-    };
-    const sendOscMessage = (address, args, meta = {}) => {
-      if (!address) return;
-      const host = typeof meta.host === "string" && meta.host.trim() ? meta.host.trim() : editorConfig.oscHost;
-      const port = clampRange(parseInt(meta.port, 10) || editorConfig.oscPort, 1, 65535);
-      const enrichedMeta = { ...meta, host, port };
-      const payload = { address, args, host, port, meta: enrichedMeta };
-      const dispatchOscEvent = (target) => {
-        try {
-          const event = new CustomEvent("mediapipa:osc", {
-            detail: payload,
-            bubbles: true,
-            composed: true
-          });
-          target.dispatchEvent(event);
-        } catch (err) {
-          console.warn("OSC dispatch failed", err);
-        }
-      };
-      dispatchOscEvent(window);
-      dispatchOscEvent(document);
-      console.info("[OSC]", payload);
-    };
-    if (!window.__mediapipaOscRelayBound) {
-      window.__mediapipaOscRelayBound = true;
-      const relayEndpoint = window.MEDIAPIPA_OSC_RELAY_URL || "http://127.0.0.1:7331/osc";
-      const relayOscToHttp = (event) => {
-        if (typeof fetch !== "function") return;
-        const detail = event?.detail;
-        if (!detail || typeof detail.address !== "string") return;
-        fetch(relayEndpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(detail),
-          keepalive: true,
-          mode: "cors"
-        }).catch(() => {});
-      };
-      document.addEventListener("mediapipa:osc", relayOscToHttp);
-    }
     const findLandmarkIndex = (list, key) => {
       const match = list.find((item) => item.key === key);
       if (match && typeof match.index === "number") {
@@ -4557,58 +4368,6 @@ holistic = createHolistic();
               }
               break;
             }
-            case "osc": {
-              const address = normalizedEvent.address || "";
-              if (!address) break;
-              const oscValue = resolveValueFromMode(normalizedEvent.oscValueMode, metrics, normalizedEvent.oscValue ?? 1, { midi: false });
-              const sendOscWithPhase = (phaseLabel, overrideValue) => {
-                const computedValue = overrideValue !== undefined ? overrideValue : oscValue;
-                const args = parseOscArgs(normalizedEvent.args, {
-                  value: computedValue,
-                  phase: phaseLabel,
-                  inside,
-                  timestamp: now,
-                  normX: metrics.normX,
-                  normY: metrics.normY,
-                  distance: metrics.distance
-                });
-                const finalArgs = args.length ? args : [computedValue];
-                sendOscMessage(address, finalArgs, {
-                  shapeId: shape.id,
-                  eventId: normalizedEvent.id,
-                  phase: phaseLabel,
-                  stream: interaction.stream,
-                  landmark: interaction.landmark,
-                  host: editorConfig.oscHost,
-                  port: editorConfig.oscPort,
-                  value: computedValue,
-                  inside,
-                  normX: metrics.normX,
-                  normY: metrics.normY,
-                  distance: metrics.distance
-                });
-              };
-              if (trigger === "enterExit") {
-                if (justEntered) sendOscWithPhase("enter");
-                if (justExited) sendOscWithPhase("exit", 0);
-                break;
-              }
-              if (trigger === "enter" && justEntered) {
-                sendOscWithPhase("enter");
-                break;
-              }
-              if (trigger === "exit" && justExited) {
-                sendOscWithPhase("exit", 0);
-                break;
-              }
-              if (trigger === "inside" && inside) {
-                if (now - (eventState.lastContinuousAt || 0) >= CONTINUOUS_TRIGGER_INTERVAL_MS) {
-                  eventState.lastContinuousAt = now;
-                  sendOscWithPhase("inside");
-                }
-              }
-              break;
-            }
             default:
               break;
           }
@@ -4821,43 +4580,6 @@ holistic = createHolistic();
     editorEventList?.addEventListener("input", (event) => {
       handleEventListMutation("editor", event);
     });
-    const bindGlobalOscConfigInput = (input, key) => {
-      if (!input) return;
-      input.addEventListener("focus", () => {
-        activeConfigInput = input;
-      });
-      input.addEventListener("blur", () => {
-        if (activeConfigInput === input) {
-          activeConfigInput = null;
-        }
-      });
-      input.addEventListener("input", () => {
-        if (isSyncingConfig) return;
-        let value = input.value ?? "";
-        if (key === "oscHost") {
-          value = value.trim() || DEFAULT_EDITOR_CONFIG.oscHost;
-          input.value = value;
-        } else if (key === "oscPort") {
-          const parsed = clampRange(parseInt(value, 10) || DEFAULT_EDITOR_CONFIG.oscPort, 1, 65535);
-          value = parsed;
-          if (String(parsed) !== input.value) {
-            input.value = parsed;
-          }
-        }
-        activeConfigInput = input;
-        try {
-          updateEditorConfig({ [key]: value });
-        } finally {
-          if (document.activeElement !== input && activeConfigInput === input) {
-            activeConfigInput = null;
-          }
-        }
-      });
-    };
-    bindGlobalOscConfigInput(assignmentOscHostInput, "oscHost");
-    bindGlobalOscConfigInput(editorOscHostInput, "oscHost");
-    bindGlobalOscConfigInput(assignmentOscPortInput, "oscPort");
-    bindGlobalOscConfigInput(editorOscPortInput, "oscPort");
     editorDeleteShapeBtn?.addEventListener("click", () => {
       deleteSelectedShape();
     });

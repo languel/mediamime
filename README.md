@@ -1,100 +1,71 @@
-# Stippulata Score Editor
+# Mediamime
 
-An interactive score editor for MediaPipe streams. Draw shapes over the live pose, route multiple MIDI/OSC events per shape, and monitor diagnostic layers in a compact, Ableton-inspired UI.
+Mediamime is a browser-based gesture mapper that pairs MediaPipe Holistic with an event editor for MIDI-driven performance. Draw shapes over the live feed, assign MIDI actions to tracked landmarks, and automate expressive gestures without leaving the browser.
 
 ## Quick Start
 
-1. Serve the repository with any static file server:
-   ```bash
-   npm install --global live-server
-   live-server
-   ```
-2. Open the served URL, grant webcam access if prompted, and keep the control panel open on the right.
-3. Use the stream toggles to expose the feeds you need (`Main` affects the canvas, `Preview` feeds the diagnostic mini-map).
+1. Serve the repository with any static file host (for example `npx live-server`).
+2. Open the served URL, grant webcam permission, or switch to the bundled sample clip.
+3. Use the floating editor toggle to reveal the control panel. The **Editor** tab is enabled by default for fast mapping.
 
-## Panel Layout
+## Interface Overview
 
-### Streams Tab
-- `Mirror` toggle flips the camera feed; the adjacent `Source` button switches between webcam and the bundled sample clip.
-- Each row exposes a MediaPipe layer with separate `Main` and `Preview` toggles. Default mains: `Source`, `Pose`, `LHand`, `RHand`, `Face`, `Score`. Default previews: `Segmentation`, `Depth`, `Performance`, `Score`.
-- The preview canvas at the bottom mirrors the active preview layers, and the status chip reports camera/sample state.
+- **Editor Tab**
+  - Global `MIDI Port` selector with refresh; choose `All Outputs` to broadcast.
+  - Shape list with activity highlights and quick selection.
+  - Detail pane for stream/landmark assignment and an event stack per shape.
+- **Streams Tab**
+  - Mirror and source buttons.
+  - Layer toggles for pose, hands, face, segmentation, and diagnostics.
+  - Mini preview canvas that mirrors the active preview layers plus a status chip.
 
-### Editor Tab
-- Global routing lives directly under the tabs:
-  - **MIDI Port** dropdown (with refresh) points all events at a WebMIDI output or broadcasts to every device.
-  - **OSC Destination** stores a global host + port per browser session.
-- The score list shows every drawn shape, highlights the one under the pointer, and reflects the linked stream/trigger metadata.
-- The detail pane keeps landmarks, the event stack, and destructive actions visible even while you tweak shapes on the canvas—no auto-collapse.
+The gesture toolbar (bottom centre of the canvas) provides rectangle, ellipse, polyline, polygon, select, and erase tools. Use the mode toggle to jump between editing and performance views.
 
-### Snapshots
-- The download icon in the routing header exports a snapshot (`.json`) containing every shape, its event stack, and the global MIDI/OSC routing.
-- Use the upload icon to import a snapshot and restore shapes, routing, and stream layer toggles in one step.
-- Snapshots are versioned; keep them in source control alongside your project to track performance setups.
+## Mapping MIDI Events
 
-## Event Cards
+Every shape can host an ordered stack of event cards. Available card types:
 
-- Add as many cards as needed; each card can be a **MIDI Note**, **MIDI CC**, or an **OSC** burst.
-- Triggers:
-  - `Enter` – fires once when the tracked landmark crosses the shape boundary.
-  - `Exit` – fires once when the landmark leaves.
-  - `Enter + Exit` – emits paired on/off logic (note-on/off or value/zero).
-  - `While Inside` – throttled loop (220 ms floor) while the landmark stays in the region.
-- MIDI notes clear themselves on exit, even for continuous triggers, to avoid hanging notes.
-- OSC dispatch includes metadata (`shapeId`, `eventId`, `phase`, `stream`, `landmark`) so downstream receivers can react contextually.
+| Type       | Description                                                   |
+| ---------- | ------------------------------------------------------------- |
+| `MIDI Note`| Emits note-on/off with selectable channel, note, and velocity |
+| `MIDI CC`  | Sends Control Change messages with channel, CC#, and value    |
 
-## Value Sources
+### Triggers
 
-| Source    | MIDI Output                     | OSC Output | Description |
-|-----------|---------------------------------|------------|-------------|
-| `constant`| Stored integer (0–127)          | Stored float (0.0–1.0) | Static value, ideal for fixed velocities or note-off complements. |
-| `normX`   | Normalised X × 127              | Normalised X | Landmark X within the shape bounds (0.0 at the left edge, 1.0 at the right). |
-| `normY`   | Normalised Y × 127              | Normalised Y | Landmark Y within the shape bounds (0.0 at the top, 1.0 at the bottom). |
-| `distance`| Normalised radius × 127         | Normalised radius | Euclidean distance from the shape centroid, clamped to the bounding box radius. |
+- `Enter` – fire once when the landmark enters the shape.
+- `Exit` – fire once when the landmark leaves.
+- `Enter + Exit` – paired on/off behaviour (useful for notes and latching CC values).
+- `While Inside` – throttled loop (220 ms minimum) while the landmark remains inside.
 
-## OSC Argument Tokens
+### Value Sources
 
-Comma-separated argument strings can mix literals, tokens, and booleans. Available placeholders:
+| Source    | MIDI Output                         | Notes                                                  |
+| --------- | ----------------------------------- | ------------------------------------------------------ |
+| `constant`| Stored integer (0–127)               | Default for note velocity and CC values                |
+| `normX`   | Normalised X scaled to 0–127         | Based on the landmark position within the shape bounds |
+| `normY`   | Normalised Y scaled to 0–127         |                                                        |
+| `distance`| Normalised distance scaled to 0–127  | 0 at the centroid, 127 at the furthest shape point     |
 
-| Token / Placeholder | Expands To |
-|---------------------|-----------|
-| `:value`            | Active OSC value (post-normalisation). |
-| `:phase`            | Interaction phase: `enter`, `exit`, or `inside`. |
-| `:inside`           | `1` while the landmark is inside, `0` otherwise. |
-| `:timestamp`        | `performance.now()` (ms). |
-| `{norm_x}` / `{norm_x_bound}` | Same as `normX` value. |
-| `{norm_y}` / `{norm_y_bound}` | Same as `normY` value. |
-| `{dist_center}` / `{distance}`| Distance metric (0–1). |
-| `{value127}`        | OSC value scaled to the MIDI 0–127 range. |
+Shapes remember their event stack, so copy/duplicate workflows remain quick. The Editor tab exposes all controls inline; the pop-out modal is still available via the keyboard shortcut `Enter` if you prefer a focused view.
 
-If no arguments resolve, the dispatcher sends the computed value as a single float.
+## Snapshots
 
-## Canvas Tools & Shortcuts
+- Use the download icon to export the entire session as a versioned JSON snapshot (shapes, events, overlay state, and MIDI port preference).
+- Import a snapshot from the upload icon; Mediamime restores shapes and routing instantly.
+- Saved snapshots are ideal for moving between browsers or keeping performance presets in source control.
 
-- `Cmd/Ctrl + ,` – toggle the control panel.
-- `Cmd/Ctrl + E` – toggle the tool palette without hiding the score layer.
-- Tool shortcuts: `V` (Select), `E` (Eraser), `R` (Rectangle), `O` (Oval), `L` (Polyline), `P` (Polygon).
-- `Enter` pops the assignment modal for the active shape; `Esc` clears selection; `Delete/Backspace` removes the current shape.
-- The editor toolbar stays pinned to the bottom edge; tooltips reveal icon meanings.
+## Shortcuts
 
-## Notes & Troubleshooting
+- Canvas visibility: `Cmd/Ctrl + ,`
+- Toolbar visibility: `Cmd/Ctrl + E`
+- Tool keys: `V` (Select), `E` (Eraser), `R` (Rectangle), `O` (Oval), `L` (Polyline), `P` (Polygon)
+- Shape focus: `Enter` opens the assignment modal, `Esc` clears selection, `Delete/Backspace` removes the active shape.
 
-- MIDI port refresh is deferred until the mapping modal opens or you click the refresh buttons—attach devices first.
-- `While Inside` triggers respect the global throttling window; adjust expressions on the receiving end if tighter timing is required.
-- Mirror mode only affects rendering; shape math always runs in camera-native coordinates for consistent OSC/MIDI output.
+## Roadmap
 
-## OSC Relay
+- Add websocket output for remote listeners.
+- Expand preset management for switching between multiple mappings mid-performance.
+- Surface lightweight analytics (latency, dropped frames) in the Streams tab.
 
-Web browsers cannot emit UDP OSC directly. To forward the in-browser `mediapipa:osc` events to a desktop target (e.g. TouchDesigner) run the bundled relay:
+Mediamime is intentionally MIDI-only. Pair it with an external MIDI-to-OSC bridge if you need OSC targets today.
 
-1. Install dependencies (Node 18+):
-   ```bash
-   node osc-relay.mjs
-   ```
-   Optional flags: `--host 127.0.0.1` (target host), `--port 9000` (target UDP port), `--listen 7331` (HTTP port).
-2. Launch the score editor (e.g. `live-server`), draw/select a shape, and trigger an OSC event. The relay will log:
-   ```
-   OSC relay listening on http://127.0.0.1:7331/osc
-   Forwarding to udp://127.0.0.1:9000
-   ```
-3. The web app automatically POSTs every `mediapipa:osc` event to `http://127.0.0.1:7331/osc`; override this by setting `window.MEDIAPIPA_OSC_RELAY_URL` in the dev console before triggering events.
-4. Your OSC receiver (TouchDesigner, etc.) should now see the JSON-forwarded payload on the configured host/port. Disable the relay by stopping the Node process (`Ctrl+C`).

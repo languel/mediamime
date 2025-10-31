@@ -1,82 +1,66 @@
-# Stippulata p5.js Rewrite – Product Requirements Document
+# Mediamime – Product Outline
 
-## 1. Vision & Goals
+## 1. Vision
 
-Deliver a browser-based interactive art experience that transforms human motion into a dynamic stippled portrait. The experience runs entirely in the browser using p5.js for rendering, MediaPipe Holistic for live landmark extraction, and weighted Voronoi stippling (inspired by StippleGen) to position particles.
+Deliver a compact, browser-native gesture mapper that turns MediaPipe Holistic landmarks into reliable MIDI control. The experience should feel instantaneous, stay uncluttered on stage, and require no build tooling.
 
-Primary objectives:
-- Maintain a fluid 30–60 FPS experience on mid-range laptops at default particle counts.
-- Expose granular creative controls (forces, overlays, collisions) through a minimal UI so artists can experiment live.
-- Support both live webcam and packaged video sources for performances and demos.
+## 2. Goals
 
-## 2. Users & Use Cases
+1. **Minimal surface area.** Keep the interface focused on the essentials: stream visibility, shape editing, and MIDI routing.
+2. **Fast iteration.** Switching shapes, tweaking triggers, or changing ports should take one or two interactions.
+3. **Shareable presets.** Snapshots must capture everything required to reproduce a performance setup.
+4. **Extensible outputs.** The MIDI core ships today; the architecture stays ready for websocket expansion later.
 
-**Target users**
-- Creative coders exploring computer-vision-driven generative art.
-- Installation artists/performers who need an easily deployable browser proof-of-concept.
-- Educators demonstrating MediaPipe landmarks and procedural drawing.
+## 3. Target Users & Scenarios
 
-**Key scenarios**
-1. The artist loads the demo, switches to the sample video, and adjusts force multipliers until a stylised stipple portrait emerges.
-2. A performer grants webcam access and tweaks viscosity/collisions to make particles cling to motion in real time.
-3. An educator disables all overlays except pose to show how landmarks influence particle density.
+- **Performers** trigger lighting or instrument layers by moving inside defined regions.
+- **Choreographers** pre-visualise gesture cues using the bundled sample footage before rehearsals.
+- **Makers** prototype computer-vision controllers without writing custom glue code.
 
-## 3. Functional Requirements
+Key flows:
+1. Load the page, choose a webcam or sample clip, and mirror the feed as needed.
+2. Draw a shape, assign a landmark, add a MIDI Note or CC event, and test the trigger live.
+3. Export the mapping, move to another machine, import, and keep playing.
 
-### 3.1 Core Experience
-- Load MediaPipe Holistic via CDN; process frames from webcam or bundled MP4.
-- Generate a weighted density field from segmentation + landmarks and drive particles via Voronoi relaxation.
-- Provide optional overlays for pose, hands, face, and segmentation, each with configurable colours/opacity.
+## 4. Functional Requirements
 
-### 3.2 Controls & UI
-- Present a lil-gui based control panel containing:
-  - Particle count, size, opacity, trail fade, render style.
-  - Force sliders + free-form numeric inputs (density, landmark pull, Voronoi strength, random walk, speed cap).
-  - Per-feature force multipliers, overlay opacity, and colour pickers.
-  - Dynamics: viscosity, repulsion radius, optional particle-to-particle collisions with friction & restitution.
-  - Advanced controls: Voronoi sample count and update cadence.
-- Supply header actions for source toggling and status text; include reset-to-default button.
-- Mirror the webcam feed unless the user disables it; sample video remains unmirrored.
+### 4.1 Sources & Rendering
+- Switch between live webcam and sample footage with visual status feedback.
+- Mirror output independently of the camera feed (mirroring is disabled for prerecorded sources).
+- Overlay pose, hands, face, segmentation, and diagnostics with per-stream toggles.
 
-### 3.3 Architecture
-- `src/app.js` wires MediaPipe, UI controls, and the p5 sketch loop.
-- `src/mediapipeManager.js` abstracts source switching, resizing, and Holistic callbacks.
-- `src/stippleSimulation.js` houses particle integration, feature weighting, Voronoi target updates, and collision handling.
-- `src/ui.js` defines default config and emits lil-gui controllers with unrestricted numeric inputs.
+### 4.2 Editor
+- Provide rectangle, ellipse, polyline, and polygon tools with keyboard shortcuts.
+- Maintain a sidebar that lists shapes, shows activity, and exposes per-shape settings.
+- Allow multiple MIDI events per shape with ordered evaluation.
+- Support triggers: enter, exit, enter+exit, and while-inside (with throttling).
+- Value modes: constant, normX, normY, distance (auto-scaled to MIDI 0–127).
 
-## 4. Non-Functional Requirements
+### 4.3 MIDI Routing
+- Global port selector with broadcast option and refresh.
+- Dispatch MIDI Note On/Off and Control Change messages with explicit channel, note/CC, and value.
+- Persist routing preferences in `localStorage` and inside exported snapshots.
 
-- **Performance:** maintain ≥30 FPS with ~1k particles and collisions disabled; degrade gracefully when collisions are enabled.
-- **Resilience:** fall back to sample video if webcam access fails; surface status messages within the UI overlay.
-- **Portability:** run from static hosting with CDN dependencies only.
-- **Accessibility:** all controls should be keyboard accessible via lil-gui focus; provide explanatory copy in README.
+### 4.4 Presets
+- Export/import JSON snapshots containing shapes, events, overlay state, and routing.
+- Version snapshots to allow future migrations.
 
-## 5. Milestones
+## 5. Non-Functional Requirements
 
-1. **Scaffold (complete):** p5 sketch, MediaPipe manager, and initial particle system with trails.
-2. **Advanced Controls (complete):** add per-feature force/opacity/colour knobs, viscosity, and optional collisions.
-3. **Polish:** preset handling, performance profiling, export options (TBD).
-4. **Stretch:** integrate pose-only fallback, timeline scrubbing for sample video, or recording.
+- **Performance:** Sustain 30–60 FPS with ~1k particles on mid-range laptops.
+- **Resilience:** Fall back to the sample clip when webcam access fails; surface status in the overlay.
+- **Portability:** Pure static hosting with CDN dependencies only.
+- **Accessibility:** Keyboard-driven toolbar, editor focus management, and ARIA labels for panel controls.
 
-## 6. Risks & Mitigations
+## 6. Milestones
 
-- **Collision overhead:** spatial hash keeps complexity manageable; collisions remain optional and off by default.
-- **MediaPipe latency:** allow reducing particle count, lowering Voronoi samples, or disabling face features to recover FPS.
-- **Permission failures:** automatic fallback to sample video plus status messaging.
+1. **v0.5 – MIDI Core (current).** Editor defaults to MIDI-only workflow, OSC removed, redundant styling trimmed.
+2. **v0.6 – Websocket Bridge.** Optional websocket emitter for external consumers plus heartbeat diagnostics.
+3. **v0.7 – Preset Enhancements.** Lightweight preset browser and snapshot diffing.
 
-## 7. Open Questions
+## 7. Future Considerations
 
-- Should control presets persist via `localStorage`?
-- Do we expose export (PNG/GIF) or recording features in the UI?
-- Would shader-based rendering improve performance at high particle counts?
+- Surface CPU/GPU load and inference timings directly in the Streams tab.
+- Allow per-event port overrides once websocket output lands.
+- Explore templated shapes and quick duplication for choreography-heavy setups.
 
-## 8. Success Metrics
-
-- Runs 20+ minutes without freezing or memory creep in Chrome/Edge.
-- UI adjustments reflect onscreen within 200 ms.
-- Collisions off: ≥30 FPS @ 1k particles; collisions on: ≥20 FPS @ 1k particles on baseline hardware.
-
----
-
-Prepared by: Codex (GPT-5)
-Date: 2025-XX-XX
