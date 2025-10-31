@@ -6,7 +6,7 @@ Mediamime is a browser-based gesture mapper that pairs MediaPipe Holistic with a
 
 1. Serve the repository with any static file host (for example `npx live-server`).
 2. Open the served URL, grant webcam permission, or switch to the bundled sample clip.
-3. Use the floating editor toggle to reveal the control panel. The **Editor** tab is enabled by default for fast mapping.
+3. Use the floating editor toggle to reveal the control panel. The **Editor** tab is enabled by default for fast mapping. The overlay toggle buttons are hidden by default—press `Cmd/Ctrl + U` whenever you need them.
 
 ## Interface Overview
 
@@ -16,7 +16,7 @@ Mediamime is a browser-based gesture mapper that pairs MediaPipe Holistic with a
   - Detail pane for stream/landmark assignment and an event stack per shape.
 - **Streams Tab**
   - Mirror and source buttons.
-  - Background opacity slider and optional persistent trails for overlay workflows.
+  - Background opacity slider, optional persistent trails, and a mirrored preview that respects the transparency slider during overlay builds.
   - Layer toggles for pose, hands, face, segmentation, and diagnostics.
   - Mini preview canvas that mirrors the active preview layers plus a status chip.
 
@@ -59,6 +59,7 @@ Shapes remember their event stack, so copy/duplicate workflows remain quick. The
 
 - Canvas visibility: `Cmd/Ctrl + ,`
 - Toolbar visibility: `Cmd/Ctrl + E`
+- Toggle overlay buttons: `Cmd/Ctrl + U`
 - Tool keys: `V` (Select), `E` (Eraser), `R` (Rectangle), `O` (Oval), `L` (Polyline), `P` (Polygon)
 - Shape focus: `Enter` opens the assignment modal, `Esc` clears selection, `Delete/Backspace` removes the active shape.
 
