@@ -648,7 +648,6 @@ const setPanelState = (open, { skipFocus = false } = {}) => {
   panelToggleBtn.setAttribute("aria-expanded", open ? "true" : "false");
   panelToggleBtn.setAttribute("title", open ? "Hide control panel" : "Show control panel");
   panelToggleBtn.setAttribute("aria-label", open ? "Hide control panel" : "Show control panel");
-  panelToggleBtn.classList.add("is-visible");
   if (panelToggleIcon) {
     panelToggleIcon.textContent = open ? "close" : "tune";
   }
@@ -677,7 +676,7 @@ const togglePanel = () => setPanelState(!isPanelOpen);
 const setToggleButtonsVisibility = (visible) => {
   const shouldShow = Boolean(visible);
   panelToggleBtn?.classList.toggle("is-visible", shouldShow);
-  editorToggleBtn?.classList.toggle("is-visible", shouldShow && editorState.isVisible);
+  editorToggleBtn?.classList.toggle("is-visible", shouldShow);
 };
 
 const waitForHolisticIdle = async () => {
@@ -700,13 +699,6 @@ const resetHolistic = async () => {
 };
     setPanelState(Boolean(isPanelOpen), { skipFocus: true });
     setToggleButtonsVisibility(false);
-    const updateToggleVisibility = () => setToggleButtonsVisibility(panelEl?.classList.contains("is-open") || editorState.isVisible);
-    panelToggleBtn?.addEventListener("click", () => {
-      updateToggleVisibility();
-    });
-    editorToggleBtn?.addEventListener("click", () => {
-      updateToggleVisibility();
-    });
     document.addEventListener("keydown", (event) => {
       const isToggleShortcut = (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'u';
       if (!isToggleShortcut) return;
@@ -781,6 +773,8 @@ function drawPreviewCanvas() {
   }
 
   const shouldMirror = overlayState.mirror && currentSource === "camera";
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (shouldMirror) {
     ctx.translate(width, 0);
     ctx.scale(-1, 1);
@@ -1410,10 +1404,6 @@ const setEditorVisibility = (visible) => {
 };
 const toggleEditorVisibility = () => {
   setEditorVisibility(!editorState.isVisible);
-};
-const setPanelToggleVisibility = (visible) => {
-  if (!panelToggleBtn) return;
-  panelToggleBtn.classList.toggle("is-visible", visible);
 };
     const updateEditorShapeList = () => {
       if (!editorShapeList) {
