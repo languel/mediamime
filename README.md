@@ -16,6 +16,7 @@ Mediamime is a browser-based gesture mapper that pairs MediaPipe Holistic with a
   - Detail pane for stream/landmark assignment and an event stack per shape.
 - **Streams Tab**
   - Mirror and source buttons.
+  - Background opacity slider for overlay workflows.
   - Layer toggles for pose, hands, face, segmentation, and diagnostics.
   - Mini preview canvas that mirrors the active preview layers plus a status chip.
 
@@ -68,4 +69,3 @@ Shapes remember their event stack, so copy/duplicate workflows remain quick. The
 - Surface lightweight analytics (latency, dropped frames) in the Streams tab.
 
 Mediamime is intentionally MIDI-only. Pair it with an external MIDI-to-OSC bridge if you need OSC targets today.
-

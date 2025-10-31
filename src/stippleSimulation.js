@@ -324,6 +324,9 @@ export class StippleSimulation {
   render(p, { drawVideo, mirror, overlay }) {
     if (!this.paramsRef) return;
     const params = this.paramsRef;
+    const surfaceAlpha = clamp(typeof globalThis !== "undefined" && typeof globalThis.__mediamimeSurfaceOpacity === "number"
+      ? globalThis.__mediamimeSurfaceOpacity
+      : 1, 0, 1);
 
     p.push();
     if (mirror) {
@@ -331,21 +334,35 @@ export class StippleSimulation {
       p.scale(-1, 1);
     }
 
-    if (params.renderStyle === "trails") {
+    const clearCanvas = () => {
+      const ctx = p.drawingContext;
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, p.width, p.height);
+      ctx.restore();
+    };
+
+    if (surfaceAlpha <= 0) {
+      clearCanvas();
+    } else if (params.renderStyle === "trails") {
       p.blendMode(p.BLEND);
+      const fade = clamp(typeof params.trailFade === "number" ? params.trailFade : 0.28, 0, 1);
       p.noStroke();
-      p.fill(0, 0, 0, params.trailFade * 255);
+      p.fill(4, 7, 13, fade * surfaceAlpha * 255);
       p.rect(0, 0, this.width, this.height);
     } else {
-      p.background(4, 7, 13, params.renderStyle === "glow" ? 220 : 255);
+      const baseAlpha = surfaceAlpha * (params.renderStyle === "glow" ? 220 : 255);
+      p.background(4, 7, 13, baseAlpha);
     }
 
     if (drawVideo && this.video && this.video.readyState >= 2 && params.showSource) {
       const ctx = p.drawingContext;
-      ctx.save();
-      ctx.globalAlpha = params.sourceAlpha;
-      ctx.drawImage(this.video, 0, 0, this.width, this.height);
-      ctx.restore();
+      if (surfaceAlpha > 0) {
+        ctx.save();
+        ctx.globalAlpha = params.sourceAlpha * surfaceAlpha;
+        ctx.drawImage(this.video, 0, 0, this.width, this.height);
+        ctx.restore();
+      }
     }
 
     if (overlay.segmentation && params.drawSegmentation) {
@@ -434,8 +451,12 @@ export class StippleSimulation {
     const params = this.paramsRef || {};
     const featureOpacity = params.featureOpacity || {};
     const featureColors = params.featureColors || {};
+    const surfaceAlpha = clamp(typeof globalThis !== "undefined" && typeof globalThis.__mediamimeSurfaceOpacity === "number"
+      ? globalThis.__mediamimeSurfaceOpacity
+      : 1, 0, 1);
     const opacity = clamp(featureOpacity.segmentation ?? 0, 0, 1);
-    if (opacity <= 0) {
+    const effectiveOpacity = clamp(opacity * surfaceAlpha, 0, 1);
+    if (effectiveOpacity <= 0) {
       return;
     }
     if (!this.segmentationImageData || !this.segmentationAlpha || !this.segmentationDisplayCanvas) {
@@ -446,14 +467,14 @@ export class StippleSimulation {
     }
     const { r, g, b } = hexToRgb(featureColors.segmentation);
     const colorKey = `${r},${g},${b}`;
-    const needsColorUpdate = this.segmentationLastColor !== colorKey || this.segmentationLastOpacity !== opacity;
+    const needsColorUpdate = this.segmentationLastColor !== colorKey || this.segmentationLastOpacity !== effectiveOpacity;
     if (this.segmentationNeedsUpdate || needsColorUpdate) {
       const alphaArray = this.segmentationAlpha;
       const imgData = this.segmentationImageData;
       const data = imgData.data;
       const len = alphaArray.length;
       for (let i = 0; i < len; i++) {
-        const alpha = clamp(alphaArray[i] * opacity, 0, 1);
+        const alpha = clamp(alphaArray[i] * effectiveOpacity, 0, 1);
         data[i * 4] = r;
         data[i * 4 + 1] = g;
         data[i * 4 + 2] = b;
@@ -462,7 +483,7 @@ export class StippleSimulation {
       this.segmentationDisplayCtx.putImageData(imgData, 0, 0);
       this.segmentationNeedsUpdate = false;
       this.segmentationLastColor = colorKey;
-      this.segmentationLastOpacity = opacity;
+      this.segmentationLastOpacity = effectiveOpacity;
     }
     const ctx = p.drawingContext;
     ctx.save();

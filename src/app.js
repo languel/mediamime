@@ -14,6 +14,13 @@ const sketchContainer = document.getElementById("sketch-container");
 
 let simulation = null;
 
+const getSurfaceOpacity = () => {
+  const value = typeof window !== "undefined" && typeof window.__mediamimeSurfaceOpacity === "number"
+    ? window.__mediamimeSurfaceOpacity
+    : 1;
+  return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 1));
+};
+
 const applySourceButtonLabel = (mode) => {
   const label =
     mode === "camera"
@@ -114,7 +121,12 @@ p5Instance = new p5((p) => {
     canvas.parent(sketchContainer);
     p.noStroke();
     p.frameRate(60);
-    p.background(4, 7, 13);
+    const surfaceOpacity = getSurfaceOpacity();
+    if (surfaceOpacity <= 0) {
+      p.clear();
+    } else {
+      p.background(4, 7, 13, surfaceOpacity * 255);
+    }
   };
 
   p.draw = () => {

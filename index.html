@@ -16,22 +16,20 @@
     }
     :root {
       color-scheme: dark;
-      --bg-primary: #04070d;
-      --bg-panel: rgba(12, 18, 30, 0.9);
-      --bg-overlay: rgba(5, 9, 18, 0.68);
-      --border-subtle: rgba(255, 255, 255, 0.08);
-      --border-strong: rgba(255, 255, 255, 0.16);
+      --surface-opacity: 1;
       --accent: #ff4081;
       --accent-strong: #f97316;
       --text-primary: #f5f7ff;
       --text-secondary: rgba(245, 247, 255, 0.7);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.16);
       --shadow-strong: 0 18px 40px rgba(0, 0, 0, 0.35);
     }
     body {
       margin: 0;
       display: flex;
       overflow: hidden;
-      background: radial-gradient(120% 120% at 10% 10%, #0d1525 0%, #04070d 48%, #02040a 100%);
+      background: radial-gradient(120% 120% at 10% 10%, rgba(13, 21, 37, var(--surface-opacity)) 0%, rgba(4, 7, 13, var(--surface-opacity)) 48%, rgba(2, 4, 10, var(--surface-opacity)) 100%);
       background: transparent;
       color: var(--text-primary);
       font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
@@ -105,7 +103,7 @@
       height: 100%;
       min-width: 0;
       min-height: 0;
-      background: var(--bg-primary);
+      background: rgba(4, 7, 13, var(--surface-opacity));
       overflow: hidden;
       display: flex;
       align-items: center;
@@ -137,7 +135,7 @@
       flex: 0 0 auto;
       width: clamp(240px, 24vw, 320px);
       max-width: 340px;
-      background: var(--bg-panel);
+      background: rgba(12, 18, 30, calc(var(--surface-opacity) * 0.9));
       border-left: 1px solid var(--border-subtle);
       color: var(--text-primary);
       padding: 0.75rem 0.85rem 1rem;
@@ -186,7 +184,7 @@
       gap: 0.25rem;
       padding: 0.25rem;
       border-radius: 3px;
-      background: rgba(9, 13, 22, 0.6);
+      background: rgba(9, 13, 22, calc(var(--surface-opacity) * 0.6));
       border: 1px solid var(--border-subtle);
       align-self: flex-start;
     }
@@ -205,7 +203,7 @@
     }
     .panel-tabs button:hover {
       color: rgba(245, 247, 255, 0.95);
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, calc(var(--surface-opacity) * 0.1));
     }
     .panel-tabs button.is-active {
       background: var(--accent-strong);
@@ -234,7 +232,7 @@
       gap: 0.4rem;
       padding: 0.5rem;
       border-radius: 2px;
-      background: rgba(12, 18, 30, 0.7);
+      background: rgba(12, 18, 30, calc(var(--surface-opacity) * 0.7));
       border: 1px solid var(--border-subtle);
     }
     .panel-routing-row {
@@ -260,6 +258,32 @@
       gap: 0.35rem;
       padding: 0 0.2rem;
     }
+    .background-opacity-control {
+      display: grid;
+      gap: 0.25rem;
+      padding: 0 0.2rem 0.4rem;
+    }
+    .background-opacity-control label {
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(245, 247, 255, 0.58);
+    }
+    .background-opacity-input {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+    .background-opacity-input input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent-strong);
+    }
+    #background-opacity-value {
+      font-size: 0.72rem;
+      color: rgba(245, 247, 255, 0.68);
+      min-width: 3ch;
+      text-align: right;
+    }
     .stream-toggle {
       display: inline-flex;
       align-items: center;
@@ -268,13 +292,13 @@
       height: 2rem;
       border-radius: 2px;
       border: 1px solid rgba(255, 255, 255, 0.14);
-      background: rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, calc(var(--surface-opacity) * 0.08));
       cursor: pointer;
       transition: background 0.15s ease, border-color 0.15s ease;
       position: relative;
     }
     .stream-toggle:hover {
-      background: rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, calc(var(--surface-opacity) * 0.12));
       border-color: rgba(255, 255, 255, 0.22);
     }
     .stream-toggle input[type="checkbox"] {
@@ -297,7 +321,7 @@
       outline-offset: 2px;
     }
     .status-chip {
-      background: rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, calc(var(--surface-opacity) * 0.08));
       border-radius: 2px;
       padding: 0.15rem 0.45rem;
       font-size: 0.72rem;
@@ -313,7 +337,7 @@
       border-radius: 2px;
       overflow: hidden;
       border: 1px solid var(--border-subtle);
-      background: var(--bg-overlay);
+      background: rgba(5, 9, 18, calc(var(--surface-opacity) * 0.68));
       text-align: center;
       padding: 0.3rem;
     }
@@ -340,7 +364,7 @@
       grid-template-columns: minmax(0, 1fr) 90px 90px;
       align-items: center;
       gap: 0.3rem;
-      background: rgba(255, 255, 255, 0.04);
+      background: rgba(255, 255, 255, calc(var(--surface-opacity) * 0.04));
       border: 1px solid rgba(255, 255, 255, 0.05);
       border-radius: 2px;
       padding: 0.45rem 0.5rem;
@@ -406,7 +430,7 @@
       height: 1.4rem;
       border-radius: 3px;
       border: 1px solid var(--border-subtle);
-      background: rgba(9, 13, 22, 0.92);
+      background: rgba(9, 13, 22, calc(var(--surface-opacity) * 0.92));
       color: #f5f7ff;
       display: inline-flex;
       align-items: center;
@@ -428,7 +452,7 @@
     }
     .panel-toggle:hover,
     .editor-toggle:hover {
-      background: rgba(13, 19, 30, 0.96);
+      background: rgba(13, 19, 30, calc(var(--surface-opacity) * 0.96));
       transform: translateY(-1px);
       border-color: rgba(255, 255, 255, 0.24);
     }
@@ -463,7 +487,7 @@
       gap: 0.25rem;
       padding: 0.35rem 0.45rem;
       border-radius: 3px;
-      background: rgba(8, 12, 22, 0.92);
+      background: rgba(8, 12, 22, calc(var(--surface-opacity) * 0.92));
       border: 1px solid rgba(255, 255, 255, 0.08);
       box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
       pointer-events: auto;
@@ -490,17 +514,17 @@
       font-size: 18px;
     }
     .gesture-editor-toolbar button:hover {
-      background: rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, calc(var(--surface-opacity) * 0.12));
       color: #f5f7ff;
     }
     .gesture-editor-toolbar button.is-active {
-      background: rgba(82, 213, 255, 0.16);
+      background: rgba(82, 213, 255, calc(var(--surface-opacity) * 0.16));
       color: #52d5ff;
     }
     .gesture-editor-toolbar .toolbar-divider {
       width: 1px;
       height: 2rem;
-      background: rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, calc(var(--surface-opacity) * 0.12));
       margin: 0 0.3rem;
     }
     .gesture-svg-wrapper {
@@ -572,7 +596,7 @@
     .modal-backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(4, 7, 13, 0.6);
+      background: rgba(4, 7, 13, calc(var(--surface-opacity) * 0.6));
       /* backdrop-filter: blur(2px); */
       opacity: 0;
       pointer-events: none;
@@ -591,7 +615,7 @@
       width: min(420px, calc(100vw - 2rem));
       max-height: calc(100vh - 4rem);
       overflow-y: auto;
-      background: rgba(9, 13, 22, 0.97);
+      background: rgba(9, 13, 22, calc(var(--surface-opacity) * 0.97));
       border-radius: 16px;
       padding: 1.5rem;
       border: 1px solid rgba(255, 255, 255, 0.08);
@@ -635,7 +659,7 @@
       padding: 0.4rem 0.45rem;
       border-radius: 4px;
       border: 1px solid var(--border-subtle);
-      background: rgba(6, 10, 18, 0.96);
+      background: rgba(6, 10, 18, calc(var(--surface-opacity) * 0.96));
       color: #f5f7ff;
       font-size: 0.82rem;
     }
@@ -649,20 +673,20 @@
       padding: 0.45rem 0.75rem;
       border-radius: 4px;
       border: 1px solid rgba(255, 255, 255, 0.14);
-      background: rgba(82, 213, 255, 0.12);
+      background: rgba(82, 213, 255, calc(var(--surface-opacity) * 0.12));
       color: #f5f7ff;
       font-size: 0.82rem;
       cursor: pointer;
       transition: background 0.18s ease;
     }
     .assignment-modal .modal-actions button:hover {
-      background: rgba(82, 213, 255, 0.22);
+      background: rgba(82, 213, 255, calc(var(--surface-opacity) * 0.22));
     }
     .assignment-modal .modal-actions button.secondary {
-      background: rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, calc(var(--surface-opacity) * 0.08));
     }
     .assignment-modal .modal-actions button.secondary:hover {
-      background: rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, calc(var(--surface-opacity) * 0.16));
     }
     .no-pointer {
       pointer-events: none;
@@ -679,7 +703,7 @@
       gap: 0.3rem;
       padding: 0.45rem;
       border-radius: 2px;
-      background: rgba(12, 18, 30, 0.74);
+      background: rgba(12, 18, 30, calc(var(--surface-opacity) * 0.74));
       border: 1px solid var(--border-subtle);
       overflow-y: auto;
       max-height: 22vh;
@@ -691,7 +715,7 @@
       gap: 0.3rem;
       border: 1px solid var(--border-subtle);
       border-radius: 2px;
-      background: rgba(255, 255, 255, 0.02);
+      background: rgba(255, 255, 255, calc(var(--surface-opacity) * 0.02));
       color: rgba(245, 247, 255, 0.78);
       padding: 0.35rem 0.45rem;
       cursor: pointer;
@@ -699,10 +723,10 @@
       transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
     }
     .editor-shape-list button:hover {
-      background: rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, calc(var(--surface-opacity) * 0.08));
     }
     .editor-shape-list button.is-active {
-      background: rgba(82, 213, 255, 0.18);
+      background: rgba(82, 213, 255, calc(var(--surface-opacity) * 0.18));
       border-color: rgba(82, 213, 255, 0.36);
       color: #f5f7ff;
       box-shadow: inset 0 0 0 1px rgba(82, 213, 255, 0.24);
@@ -721,7 +745,7 @@
       gap: 0.35rem;
       padding: 0.45rem;
       border-radius: 2px;
-      background: rgba(12, 18, 30, 0.8);
+      background: rgba(12, 18, 30, calc(var(--surface-opacity) * 0.8));
       border: 1px solid var(--border-subtle);
       max-height: 46vh;
       overflow-y: auto;
@@ -752,7 +776,7 @@
       padding: 0.28rem 0.4rem;
       border-radius: 2px;
       border: 1px solid var(--border-subtle);
-      background: rgba(6, 10, 18, 0.94);
+      background: rgba(6, 10, 18, calc(var(--surface-opacity) * 0.94));
       color: #f5f7ff;
       font-size: 0.8rem;
     }
@@ -782,7 +806,7 @@
       padding: 0.3rem 0.35rem;
       border-radius: 2px;
       border: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(10, 16, 26, 0.86);
+      background: rgba(10, 16, 26, calc(var(--surface-opacity) * 0.86));
     }
     .event-card-header {
       display: flex;
@@ -831,7 +855,7 @@
       padding: 0.24rem 0.3rem;
       border-radius: 2px;
       border: 1px solid rgba(255, 255, 255, 0.12);
-      background: rgba(6, 10, 18, 0.95);
+      background: rgba(6, 10, 18, calc(var(--surface-opacity) * 0.95));
       color: #f5f7ff;
       font-size: 0.78rem;
     }
@@ -847,7 +871,7 @@
     }
     .event-hint code {
       font-size: 0.7rem;
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, calc(var(--surface-opacity) * 0.1));
       padding: 0.05rem 0.25rem;
       border-radius: 4px;
     }
@@ -867,28 +891,28 @@
       padding: 0.5rem 0.85rem;
       border-radius: 8px;
       border: 1px solid rgba(255, 255, 255, 0.12);
-      background: rgba(82, 213, 255, 0.1);
+      background: rgba(82, 213, 255, calc(var(--surface-opacity) * 0.1));
       color: #f5f7ff;
       font-size: 0.86rem;
       cursor: pointer;
       transition: background 0.18s ease;
     }
     .editor-detail-actions button:hover {
-      background: rgba(82, 213, 255, 0.2);
+      background: rgba(82, 213, 255, calc(var(--surface-opacity) * 0.2));
     }
     .editor-detail-actions button.secondary {
-      background: rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, calc(var(--surface-opacity) * 0.08));
     }
     .editor-detail-actions button.secondary:hover {
-      background: rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, calc(var(--surface-opacity) * 0.14));
     }
     .editor-detail-actions button.danger {
-      background: rgba(244, 63, 94, 0.15);
+      background: rgba(244, 63, 94, calc(var(--surface-opacity) * 0.15));
       border-color: rgba(244, 63, 94, 0.4);
       color: rgba(255, 219, 227, 0.92);
     }
     .editor-detail-actions button.danger:hover {
-      background: rgba(244, 63, 94, 0.25);
+      background: rgba(244, 63, 94, calc(var(--surface-opacity) * 0.25));
     }
     .input-with-button {
       display: flex;
@@ -989,6 +1013,13 @@
             <button id="mediamime-toggle-source" class="icon-button" title="Toggle media source" aria-label="Toggle media source">
               <span class="material-icons-outlined" aria-hidden="true">switch_video</span>
             </button>
+          </div>
+          <div class="background-opacity-control">
+            <label for="background-opacity">Background opacity</label>
+            <div class="background-opacity-input">
+              <input type="range" id="background-opacity" min="0" max="1" step="0.05" value="1">
+              <span id="background-opacity-value">100%</span>
+            </div>
           </div>
           <div class="overlay-toggles">
             <div class="overlay-toggles-header">
@@ -1309,6 +1340,8 @@ const editorFormInputs = [
   editorStreamSelect,
   editorLandmarkSelect
 ].filter(Boolean);
+const backgroundOpacityInput = document.getElementById("background-opacity");
+const backgroundOpacityValue = document.getElementById("background-opacity-value");
 
 const SEGMENTATION_COLOR = { r: 15, g: 139, b: 168 };
 const SEGMENTATION_ALPHA = 0.6;
@@ -1409,7 +1442,8 @@ const isScorePreviewEnabled = () => overlayState.score?.preview ?? false;
 
 const CONFIG_STORAGE_KEY = "mediamime:config";
 const DEFAULT_EDITOR_CONFIG = {
-  midiPort: "broadcast"
+  midiPort: "broadcast",
+  backgroundOpacity: 1
 };
 const SNAPSHOT_VERSION = 1;
 const SNAPSHOT_FILE_PREFIX = "mediamime-snapshot";
@@ -1431,6 +1465,10 @@ const loadEditorConfig = () => {
     const stored = JSON.parse(raw);
     if (!stored || typeof stored !== "object") return;
     if (stored.midiPort) editorConfig.midiPort = String(stored.midiPort);
+    if (typeof stored.backgroundOpacity === "number") {
+      const opacity = Math.max(0, Math.min(1, stored.backgroundOpacity));
+      editorConfig.backgroundOpacity = opacity;
+    }
   } catch (err) {
     console.warn("Failed to load editor config", err);
   }
@@ -3104,8 +3142,19 @@ holistic = createHolistic();
         markEditorSidebarDirty();
       }
       const configSource = payload.config;
-      if (configSource && typeof configSource === "object" && typeof configSource.midiPort === "string" && configSource.midiPort.trim()) {
-        updateEditorConfig({ midiPort: configSource.midiPort.trim() });
+      if (configSource && typeof configSource === "object") {
+        const patch = {};
+        if (typeof configSource.midiPort === "string" && configSource.midiPort.trim()) {
+          patch.midiPort = configSource.midiPort.trim();
+        }
+        if (typeof configSource.backgroundOpacity === "number") {
+          patch.backgroundOpacity = Math.max(0, Math.min(1, configSource.backgroundOpacity));
+        }
+        if (Object.keys(patch).length) {
+          updateEditorConfig(patch);
+        } else {
+          applyGlobalConnectionConfig();
+        }
       } else {
         applyGlobalConnectionConfig();
       }
@@ -3229,6 +3278,14 @@ holistic = createHolistic();
 
     const clampRange = (value, min, max) => Math.min(max, Math.max(min, value));
     const clampUnit = (value) => clampRange(value, 0, 1);
+    if (typeof globalThis.__mediamimeSurfaceOpacity !== "number") {
+      globalThis.__mediamimeSurfaceOpacity = 1;
+    }
+    const setBackgroundOpacity = (value) => {
+      const alpha = clampUnit(typeof value === "number" ? value : Number.parseFloat(value) || 0);
+      document.documentElement.style.setProperty("--surface-opacity", `${alpha}`);
+      globalThis.__mediamimeSurfaceOpacity = alpha;
+    };
 
     const setEditorViewport = (width, height) => {
       editorState.viewport.width = width || DEFAULT_WIDTH;
@@ -4040,6 +4097,14 @@ holistic = createHolistic();
       populateMidiPortSelect(editorMidiPortSelect, editorConfig.midiPort);
       if (assignmentMidiPortSelect) assignmentMidiPortSelect.dataset.selectedPort = editorConfig.midiPort;
       if (editorMidiPortSelect) editorMidiPortSelect.dataset.selectedPort = editorConfig.midiPort;
+      if (backgroundOpacityInput) {
+        backgroundOpacityInput.value = String(editorConfig.backgroundOpacity ?? 1);
+      }
+      if (backgroundOpacityValue) {
+        const percent = Math.round((editorConfig.backgroundOpacity ?? 1) * 100);
+        backgroundOpacityValue.textContent = `${percent}%`;
+      }
+      setBackgroundOpacity(editorConfig.backgroundOpacity ?? 1);
       isSyncingConfig = false;
     }
     const refreshMidiPortOptions = async () => {
@@ -4579,6 +4644,15 @@ holistic = createHolistic();
     });
     editorEventList?.addEventListener("input", (event) => {
       handleEventListMutation("editor", event);
+    });
+    backgroundOpacityInput?.addEventListener("input", (event) => {
+      const rawValue = Number.parseFloat(event.target.value);
+      const nextOpacity = clampUnit(Number.isFinite(rawValue) ? rawValue : 0);
+      if (backgroundOpacityValue) {
+        backgroundOpacityValue.textContent = `${Math.round(nextOpacity * 100)}%`;
+      }
+      setBackgroundOpacity(nextOpacity);
+      updateEditorConfig({ backgroundOpacity: nextOpacity });
     });
     editorDeleteShapeBtn?.addEventListener("click", () => {
       deleteSelectedShape();
