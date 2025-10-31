@@ -284,6 +284,23 @@
       min-width: 3ch;
       text-align: right;
     }
+    .stream-option-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 0.2rem 0.4rem;
+      color: rgba(245, 247, 255, 0.7);
+      font-size: 0.78rem;
+    }
+    .stream-option-row label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      cursor: pointer;
+    }
+    .stream-option-row input[type="checkbox"] {
+      accent-color: var(--accent-strong);
+    }
     .stream-toggle {
       display: inline-flex;
       align-items: center;
@@ -1021,6 +1038,12 @@
               <span id="background-opacity-value">100%</span>
             </div>
           </div>
+          <div class="stream-option-row">
+            <label for="toggle-trails">
+              <input type="checkbox" id="toggle-trails">
+              <span>Persistent trails</span>
+            </label>
+          </div>
           <div class="overlay-toggles">
             <div class="overlay-toggles-header">
               <span>Stream</span>
@@ -1342,6 +1365,7 @@ const editorFormInputs = [
 ].filter(Boolean);
 const backgroundOpacityInput = document.getElementById("background-opacity");
 const backgroundOpacityValue = document.getElementById("background-opacity-value");
+const trailsCheckbox = document.getElementById("toggle-trails");
 
 const SEGMENTATION_COLOR = { r: 15, g: 139, b: 168 };
 const SEGMENTATION_ALPHA = 0.6;
@@ -1443,7 +1467,8 @@ const isScorePreviewEnabled = () => overlayState.score?.preview ?? false;
 const CONFIG_STORAGE_KEY = "mediamime:config";
 const DEFAULT_EDITOR_CONFIG = {
   midiPort: "broadcast",
-  backgroundOpacity: 1
+  backgroundOpacity: 1,
+  trailsEnabled: false
 };
 const SNAPSHOT_VERSION = 1;
 const SNAPSHOT_FILE_PREFIX = "mediamime-snapshot";
@@ -1468,6 +1493,9 @@ const loadEditorConfig = () => {
     if (typeof stored.backgroundOpacity === "number") {
       const opacity = Math.max(0, Math.min(1, stored.backgroundOpacity));
       editorConfig.backgroundOpacity = opacity;
+    }
+    if (typeof stored.trailsEnabled === "boolean") {
+      editorConfig.trailsEnabled = stored.trailsEnabled;
     }
   } catch (err) {
     console.warn("Failed to load editor config", err);
@@ -3278,6 +3306,9 @@ holistic = createHolistic();
 
     const clampRange = (value, min, max) => Math.min(max, Math.max(min, value));
     const clampUnit = (value) => clampRange(value, 0, 1);
+    const getSurfaceOpacity = () => clampUnit(typeof globalThis.__mediamimeSurfaceOpacity === "number"
+      ? globalThis.__mediamimeSurfaceOpacity
+      : 1);
     if (typeof globalThis.__mediamimeSurfaceOpacity !== "number") {
       globalThis.__mediamimeSurfaceOpacity = 1;
     }
@@ -4105,6 +4136,9 @@ holistic = createHolistic();
         backgroundOpacityValue.textContent = `${percent}%`;
       }
       setBackgroundOpacity(editorConfig.backgroundOpacity ?? 1);
+      if (trailsCheckbox) {
+        trailsCheckbox.checked = Boolean(editorConfig.trailsEnabled);
+      }
       isSyncingConfig = false;
     }
     const refreshMidiPortOptions = async () => {
@@ -4654,6 +4688,9 @@ holistic = createHolistic();
       setBackgroundOpacity(nextOpacity);
       updateEditorConfig({ backgroundOpacity: nextOpacity });
     });
+    trailsCheckbox?.addEventListener("change", (event) => {
+      updateEditorConfig({ trailsEnabled: Boolean(event.target.checked) });
+    });
     editorDeleteShapeBtn?.addEventListener("click", () => {
       deleteSelectedShape();
     });
@@ -4823,13 +4860,37 @@ holistic = createHolistic();
       p.pop();
     };
 
+const clearCanvas = (p) => {
+  const ctx = p.drawingContext;
+  const canvas = ctx.canvas;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
+};
+
+const paintBackground = (p, alpha) => {
+  const ctx = p.drawingContext;
+  const canvas = ctx.canvas;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = Math.max(0, Math.min(1, alpha / 255));
+  ctx.fillStyle = "#04070d";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
+};
+
 const drawSegmentation = (p) => {
   if (!overlayState.segmentation?.main || !segmentationMaskAvailable || !segmentationTintCanvas.width) {
     return;
   }
+  const surfaceOpacity = getSurfaceOpacity();
+  if (surfaceOpacity <= 0) {
+    return;
+  }
   const ctx = p.drawingContext;
   ctx.save();
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = surfaceOpacity;
   ctx.drawImage(segmentationTintCanvas, 0, 0, canvasWidth, canvasHeight);
   ctx.restore();
 };
@@ -4838,7 +4899,12 @@ const drawSegmentation = (p) => {
       p.setup = () => {
         const canvas = p.createCanvas(DEFAULT_WIDTH, DEFAULT_HEIGHT);
         canvas.parent(sketchContainer);
-        p.background(4, 7, 13);
+        const surfaceOpacity = getSurfaceOpacity();
+        if (surfaceOpacity <= 0) {
+          clearCanvas(p);
+        } else {
+          p.background(4, 7, 13, surfaceOpacity * 255);
+        }
         p.noStroke();
       };
 
@@ -4873,18 +4939,27 @@ const drawSegmentation = (p) => {
         p.canvas.style.maxWidth = "100%";
         p.canvas.style.maxHeight = "100%";
 
+        const surfaceOpacity = getSurfaceOpacity();
+        const trailsEnabled = Boolean(editorConfig.trailsEnabled);
+        if (!trailsEnabled || surfaceOpacity <= 0) {
+          clearCanvas(p);
+        }
+
         p.push();
         if (overlayState.mirror && currentSource === "camera") {
           p.translate(canvasWidth, 0);
           p.scale(-1, 1);
         }
 
-        p.background(4, 7, 13, overlayState.underlay?.main ? 180 : 255);
+        if (surfaceOpacity > 0) {
+          const baseAlpha = Math.min(255, (overlayState.underlay?.main ? 180 : 255) * surfaceOpacity);
+          paintBackground(p, baseAlpha);
+        }
 
-        if (overlayState.underlay?.main && videoEl.readyState >= 2) {
+        if (overlayState.underlay?.main && surfaceOpacity > 0 && videoEl.readyState >= 2) {
           const ctx = p.drawingContext;
           ctx.save();
-          ctx.globalAlpha = 1;
+          ctx.globalAlpha = surfaceOpacity;
           ctx.drawImage(videoEl, 0, 0, canvasWidth, canvasHeight);
           ctx.restore();
         }
