@@ -81,3 +81,20 @@ If no arguments resolve, the dispatcher sends the computed value as a single flo
 - MIDI port refresh is deferred until the mapping modal opens or you click the refresh buttons—attach devices first.
 - `While Inside` triggers respect the global throttling window; adjust expressions on the receiving end if tighter timing is required.
 - Mirror mode only affects rendering; shape math always runs in camera-native coordinates for consistent OSC/MIDI output.
+
+## OSC Relay
+
+Web browsers cannot emit UDP OSC directly. To forward the in-browser `mediapipa:osc` events to a desktop target (e.g. TouchDesigner) run the bundled relay:
+
+1. Install dependencies (Node 18+):
+   ```bash
+   node osc-relay.mjs
+   ```
+   Optional flags: `--host 127.0.0.1` (target host), `--port 9000` (target UDP port), `--listen 7331` (HTTP port).
+2. Launch the score editor (e.g. `live-server`), draw/select a shape, and trigger an OSC event. The relay will log:
+   ```
+   OSC relay listening on http://127.0.0.1:7331/osc
+   Forwarding to udp://127.0.0.1:9000
+   ```
+3. The web app automatically POSTs every `mediapipa:osc` event to `http://127.0.0.1:7331/osc`; override this by setting `window.MEDIAPIPA_OSC_RELAY_URL` in the dev console before triggering events.
+4. Your OSC receiver (TouchDesigner, etc.) should now see the JSON-forwarded payload on the configured host/port. Disable the relay by stopping the Node process (`Ctrl+C`).
