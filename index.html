@@ -1851,16 +1851,18 @@ holistic = createHolistic();
     const markEditorSidebarDirty = () => {
       editorSidebarDirty = true;
     };
-const setEditorVisibility = (visible) => {
-  editorState.isVisible = Boolean(visible);
-  if (gestureToolbar) {
-    gestureToolbar.style.display = editorState.isVisible ? "" : "none";
-    gestureToolbar.style.pointerEvents = editorState.isVisible ? "auto" : "none";
-  }
-};
-const toggleEditorVisibility = () => {
-  setEditorVisibility(!editorState.isVisible);
-};
+
+    const setEditorVisibility = (visible) => {
+      editorState.isVisible = Boolean(visible);
+      if (gestureToolbar) {
+        gestureToolbar.style.display = editorState.isVisible ? "" : "none";
+        gestureToolbar.style.pointerEvents = editorState.isVisible ? "auto" : "none";
+      }
+    };
+
+    const toggleEditorVisibility = () => {
+      setEditorVisibility(!editorState.isVisible);
+    };
     const updateEditorShapeList = () => {
       if (!editorShapeList) {
         return;
@@ -2256,7 +2258,7 @@ const toggleEditorVisibility = () => {
       shape.closed = Boolean(shape.closed);
       ensurePolylineStyle(shape);
       updatePolylineBounds(shape);
-      markEditorSidebarDirty();
+      setSelectedShape(shape.id, { suppressRender: true });
       renderEditor();
       queuePersist();
     };
@@ -2277,7 +2279,7 @@ const toggleEditorVisibility = () => {
       editorState.activePolylineId = shape.id;
       editorState.polylineHoverPoint = null;
       editorState.didMutate = true;
-      setSelectedShape(shape.id, { suppressRender: true });
+      editorState.selectedId = null;
       markEditorSidebarDirty();
       renderEditor();
     };
@@ -3165,6 +3167,7 @@ const toggleEditorVisibility = () => {
       if (!editorState.activePolylineId) return;
       const svgPoint = toSvgPoint(event);
       if (!svgPoint) return;
+      // preview next vertex without toggling selection box
       editorState.polylineHoverPoint = toNormalizedPoint(svgPoint);
       renderEditor();
     };
@@ -3525,6 +3528,10 @@ const toggleEditorVisibility = () => {
           break;
         case "enter":
           if (isPolylineTool(editorState.tool) && editorState.activePolylineId) {
+            const activeShape = findShapeById(editorState.activePolylineId);
+            if (event.shiftKey && activeShape) {
+              activeShape.closed = true;
+            }
             finalizeActivePolyline({ commit: true });
             event.preventDefault();
           } else if (editorState.selectedId) {
