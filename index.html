@@ -50,13 +50,12 @@
       </div>
       <video id="mediamime-video" muted></video>
     </section>
-    <button id="editor-toggle" class="editor-toggle icon-button" type="button" title="Show tool palette" aria-label="Show tool palette" aria-pressed="false">
-      <span class="material-icons-outlined" aria-hidden="true">visibility_off</span>
-    </button>
-    <div id="modal-layer" class="floating-modal-layer">
+        <div id="modal-layer" class="floating-modal-layer">
       <section id="modal-input" class="panel floating-modal is-open" role="dialog" aria-modal="false" aria-label="Input panel" data-modal="input" data-resizable="true" tabindex="-1">
-        <div class="panel-header" data-modal-handle>
-          <h2>Input</h2>
+        <div class="modal-chrome">
+          <div class="modal-handle" data-modal-handle aria-label="Move Input panel" tabindex="0">
+            <span class="material-icons-outlined" aria-hidden="true">drag_indicator</span>
+          </div>
           <div class="panel-actions">
             <button type="button" class="icon-button panel-close" data-modal-close="input" title="Hide Input panel" aria-label="Hide Input panel">
               <span class="material-icons-outlined" aria-hidden="true">close</span>
@@ -74,13 +73,12 @@
             </button>
           </div>
         </div>
-        <button type="button" class="modal-resize-handle" aria-label="Resize Input panel" data-modal-resize="input">
-          <span class="material-icons-outlined" aria-hidden="true">open_in_full</span>
-        </button>
       </section>
       <section id="modal-layers" class="panel floating-modal is-open" role="dialog" aria-modal="false" aria-label="Layers panel" data-modal="layers" tabindex="-1">
-        <div class="panel-header" data-modal-handle>
-          <h2>Layers</h2>
+        <div class="modal-chrome">
+          <div class="modal-handle" data-modal-handle aria-label="Move Layers panel" tabindex="0">
+            <span class="material-icons-outlined" aria-hidden="true">drag_indicator</span>
+          </div>
           <div class="panel-actions">
             <button id="mediamime-reset" class="icon-button" title="Reset overlays" aria-label="Reset overlays">
               <span class="material-icons-outlined" aria-hidden="true">refresh</span>
@@ -245,8 +243,10 @@
           </div>
       </section>
       <section id="modal-map" class="panel floating-modal is-open" role="dialog" aria-modal="false" aria-label="Map panel" data-modal="map" tabindex="-1">
-        <div class="panel-header" data-modal-handle>
-          <h2>Map</h2>
+        <div class="modal-chrome">
+          <div class="modal-handle" data-modal-handle aria-label="Move Map panel" tabindex="0">
+            <span class="material-icons-outlined" aria-hidden="true">drag_indicator</span>
+          </div>
           <div class="panel-actions">
             <button type="button" class="icon-button panel-close" data-modal-close="map" title="Hide Map panel" aria-label="Hide Map panel">
               <span class="material-icons-outlined" aria-hidden="true">close</span>
@@ -319,8 +319,10 @@
         </div>
       </section>
       <section id="modal-preview" class="panel floating-modal is-open" role="dialog" aria-modal="false" aria-label="Preview panel" data-modal="preview" data-resizable="true" tabindex="-1">
-        <div class="panel-header" data-modal-handle>
-          <h2>Preview</h2>
+        <div class="modal-chrome">
+          <div class="modal-handle" data-modal-handle aria-label="Move Preview panel" tabindex="0">
+            <span class="material-icons-outlined" aria-hidden="true">drag_indicator</span>
+          </div>
           <div class="panel-actions">
             <button type="button" class="icon-button panel-close" data-modal-close="preview" title="Hide Preview panel" aria-label="Hide Preview panel">
               <span class="material-icons-outlined" aria-hidden="true">close</span>
@@ -332,9 +334,6 @@
             <canvas id="segmentation-preview" width="320" height="180"></canvas>
           </div>
         </div>
-        <button type="button" class="modal-resize-handle" aria-label="Resize Preview panel" data-modal-resize="preview">
-          <span class="material-icons-outlined" aria-hidden="true">open_in_full</span>
-        </button>
       </section>
     </div>
   </main>
@@ -439,7 +438,6 @@ const SAMPLE_VIDEO_URL = "https://thefoxofsky.github.io/project_pages/RealisDanc
         preview: document.getElementById("overlay-score-preview")
       }
     };
-    const editorToggleBtn = document.getElementById("editor-toggle");
     const modalElements = Array.from(document.querySelectorAll(".floating-modal[data-modal]"));
     const modalState = new Map();
     const modalStateListeners = [];
@@ -454,6 +452,35 @@ const SAMPLE_VIDEO_URL = "https://thefoxofsky.github.io/project_pages/RealisDanc
       layers: { top: 176, align: "right" },
       preview: { top: 336, align: "right" },
       map: { top: 496, align: "right" }
+    };
+    const MODAL_MARGIN = 0;
+    const MODAL_LAYOUT_KEY = "mediamime:modal-layout";
+    const loadModalLayout = () => {
+      if (typeof localStorage === "undefined") return {};
+      try {
+        const raw = localStorage.getItem(MODAL_LAYOUT_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === "object" ? parsed : {};
+      } catch (err) {
+        console.warn("Failed to load modal layout", err);
+        return {};
+      }
+    };
+    const modalLayout = loadModalLayout();
+    const persistModalLayout = () => {
+      if (typeof localStorage === "undefined") return;
+      try {
+        localStorage.setItem(MODAL_LAYOUT_KEY, JSON.stringify(modalLayout));
+      } catch (err) {
+        console.warn("Failed to persist modal layout", err);
+      }
+    };
+    const updateModalLayout = (id, changes = {}) => {
+      if (!id) return;
+      const current = modalLayout[id] || {};
+      modalLayout[id] = { ...current, ...changes };
+      persistModalLayout();
     };
     const onModalStateChange = (listener) => {
       if (typeof listener === "function") {
@@ -480,38 +507,91 @@ const ensureModalInViewport = (modal) => {
       rect = modal.getBoundingClientRect();
     }
   }
-  const maxLeft = Math.max(16, window.innerWidth - rect.width - 16);
-  const maxTop = Math.max(16, window.innerHeight - rect.height - 16);
-  modal.style.left = `${clamp(rect.left, 16, maxLeft)}px`;
-  modal.style.top = `${clamp(rect.top, 16, maxTop)}px`;
+  const maxLeft = Math.max(MODAL_MARGIN, window.innerWidth - rect.width - MODAL_MARGIN);
+  const maxTop = Math.max(MODAL_MARGIN, window.innerHeight - rect.height - MODAL_MARGIN);
+  modal.style.left = `${clamp(rect.left, MODAL_MARGIN, maxLeft)}px`;
+  modal.style.top = `${clamp(rect.top, MODAL_MARGIN, maxTop)}px`;
   modal.style.right = "auto";
   modal.style.bottom = "auto";
 };
 
 const initializeModalPosition = (modal) => {
   if (!modal) return;
+  const id = modal.dataset.modal;
   modal.style.right = "auto";
   modal.style.bottom = "auto";
-  const id = modal.dataset.modal;
+  const saved = modalLayout[id] || {};
   if (modal.dataset.resizable === "true") {
-    const rect = modal.getBoundingClientRect();
-    modal.style.width = `${Math.min(rect.width, window.innerWidth - 32)}px`;
-    modal.style.height = `${Math.min(rect.height, window.innerHeight - 32)}px`;
+    if (Number.isFinite(saved.width)) {
+      modal.style.width = `${saved.width}px`;
+    }
+    if (Number.isFinite(saved.height)) {
+      modal.style.height = `${saved.height}px`;
+    }
   }
+  if (Number.isFinite(saved.left)) {
+    modal.style.left = `${saved.left}px`;
+  }
+  if (Number.isFinite(saved.top)) {
+    modal.style.top = `${saved.top}px`;
+  }
+
   const rect = modal.getBoundingClientRect();
   const defaults = DEFAULT_MODAL_POSITIONS[id];
-  if (defaults) {
-    if (typeof defaults.top === "number") {
-      modal.style.top = `${defaults.top}px`;
-    }
+  if (!Number.isFinite(saved.top) && defaults && typeof defaults.top === "number") {
+    modal.style.top = `${defaults.top}px`;
+  }
+  if (!Number.isFinite(saved.left) && defaults) {
     if (defaults.align === "right") {
-      const alignedLeft = Math.max(16, window.innerWidth - rect.width - 16);
+      const alignedLeft = Math.max(MODAL_MARGIN, window.innerWidth - rect.width - MODAL_MARGIN);
       modal.style.left = `${alignedLeft}px`;
     } else if (typeof defaults.left === "number") {
       modal.style.left = `${defaults.left}px`;
     }
   }
+
   ensureModalInViewport(modal);
+
+  const appliedLeft = Number.parseFloat(modal.style.left);
+  const appliedTop = Number.parseFloat(modal.style.top);
+  if (!Number.isFinite(saved.left) || !Number.isFinite(saved.top)) {
+    updateModalLayout(id, {
+      left: Number.isFinite(appliedLeft) ? appliedLeft : MODAL_MARGIN,
+      top: Number.isFinite(appliedTop) ? appliedTop : MODAL_MARGIN
+    });
+  } else {
+    const updates = {};
+    if (Number.isFinite(appliedLeft) && Math.abs(appliedLeft - saved.left) > 0.5) {
+      updates.left = appliedLeft;
+    }
+    if (Number.isFinite(appliedTop) && Math.abs(appliedTop - saved.top) > 0.5) {
+      updates.top = appliedTop;
+    }
+    if (Object.keys(updates).length) {
+      updateModalLayout(id, updates);
+    }
+  }
+  if (modal.dataset.resizable === "true") {
+    const appliedWidth = Number.parseFloat(modal.style.width);
+    const appliedHeight = Number.parseFloat(modal.style.height);
+    if (!Number.isFinite(saved.width) && Number.isFinite(appliedWidth)) {
+      updateModalLayout(id, { width: appliedWidth });
+    }
+    if (!Number.isFinite(saved.height) && Number.isFinite(appliedHeight)) {
+      updateModalLayout(id, { height: appliedHeight });
+    } else {
+      const resizeUpdates = {};
+      if (Number.isFinite(appliedWidth) && Number.isFinite(saved.width) && Math.abs(appliedWidth - saved.width) > 0.5) {
+        resizeUpdates.width = appliedWidth;
+      }
+      if (Number.isFinite(appliedHeight) && Number.isFinite(saved.height) && Math.abs(appliedHeight - saved.height) > 0.5) {
+        resizeUpdates.height = appliedHeight;
+      }
+      if (Object.keys(resizeUpdates).length) {
+        updateModalLayout(id, resizeUpdates);
+      }
+    }
+  }
 };
 
 const bringModalToFront = (modal) => {
@@ -548,6 +628,18 @@ const setModalVisibility = (id, open, { skipFocus } = {}) => {
   } else if (lastActiveModalId === id) {
     lastActiveModalId = null;
   }
+  const layoutUpdates = { open: nextState };
+  const leftValue = Number.parseFloat(modal.style.left);
+  const topValue = Number.parseFloat(modal.style.top);
+  const widthValue = Number.parseFloat(modal.style.width);
+  const heightValue = Number.parseFloat(modal.style.height);
+  if (Number.isFinite(leftValue)) layoutUpdates.left = leftValue;
+  if (Number.isFinite(topValue)) layoutUpdates.top = topValue;
+  if (modal.dataset.resizable === "true") {
+    if (Number.isFinite(widthValue)) layoutUpdates.width = widthValue;
+    if (Number.isFinite(heightValue)) layoutUpdates.height = heightValue;
+  }
+  updateModalLayout(id, layoutUpdates);
   modalStateListeners.forEach((listener) => {
     try {
       listener({ id, open: nextState, modal });
@@ -576,10 +668,10 @@ const attachModalDrag = (modal) => {
     modal.style.right = "auto";
     modal.style.bottom = "auto";
     const handlePointerMove = (moveEvent) => {
-      const maxLeft = Math.max(16, window.innerWidth - rect.width - 16);
-      const maxTop = Math.max(16, window.innerHeight - rect.height - 16);
-      modal.style.left = `${clamp(moveEvent.clientX - offsetX, 16, maxLeft)}px`;
-      modal.style.top = `${clamp(moveEvent.clientY - offsetY, 16, maxTop)}px`;
+      const maxLeft = Math.max(MODAL_MARGIN, window.innerWidth - rect.width - MODAL_MARGIN);
+      const maxTop = Math.max(MODAL_MARGIN, window.innerHeight - rect.height - MODAL_MARGIN);
+      modal.style.left = `${clamp(moveEvent.clientX - offsetX, MODAL_MARGIN, maxLeft)}px`;
+      modal.style.top = `${clamp(moveEvent.clientY - offsetY, MODAL_MARGIN, maxTop)}px`;
     };
     const stopDrag = () => {
       handle.releasePointerCapture(event.pointerId);
@@ -587,6 +679,14 @@ const attachModalDrag = (modal) => {
       window.removeEventListener("pointerup", stopDrag);
       handle.removeEventListener("lostpointercapture", stopDrag);
       ensureModalInViewport(modal);
+      const leftValue = Number.parseFloat(modal.style.left);
+      const topValue = Number.parseFloat(modal.style.top);
+      const updates = {};
+      if (Number.isFinite(leftValue)) updates.left = leftValue;
+      if (Number.isFinite(topValue)) updates.top = topValue;
+      if (Object.keys(updates).length) {
+        updateModalLayout(modal.dataset.modal, updates);
+      }
     };
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", stopDrag, { once: true });
@@ -594,53 +694,166 @@ const attachModalDrag = (modal) => {
   });
 };
 
+const detectResizeDirection = (x, y, rect, margin) => {
+  const directions = [];
+  if (x - rect.left <= margin) directions.push("w");
+  else if (rect.right - x <= margin) directions.push("e");
+  if (y - rect.top <= margin) directions.push("n");
+  else if (rect.bottom - y <= margin) directions.push("s");
+  return directions.length ? directions.join("") : null;
+};
+
+const cursorForDirection = (dir) => {
+  switch (dir) {
+    case "n":
+    case "s":
+      return "ns-resize";
+    case "e":
+    case "w":
+      return "ew-resize";
+    case "ne":
+    case "en":
+    case "sw":
+    case "ws":
+      return "nesw-resize";
+    case "nw":
+    case "wn":
+    case "se":
+    case "es":
+      return "nwse-resize";
+    default:
+      return "";
+  }
+};
+
 const attachModalResize = (modal) => {
   if (!modal || modal.dataset.resizable !== "true") return;
-  const handle = modal.querySelector("[data-modal-resize]");
-  if (!handle) return;
-  handle.addEventListener("pointerdown", (event) => {
+  const RESIZE_MARGIN = 14;
+  let activeDirection = null;
+  let resizeContext = null;
+
+  const updateCursor = (event) => {
+    if (resizeContext) return;
+    if (event.target.closest("[data-modal-handle]") || event.target.closest(".panel-actions")) {
+      modal.style.cursor = "";
+      return;
+    }
+    const rect = modal.getBoundingClientRect();
+    const direction = detectResizeDirection(event.clientX, event.clientY, rect, RESIZE_MARGIN);
+    modal.style.cursor = cursorForDirection(direction) || "";
+  };
+
+  const finalizeResize = (event) => {
+    if (!resizeContext) return;
+    modal.releasePointerCapture(event.pointerId);
+    modal.removeEventListener("pointermove", handlePointerMove);
+    modal.removeEventListener("pointerup", finalizeResize);
+    modal.removeEventListener("lostpointercapture", finalizeResize);
+    ensureModalInViewport(modal);
+    const updates = {};
+    const leftValue = Number.parseFloat(modal.style.left);
+    const topValue = Number.parseFloat(modal.style.top);
+    const widthValue = Number.parseFloat(modal.style.width);
+    const heightValue = Number.parseFloat(modal.style.height);
+    if (Number.isFinite(leftValue)) updates.left = leftValue;
+    if (Number.isFinite(topValue)) updates.top = topValue;
+    if (Number.isFinite(widthValue)) updates.width = widthValue;
+    if (Number.isFinite(heightValue)) updates.height = heightValue;
+    updateModalLayout(modal.dataset.modal, updates);
+    resizeContext = null;
+    activeDirection = null;
+    modal.style.cursor = "";
+  };
+
+  const handlePointerMove = (event) => {
+    if (!resizeContext) return;
+    const { startX, startY, startWidth, startHeight, startLeft, startTop, minWidth, minHeight } = resizeContext;
+    const deltaX = event.clientX - startX;
+    const deltaY = event.clientY - startY;
+    if (activeDirection) {
+      modal.style.cursor = cursorForDirection(activeDirection) || modal.style.cursor;
+    }
+    let nextWidth = startWidth;
+    let nextHeight = startHeight;
+    let nextLeft = startLeft;
+    let nextTop = startTop;
+    const maxWidth = Math.max(minWidth, window.innerWidth - 32);
+    const maxHeight = Math.max(minHeight, window.innerHeight - 32);
+
+    if (activeDirection.includes("e")) {
+      nextWidth = clamp(startWidth + deltaX, minWidth, maxWidth);
+    }
+    if (activeDirection.includes("s")) {
+      nextHeight = clamp(startHeight + deltaY, minHeight, maxHeight);
+    }
+    if (activeDirection.includes("w")) {
+      const proposed = clamp(startWidth - deltaX, minWidth, maxWidth);
+      const deltaWidth = startWidth - proposed;
+      nextWidth = proposed;
+      nextLeft = clamp(startLeft + deltaWidth, MODAL_MARGIN, window.innerWidth - nextWidth - MODAL_MARGIN);
+    }
+    if (activeDirection.includes("n")) {
+      const proposed = clamp(startHeight - deltaY, minHeight, maxHeight);
+      const deltaHeight = startHeight - proposed;
+      nextHeight = proposed;
+      nextTop = clamp(startTop + deltaHeight, MODAL_MARGIN, window.innerHeight - nextHeight - MODAL_MARGIN);
+    }
+
+    modal.style.width = `${nextWidth}px`;
+    modal.style.height = `${nextHeight}px`;
+    modal.style.left = `${nextLeft}px`;
+    modal.style.top = `${nextTop}px`;
+  };
+
+  modal.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
+    if (event.target.closest("[data-modal-handle]")) return;
+    if (event.target.closest(".panel-actions")) return;
+    const rect = modal.getBoundingClientRect();
+    const direction = detectResizeDirection(event.clientX, event.clientY, rect, RESIZE_MARGIN);
+    if (!direction) return;
     event.preventDefault();
     bringModalToFront(modal);
-    handle.setPointerCapture(event.pointerId);
-    const rect = modal.getBoundingClientRect();
-    const startWidth = rect.width;
-    const startHeight = rect.height;
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const minWidth = 220;
-    const minHeight = 160;
-    const handlePointerMove = (moveEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      const deltaY = moveEvent.clientY - startY;
-      const maxWidth = Math.max(minWidth, window.innerWidth - 32);
-      const maxHeight = Math.max(minHeight, window.innerHeight - 32);
-      const nextWidth = clamp(startWidth + deltaX, minWidth, maxWidth);
-      const nextHeight = clamp(startHeight + deltaY, minHeight, maxHeight);
-      modal.style.width = `${nextWidth}px`;
-      modal.style.height = `${nextHeight}px`;
-      ensureModalInViewport(modal);
+    modal.style.right = "auto";
+    modal.style.bottom = "auto";
+    activeDirection = direction;
+    resizeContext = {
+      startX: event.clientX,
+      startY: event.clientY,
+      startWidth: rect.width,
+      startHeight: rect.height,
+      startLeft: rect.left,
+      startTop: rect.top,
+      minWidth: 220,
+      minHeight: 160
     };
-    const stopResize = () => {
-      handle.releasePointerCapture(event.pointerId);
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", stopResize);
-      handle.removeEventListener("lostpointercapture", stopResize);
-      ensureModalInViewport(modal);
-    };
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", stopResize, { once: true });
-    handle.addEventListener("lostpointercapture", stopResize);
+    modal.style.cursor = cursorForDirection(direction) || modal.style.cursor;
+    modal.setPointerCapture(event.pointerId);
+    modal.addEventListener("pointermove", handlePointerMove);
+    modal.addEventListener("pointerup", finalizeResize, { once: true });
+    modal.addEventListener("lostpointercapture", finalizeResize);
+  });
+
+  modal.addEventListener("mousemove", updateCursor);
+  modal.addEventListener("mouseleave", () => {
+    if (!resizeContext) {
+      modal.style.cursor = "";
+    }
   });
 };
 
 modalElements.forEach((modal) => {
   initializeModalPosition(modal);
   const id = modal.dataset.modal;
-  const open = !modal.classList.contains("is-hidden");
+  const saved = modalLayout[id] || {};
+  const open = saved.open ?? !modal.classList.contains("is-hidden");
   modalState.set(id, open);
+  modal.classList.toggle("is-hidden", !open);
   modal.setAttribute("aria-hidden", open ? "false" : "true");
-  bringModalToFront(modal);
+  if (open) {
+    bringModalToFront(modal);
+  }
+  updateModalLayout(id, { open });
   modal.addEventListener("pointerdown", () => bringModalToFront(modal));
   attachModalDrag(modal);
   attachModalResize(modal);
@@ -673,7 +886,23 @@ document.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("resize", () => {
-  modalElements.forEach((modal) => ensureModalInViewport(modal));
+  modalElements.forEach((modal) => {
+    ensureModalInViewport(modal);
+    const updates = {};
+    const leftValue = Number.parseFloat(modal.style.left);
+    const topValue = Number.parseFloat(modal.style.top);
+    if (Number.isFinite(leftValue)) updates.left = leftValue;
+    if (Number.isFinite(topValue)) updates.top = topValue;
+    if (modal.dataset.resizable === "true") {
+      const widthValue = Number.parseFloat(modal.style.width);
+      const heightValue = Number.parseFloat(modal.style.height);
+      if (Number.isFinite(widthValue)) updates.width = widthValue;
+      if (Number.isFinite(heightValue)) updates.height = heightValue;
+    }
+    if (Object.keys(updates).length) {
+      updateModalLayout(modal.dataset.modal, updates);
+    }
+  });
 });
 
 const previewCanvas = document.getElementById("segmentation-preview");
@@ -1140,7 +1369,7 @@ function drawPreviewCanvas() {
     const boxHeight = padding * 2 + lines.length * lineHeight;
     ctx.save();
     ctx.globalAlpha = 0.95;
-    ctx.fillStyle = "rgba(9, 13, 22, 0.86)";
+    ctx.fillStyle = "rgba(9, 13, 22, 0.10)";
     ctx.fillRect(padding, padding, boxWidth, boxHeight);
     ctx.fillStyle = "rgba(245, 247, 255, 0.92)";
     ctx.font = "12px 'Inter', 'Helvetica Neue', Arial, sans-serif";
@@ -1627,15 +1856,6 @@ const setEditorVisibility = (visible) => {
   if (gestureToolbar) {
     gestureToolbar.style.display = editorState.isVisible ? "" : "none";
     gestureToolbar.style.pointerEvents = editorState.isVisible ? "auto" : "none";
-  }
-  if (editorToggleBtn) {
-    editorToggleBtn.setAttribute("aria-pressed", editorState.isVisible ? "true" : "false");
-    editorToggleBtn.setAttribute("title", editorState.isVisible ? "Hide tool palette" : "Show tool palette");
-    editorToggleBtn.setAttribute("aria-label", editorState.isVisible ? "Hide tool palette" : "Show tool palette");
-    const icon = editorToggleBtn.querySelector(".material-icons-outlined");
-    if (icon) {
-      icon.textContent = editorState.isVisible ? "gesture" : "visibility_off";
-    }
   }
 };
 const toggleEditorVisibility = () => {
@@ -3882,7 +4102,6 @@ const toggleEditorVisibility = () => {
         closeAssignmentModal();
       }
     });
-    editorToggleBtn?.addEventListener("click", toggleEditorVisibility);
     editorShapeList?.addEventListener("click", (event) => {
       const target = event.target?.closest("button[data-shape-id]");
       if (!target) return;

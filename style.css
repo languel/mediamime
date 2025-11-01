@@ -138,11 +138,10 @@ html, body {
       max-height: min(72vh, 680px);
       pointer-events: auto;
       /* backdrop-filter: blur(18px); */
-      transition: opacity 0.2s ease, transform 0.2s ease;
+      transition: opacity 0.2s ease, transform 0.2s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, padding 0.18s ease;
       overflow: hidden;
-      right: 1rem;
+      right: 0;
       will-change: left, top;
-      user-select: none;
     }
     .floating-modal.is-hidden {
       opacity: 0;
@@ -155,7 +154,7 @@ html, body {
       overflow: auto;
     }
     .floating-modal[data-resizable="true"] {
-      padding-bottom: calc(1px + 1.7rem);
+      padding-bottom: 1px;
     }
     .floating-modal[data-modal="input"] {
       top: auto;
@@ -165,30 +164,69 @@ html, body {
     }
     .floating-modal[data-modal="preview"] {
       top: auto;
+      transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
     }
     .floating-modal[data-modal="map"] {
       top: auto;
+    }
+    .floating-modal[data-modal="preview"]:not(:hover) {
+      background: transparent;
+      border-color: transparent;
+      box-shadow: none;
+      padding: 0;
+    }
+    .floating-modal[data-modal="preview"]:not(:hover) .modal-chrome {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .floating-modal[data-modal="preview"]:not(:hover) .floating-modal-body {
+      gap: 0;
+    }
+    .floating-modal[data-modal="preview"]:not(:hover) .segment-preview {
+      border-color: transparent;
+      background: transparent;
+      padding: 0;
+      box-shadow: none;
+    }
+    .floating-modal[data-modal="preview"]:not(:hover) .segment-preview canvas {
+      border-radius: 0;
     }
     .floating-modal-body {
       display: flex;
       flex-direction: column;
       gap: 1px;
     }
-    .panel-header {
+    .modal-chrome {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 1px;
       padding: 1px;
+    }
+    .modal-handle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.5rem;
+      height: 1.5rem;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      color: rgba(245, 247, 255, 0.65);
       cursor: move;
       user-select: none;
       touch-action: none;
     }
-    .panel-header h2 {
-      margin: 0;
-      font-size: 1.05rem;
-      font-weight: 600;
-      color: var(--text-primary);
+    .modal-handle:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(245, 247, 255, 0.85);
+    }
+    .modal-handle span {
+      font-size: 18px;
+    }
+    .modal-handle:focus-visible {
+      outline: 1px solid rgba(245, 247, 255, 0.35);
+      outline-offset: 2px;
     }
     .panel-actions {
       display: flex;
@@ -200,29 +238,16 @@ html, body {
     }
     .panel-actions .icon-button {
       padding: 1px;
-    }
-    .modal-resize-handle {
-      position: absolute;
-      right: 0.5rem;
-      bottom: 0.5rem;
-      width: 1.7rem;
-      height: 1.7rem;
+      width: 1.6rem;
+      height: 1.6rem;
       border-radius: 4px;
-      border: 1px solid rgba(255, 255, 255, 0.16);
-      background: rgba(9, 13, 22, 0.65);
-      color: rgba(245, 247, 255, 0.75);
-      display: none;
+      display: inline-flex;
       align-items: center;
       justify-content: center;
-      cursor: se-resize;
-      transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+      cursor: pointer;
     }
-    .floating-modal[data-resizable="true"] .modal-resize-handle {
-      display: inline-flex;
-    }
-    .modal-resize-handle:hover {
-      background: rgba(255, 255, 255, 0.2);
-      color: rgba(9, 13, 22, 0.92);
+    .panel-actions .icon-button .material-icons-outlined {
+      font-size: 18px;
     }
     .editor-toggle {
       position: absolute;
@@ -407,7 +432,7 @@ html, body {
       display: block;
     }
     .overlay-table-wrapper {
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.05);
       border-radius: 4px;
       overflow: hidden;
       background: rgba(12, 18, 30, calc(var(--surface-opacity) * 0.65));
