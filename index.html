@@ -21,8 +21,14 @@
           <button id="gesture-tool-select" class="is-active" type="button" data-tool="select" title="Select (V)" aria-label="Select (V)">
             <span class="material-icons-outlined" aria-hidden="true">near_me</span>
           </button>
-          <button id="gesture-tool-eraser" type="button" data-tool="eraser" title="Eraser (E)" aria-label="Eraser (E)">
-            <span class="material-symbols-outlined" aria-hidden="true">ink_eraser</span>
+          <button id="gesture-tool-hand" type="button" data-tool="hand" title="Pan (H)" aria-label="Pan (H)">
+            <span class="material-icons-outlined" aria-hidden="true">pan_tool_alt</span>
+          </button>
+          <button id="gesture-tool-freehand" type="button" data-tool="freehand" title="Freehand (D)" aria-label="Freehand (D)">
+            <span class="material-icons-outlined" aria-hidden="true">gesture</span>
+          </button>
+          <button id="gesture-tool-line" type="button" data-tool="line" title="Line (L)" aria-label="Line (L)">
+            <span class="material-icons-outlined" aria-hidden="true">timeline</span>
           </button>
           <button id="gesture-tool-rect" type="button" data-tool="rect" title="Rectangle (R)" aria-label="Rectangle (R)">
             <span class="material-icons-outlined" aria-hidden="true">crop_square</span>
@@ -30,11 +36,8 @@
           <button id="gesture-tool-ellipse" type="button" data-tool="ellipse" title="Oval (O)" aria-label="Oval (O)">
             <span class="material-icons-outlined" aria-hidden="true">radio_button_unchecked</span>
           </button>
-          <button id="gesture-tool-line" type="button" data-tool="line" title="Line (L)" aria-label="Line (L)">
-            <span class="material-icons-outlined" aria-hidden="true">timeline</span>
-          </button>
-          <button id="gesture-tool-polygon" type="button" data-tool="polygon" title="Polygon (P)" aria-label="Polygon (P)">
-            <span class="material-icons-outlined" aria-hidden="true">change_history</span>
+          <button id="gesture-tool-eraser" type="button" data-tool="eraser" title="Eraser (E)" aria-label="Eraser (E)">
+            <span class="material-symbols-outlined" aria-hidden="true">ink_eraser</span>
           </button>
           <div class="toolbar-divider" aria-hidden="true"></div>
           <button id="gesture-mode-toggle" type="button" title="Toggle perform mode" aria-label="Toggle perform mode">
@@ -914,11 +917,12 @@ const gestureSvg = document.getElementById("gesture-svg");
 const gestureSvgWrapper = document.querySelector(".gesture-svg-wrapper");
 const gestureToolButtons = {
   select: document.getElementById("gesture-tool-select"),
-  eraser: document.getElementById("gesture-tool-eraser"),
+  hand: document.getElementById("gesture-tool-hand"),
+  freehand: document.getElementById("gesture-tool-freehand"),
   rect: document.getElementById("gesture-tool-rect"),
   ellipse: document.getElementById("gesture-tool-ellipse"),
   line: document.getElementById("gesture-tool-line"),
-  polygon: document.getElementById("gesture-tool-polygon")
+  eraser: document.getElementById("gesture-tool-eraser")
 };
 const gestureModeToggle = document.getElementById("gesture-mode-toggle");
 const gestureClearBtn = document.getElementById("gesture-clear");
@@ -1689,6 +1693,9 @@ holistic = createHolistic();
 
     const DEFAULT_WIDTH = 1280;
     const DEFAULT_HEIGHT = 720;
+    const AUTO_REVERT_TOOLS = new Set(["line", "freehand", "rect", "ellipse"]);
+    const FREEHAND_SIMPLIFY_TOLERANCE = 0.0025;
+    const VERTEX_EPSILON = 1e-4;
 
     let canvasWidth = DEFAULT_WIDTH;
     let canvasHeight = DEFAULT_HEIGHT;
@@ -1697,6 +1704,7 @@ holistic = createHolistic();
       tool: "select",
       shapes: [],
       selectedId: null,
+      selectedIds: new Set(),
       drawingShapeId: null,
       dragHandle: null,
       pointerId: null,
@@ -1709,12 +1717,74 @@ holistic = createHolistic();
       didMutate: false,
       activePolylineId: null,
       polylineHoverPoint: null,
+      polylinePointerId: null,
+      polylineExtendArmed: false,
       eraserActive: false,
       eraserPointerId: null,
-      erasedShapeIds: new Set()
+      erasedShapeIds: new Set(),
+      hoverShapeId: null,
+      toolLocked: false,
+      pan: { x: 0, y: 0 },
+      panPointerId: null,
+      panOrigin: null,
+      selectionMarquee: null,
+      selectionBounds: null,
+      transformSession: null,
+      selectionFrame: null,
+      cursorHandle: null
     };
-    const isPolylineTool = (tool) => tool === "line" || tool === "polygon";
+    const applyEditorPan = () => {
+      if (!gestureSvgWrapper) return;
+      gestureSvgWrapper.style.transform = `translate(${editorState.pan.x}px, ${editorState.pan.y}px)`;
+    };
+
+    const updateToolLockIndicator = () => {
+      gestureToolbar?.classList.toggle("is-tool-locked", Boolean(editorState.toolLocked));
+    };
+    applyEditorPan();
+    updateToolLockIndicator();
+
+    const maybeAutoRevertTool = () => {
+      if (!editorState.toolLocked && AUTO_REVERT_TOOLS.has(editorState.tool)) {
+        setEditorTool("select");
+      }
+    };
+
+    const beginPan = (event) => {
+      editorState.panPointerId = event.pointerId;
+      editorState.panOrigin = {
+        x: event.clientX,
+        y: event.clientY,
+        panX: editorState.pan.x,
+        panY: editorState.pan.y
+      };
+      gestureSvgWrapper?.classList.add("is-panning");
+      if (gestureSvg?.setPointerCapture) {
+        gestureSvg.setPointerCapture(event.pointerId);
+      }
+    };
+
+    const updatePan = (event) => {
+      if (editorState.panPointerId !== event.pointerId || !editorState.panOrigin) return;
+      const dx = event.clientX - editorState.panOrigin.x;
+      const dy = event.clientY - editorState.panOrigin.y;
+      editorState.pan.x = editorState.panOrigin.panX + dx;
+      editorState.pan.y = editorState.panOrigin.panY + dy;
+      applyEditorPan();
+    };
+
+    const endPan = (event) => {
+      if (editorState.panPointerId !== event.pointerId) return;
+      if (gestureSvg?.hasPointerCapture?.(event.pointerId)) {
+        gestureSvg.releasePointerCapture(event.pointerId);
+      }
+      editorState.panPointerId = null;
+      editorState.panOrigin = null;
+      gestureSvgWrapper?.classList.remove("is-panning");
+    };
+    const isPolylineTool = (tool) => tool === "line" || tool === "freehand";
     const STORAGE_KEY = "mediamime:gesture-shapes";
+    const STORAGE_KEY_SVG = `${STORAGE_KEY}:svg`;
     let persistTimer = null;
     let activeAssignmentShapeId = null;
     let assignmentDraftInteraction = null;
@@ -1974,6 +2044,7 @@ holistic = createHolistic();
         }
       }
       resetShapeRuntime(shape);
+      refreshSelectionBounds();
       if (!skipDirty) {
         markEditorSidebarDirty();
       }
@@ -1987,17 +2058,18 @@ holistic = createHolistic();
       }
     };
     const deleteSelectedShape = () => {
-      if (!editorState.selectedId) return;
-      const index = editorState.shapes.findIndex((shape) => shape.id === editorState.selectedId);
-      if (index >= 0) {
-        if (editorState.activePolylineId === editorState.selectedId) {
+      const ids = getSelectedIds();
+      if (!ids.length) return;
+      ids.forEach((id) => {
+        if (editorState.activePolylineId === id) {
           clearActivePolylineState();
         }
-        editorState.shapes.splice(index, 1);
-        setSelectedShape(null, { suppressRender: true });
-        renderEditor();
-        queuePersist();
-      }
+        removeShapeById(id);
+      });
+      setSelectedShapes([], { suppressRender: true });
+      refreshSelectionBounds();
+      renderEditor();
+      queuePersist();
     };
     const VALUE_SOURCE_OPTIONS = [
       { id: "constant", label: "Constant" },
@@ -2117,10 +2189,67 @@ holistic = createHolistic();
     const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (match) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[match]));
     const normalizeVertices = (vertices) => {
       if (!Array.isArray(vertices)) return [];
-      return vertices.map((vertex) => ({
-        x: clampUnit(vertex?.x ?? 0),
-        y: clampUnit(vertex?.y ?? 0)
-      }));
+      const normalized = [];
+      for (const vertex of vertices) {
+        const x = clampUnit(vertex?.x ?? 0);
+        const y = clampUnit(vertex?.y ?? 0);
+        if (!normalized.length) {
+          normalized.push({ x, y });
+          continue;
+        }
+        const prev = normalized[normalized.length - 1];
+        if (Math.hypot(x - prev.x, y - prev.y) <= VERTEX_EPSILON) {
+          normalized[normalized.length - 1] = { x, y };
+        } else {
+          normalized.push({ x, y });
+        }
+      }
+      if (normalized.length >= 2) {
+        const first = normalized[0];
+        const last = normalized[normalized.length - 1];
+        if (Math.hypot(last.x - first.x, last.y - first.y) <= VERTEX_EPSILON) {
+          normalized[normalized.length - 1] = { ...first };
+        }
+      }
+      return normalized;
+    };
+    const RAD_TO_DEG = 180 / Math.PI;
+    const SNAP_ROTATION_INCREMENT = Math.PI / 12;
+    function normalizeAngle(angle) {
+      if (!Number.isFinite(angle)) return 0;
+      return Math.atan2(Math.sin(angle), Math.cos(angle));
+    }
+    const rotatePointAround = (x, y, cx, cy, angle) => {
+      const dx = x - cx;
+      const dy = y - cy;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      return {
+        x: cx + dx * cos - dy * sin,
+        y: cy + dx * sin + dy * cos
+      };
+    };
+    const getRectCorners = (shape) => {
+      const rotation = normalizeAngle(shape.rotation || 0);
+      const width = shape.width ?? 0;
+      const height = shape.height ?? 0;
+      const cx = (shape.x ?? 0) + width / 2;
+      const cy = (shape.y ?? 0) + height / 2;
+      const hw = width / 2;
+      const hh = height / 2;
+      const offsets = [
+        { x: -hw, y: -hh },
+        { x: hw, y: -hh },
+        { x: hw, y: hh },
+        { x: -hw, y: hh }
+      ];
+      if (!rotation) {
+        return offsets.map((offset) => ({
+          x: clampUnit(cx + offset.x),
+          y: clampUnit(cy + offset.y)
+        }));
+      }
+      return offsets.map((offset) => rotatePointAround(cx + offset.x, cy + offset.y, cx, cy, rotation));
     };
     const computePolylineBounds = (vertices) => {
       const normalized = normalizeVertices(vertices);
@@ -2161,6 +2290,83 @@ holistic = createHolistic();
       const dx = (a.x ?? 0) - (b.x ?? 0);
       const dy = (a.y ?? 0) - (b.y ?? 0);
       return Math.hypot(dx, dy);
+    };
+    const squaredDistanceBetween = (a, b) => {
+      if (!a || !b) return 0;
+      const dx = (a.x ?? 0) - (b.x ?? 0);
+      const dy = (a.y ?? 0) - (b.y ?? 0);
+      return dx * dx + dy * dy;
+    };
+    const getSqSegDist = (p, p1, p2) => {
+      let x = p1.x;
+      let y = p1.y;
+      let dx = p2.x - x;
+      let dy = p2.y - y;
+      if (dx !== 0 || dy !== 0) {
+        const t = ((p.x - x) * dx + (p.y - y) * dy) / (dx * dx + dy * dy);
+        if (t > 1) {
+          x = p2.x;
+          y = p2.y;
+        } else if (t > 0) {
+          x += dx * t;
+          y += dy * t;
+        }
+      }
+      dx = p.x - x;
+      dy = p.y - y;
+      return dx * dx + dy * dy;
+    };
+    const simplifyRadialDistance = (points, sqTolerance) => {
+      if (!points.length) return [];
+      let prevPoint = points[0];
+      const newPoints = [prevPoint];
+      for (let i = 1; i < points.length; i++) {
+        const point = points[i];
+        if (squaredDistanceBetween(point, prevPoint) > sqTolerance) {
+          newPoints.push(point);
+          prevPoint = point;
+        }
+      }
+      if (prevPoint !== points[points.length - 1]) {
+        newPoints.push(points[points.length - 1]);
+      }
+      return newPoints;
+    };
+    const simplifyDouglasPeucker = (points, sqTolerance) => {
+      const len = points.length;
+      if (len <= 2) return points.slice();
+      const markers = new Uint8Array(len);
+      markers[0] = markers[len - 1] = 1;
+      const stack = [[0, len - 1]];
+      while (stack.length) {
+        const [first, last] = stack.pop();
+        let maxSqDist = 0;
+        let index = 0;
+        for (let i = first + 1; i < last; i++) {
+          const sqDist = getSqSegDist(points[i], points[first], points[last]);
+          if (sqDist > maxSqDist) {
+            index = i;
+            maxSqDist = sqDist;
+          }
+        }
+        if (maxSqDist > sqTolerance) {
+          markers[index] = 1;
+          stack.push([first, index], [index, last]);
+        }
+      }
+      const simplified = [];
+      for (let i = 0; i < len; i++) {
+        if (markers[i]) simplified.push(points[i]);
+      }
+      return simplified;
+    };
+    const simplifyPolyline = (points, tolerance = FREEHAND_SIMPLIFY_TOLERANCE) => {
+      if (!Array.isArray(points) || points.length <= 2) {
+        return Array.isArray(points) ? points.slice() : [];
+      }
+      const sqTolerance = tolerance * tolerance;
+      const radial = simplifyRadialDistance(points, sqTolerance);
+      return simplifyDouglasPeucker(radial, sqTolerance);
     };
     const distancePointToSegment = (px, py, ax, ay, bx, by) => {
       const abx = bx - ax;
@@ -2214,8 +2420,17 @@ holistic = createHolistic();
           editorState.pointerOrigin = null;
           editorState.pointerId = null;
         }
-        if (editorState.selectedId === shapeId) {
+        if (editorState.selectedIds?.size) {
+          editorState.selectedIds.delete(shapeId);
+          if (editorState.selectedIds.size === 0) {
+            editorState.selectedId = null;
+          } else if (!editorState.selectedId || !editorState.selectedIds.has(editorState.selectedId)) {
+            editorState.selectedId = Array.from(editorState.selectedIds)[0] || null;
+          }
+          refreshSelectionBounds();
+        } else if (editorState.selectedId === shapeId) {
           editorState.selectedId = null;
+          refreshSelectionBounds();
         }
         markEditorSidebarDirty();
         editorState.didMutate = true;
@@ -2234,9 +2449,11 @@ holistic = createHolistic();
       }
       editorState.activePolylineId = null;
       editorState.polylineHoverPoint = null;
+      editorState.polylinePointerId = null;
       editorState.initialVertices = null;
       editorState.pointerOrigin = null;
       editorState.pointerId = null;
+      editorState.polylineExtendArmed = false;
     };
     const finalizeActivePolyline = ({ commit = true } = {}) => {
       const activeId = editorState.activePolylineId;
@@ -2261,6 +2478,7 @@ holistic = createHolistic();
       setSelectedShape(shape.id, { suppressRender: true });
       renderEditor();
       queuePersist();
+      maybeAutoRevertTool();
     };
     const cancelActivePolyline = () => finalizeActivePolyline({ commit: false });
     const startPolylineAt = (point) => {
@@ -2268,8 +2486,9 @@ holistic = createHolistic();
         id: ensureUuid(),
         type: "polyline",
         vertices: [{ ...point }],
-        closed: editorState.tool === "polygon",
+        closed: false,
         style: { ...DEFAULT_SHAPE_STYLE },
+        rotation: 0,
         interaction: createDefaultInteraction(),
         runtime: { inside: false, lastTriggerAt: 0, lastContinuousAt: 0, noteOn: false, eventState: {}, lastMetrics: { normX: 0, normY: 0, distance: 0 } }
       };
@@ -2278,8 +2497,11 @@ holistic = createHolistic();
       editorState.shapes.push(shape);
       editorState.activePolylineId = shape.id;
       editorState.polylineHoverPoint = null;
+      editorState.polylineExtendArmed = false;
       editorState.didMutate = true;
       editorState.selectedId = null;
+      editorState.selectedIds = new Set();
+      editorState.selectionBounds = null;
       markEditorSidebarDirty();
       renderEditor();
     };
@@ -2598,18 +2820,64 @@ holistic = createHolistic();
       renderEventList("modal", draft.events);
       isSyncingAssignmentForm = false;
     };
-    const serializeShapes = () => editorState.shapes.map((shape) => ({
-      id: shape.id,
-      type: shape.type,
-      x: shape.x,
-      y: shape.y,
-      width: shape.width,
-      height: shape.height,
-      style: shape.style,
-      interaction: sanitizeInteractionForStorage(shape.interaction),
-      vertices: shape.vertices,
-      closed: shape.closed ?? false
-    }));
+    const getShapeStyle = (shape) => ({
+      stroke: shape?.style?.stroke ?? DEFAULT_SHAPE_STYLE.stroke,
+      fill: shape?.style?.fill ?? DEFAULT_SHAPE_STYLE.fill,
+      strokeWidth: shape?.style?.strokeWidth ?? DEFAULT_SHAPE_STYLE.strokeWidth
+    });
+    const shapeToSvgMarkup = (shape, viewportWidth, viewportHeight) => {
+      if (!shape) return "";
+      const style = getShapeStyle(shape);
+      const rotation = normalizeAngle(shape.rotation || 0);
+      if (shape.type === "polyline") {
+        const vertices = normalizeVertices(shape.vertices || []);
+        if (!vertices.length) return "";
+        const pointsAttribute = vertices.map((vertex) => `${(vertex.x * viewportWidth).toFixed(2)} ${(vertex.y * viewportHeight).toFixed(2)}`).join(" ");
+        if (shape.closed && vertices.length >= 3) {
+          return `<polygon points="${pointsAttribute}" fill="${style.fill}" stroke="${style.stroke}" stroke-width="${style.strokeWidth}"></polygon>`;
+        }
+        return `<polyline points="${pointsAttribute}" fill="none" stroke="${style.stroke}" stroke-width="${style.strokeWidth}" stroke-linecap="round" stroke-linejoin="round"></polyline>`;
+      }
+      const x = (shape.x ?? 0) * viewportWidth;
+      const y = (shape.y ?? 0) * viewportHeight;
+      const w = Math.max((shape.width ?? 0) * viewportWidth, 0);
+      const h = Math.max((shape.height ?? 0) * viewportHeight, 0);
+      if (w <= 0 || h <= 0) return "";
+      if (shape.type === "ellipse") {
+        const cx = x + w / 2;
+        const cy = y + h / 2;
+        const transformAttr = rotation ? ` transform="rotate(${(rotation * RAD_TO_DEG).toFixed(4)} ${cx.toFixed(2)} ${cy.toFixed(2)})"` : "";
+        return `<ellipse cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" rx="${(w / 2).toFixed(2)}" ry="${(h / 2).toFixed(2)}" fill="${style.fill}" stroke="${style.stroke}" stroke-width="${style.strokeWidth}"${transformAttr}></ellipse>`;
+      }
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      const transformAttr = rotation ? ` transform="rotate(${(rotation * RAD_TO_DEG).toFixed(4)} ${cx.toFixed(2)} ${cy.toFixed(2)})"` : "";
+      return `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" fill="${style.fill}" stroke="${style.stroke}" stroke-width="${style.strokeWidth}"${transformAttr}></rect>`;
+    };
+    const generateScoreSvg = (shapes = editorState.shapes, viewport = editorState.viewport) => {
+      const viewportWidth = viewport.width || DEFAULT_WIDTH;
+      const viewportHeight = viewport.height || DEFAULT_HEIGHT;
+      const markup = shapes.map((shape) => shapeToSvgMarkup(shape, viewportWidth, viewportHeight)).filter(Boolean).join("");
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewportWidth} ${viewportHeight}" fill="none">${markup}</svg>`;
+    };
+    const serializeShapes = () => {
+      const viewportWidth = editorState.viewport.width || DEFAULT_WIDTH;
+      const viewportHeight = editorState.viewport.height || DEFAULT_HEIGHT;
+      return editorState.shapes.map((shape) => ({
+        id: shape.id,
+        type: shape.type,
+        x: shape.x,
+        y: shape.y,
+        width: shape.width,
+        height: shape.height,
+        rotation: typeof shape.rotation === "number" ? shape.rotation : 0,
+        style: shape.style,
+        interaction: sanitizeInteractionForStorage(shape.interaction),
+        vertices: shape.vertices,
+        closed: shape.closed ?? false,
+        svg: shapeToSvgMarkup(shape, viewportWidth, viewportHeight)
+      }));
+    };
     const queuePersist = () => {
       if (typeof localStorage === "undefined") return;
       if (persistTimer) {
@@ -2619,6 +2887,8 @@ holistic = createHolistic();
         try {
           const payload = serializeShapes();
           localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+          const svgMarkup = generateScoreSvg();
+          localStorage.setItem(STORAGE_KEY_SVG, svgMarkup);
         } catch (err) {
           console.warn("Failed to persist editor state", err);
         } finally {
@@ -2707,6 +2977,8 @@ holistic = createHolistic();
       editorState.polylineHoverPoint = null;
       editorState.drawingShapeId = null;
       editorState.dragHandle = null;
+      editorState.selectionBounds = null;
+      editorState.selectionMarquee = null;
       markEditorSidebarDirty();
       if (isMapModalOpen()) {
         updateEditorSidebar();
@@ -2779,6 +3051,7 @@ holistic = createHolistic();
           y: clampUnit(shape.y ?? 0),
           width: clampRange(shape.width ?? SHAPE_MIN_SIZE, SHAPE_MIN_SIZE, 1),
           height: clampRange(shape.height ?? SHAPE_MIN_SIZE, SHAPE_MIN_SIZE, 1),
+          rotation: typeof shape.rotation === "number" ? normalizeAngle(shape.rotation) : 0,
           style: { ...DEFAULT_SHAPE_STYLE, ...(shape.style || {}) },
           interaction: mergedInteraction,
           runtime: {
@@ -2902,11 +3175,20 @@ holistic = createHolistic();
         return;
       }
       const { width, height } = editorState.viewport;
+      const selectedIds = getSelectedIds();
+      const primarySelectedId = (editorState.selectedId && editorState.selectedIds?.has(editorState.selectedId))
+        ? editorState.selectedId
+        : (selectedIds[0] || null);
+      const selectedShape = primarySelectedId ? findShapeById(primarySelectedId) : null;
+      const selectionBounds = editorState.selectionBounds || (selectedIds.length ? computeSelectionBounds(selectedIds) : null);
       let previewMarkup = "";
       const shapesMarkup = editorState.shapes.map((shape) => {
         const classes = ["gesture-shape"];
-        if (shape.id === editorState.selectedId) {
+        if (editorState.selectedIds?.has(shape.id)) {
           classes.push("is-selected");
+        }
+        if (shape.id === editorState.hoverShapeId && editorState.tool === "select") {
+          classes.push("is-hovered");
         }
         if (shape.runtime?.inside) {
           classes.push("is-active");
@@ -2948,37 +3230,66 @@ holistic = createHolistic();
           const cx = x + w / 2;
           const cy = y + h / 2;
           const ellipseFill = fillColor === "none" ? "none" : fillColor;
-          return `<ellipse data-shape-id="${shape.id}" data-shape-type="ellipse" class="${className}" cx="${cx}" cy="${cy}" rx="${Math.max(w / 2, 1)}" ry="${Math.max(h / 2, 1)}" fill="${ellipseFill}" stroke="${strokeColor}" stroke-width="${strokeWidth}"></ellipse>`;
+          const rotation = normalizeAngle(shape.rotation || 0);
+          const transformAttr = rotation ? ` transform="rotate(${(rotation * RAD_TO_DEG).toFixed(4)}, ${cx}, ${cy})"` : "";
+          return `<ellipse data-shape-id="${shape.id}" data-shape-type="ellipse" class="${className}" cx="${cx}" cy="${cy}" rx="${Math.max(w / 2, 1)}" ry="${Math.max(h / 2, 1)}" fill="${ellipseFill}" stroke="${strokeColor}" stroke-width="${strokeWidth}"${transformAttr}></ellipse>`;
         }
         const rectFill = fillColor === "none" ? "none" : fillColor;
-        return `<rect data-shape-id="${shape.id}" data-shape-type="rect" class="${className}" x="${x}" y="${y}" width="${Math.max(w, 1)}" height="${Math.max(h, 1)}" fill="${rectFill}" stroke="${strokeColor}" stroke-width="${strokeWidth}"></rect>`;
+        const rotation = normalizeAngle(shape.rotation || 0);
+        const centerX = x + w / 2;
+        const centerY = y + h / 2;
+        const transformAttr = rotation ? ` transform="rotate(${(rotation * RAD_TO_DEG).toFixed(4)}, ${centerX}, ${centerY})"` : "";
+        return `<rect data-shape-id="${shape.id}" data-shape-type="rect" class="${className}" x="${x}" y="${y}" width="${Math.max(w, 1)}" height="${Math.max(h, 1)}" fill="${rectFill}" stroke="${strokeColor}" stroke-width="${strokeWidth}"${transformAttr}></rect>`;
       }).join("");
-      let handlesMarkup = "";
-      const selectedShape = findShapeById(editorState.selectedId);
-      if (selectedShape) {
-        const x = selectedShape.x * width;
-        const y = selectedShape.y * height;
-        const w = Math.max(selectedShape.width * width, 2);
-        const h = Math.max(selectedShape.height * height, 2);
-        const right = x + w;
-        const bottom = y + h;
-        const cx = x + w / 2;
-        const cy = y + h / 2;
-        handlesMarkup = `
-          <g data-selected-controls="${selectedShape.id}">
-            <rect class="gesture-outline" x="${x}" y="${y}" width="${w}" height="${h}"></rect>
-            <circle class="gesture-handle" data-handle="nw" cx="${x}" cy="${y}" r="6"></circle>
-            <circle class="gesture-handle" data-handle="n" cx="${cx}" cy="${y}" r="6"></circle>
-            <circle class="gesture-handle" data-handle="ne" cx="${right}" cy="${y}" r="6"></circle>
-            <circle class="gesture-handle" data-handle="e" cx="${right}" cy="${cy}" r="6"></circle>
-            <circle class="gesture-handle" data-handle="se" cx="${right}" cy="${bottom}" r="6"></circle>
-            <circle class="gesture-handle" data-handle="s" cx="${cx}" cy="${bottom}" r="6"></circle>
-            <circle class="gesture-handle" data-handle="sw" cx="${x}" cy="${bottom}" r="6"></circle>
-            <circle class="gesture-handle" data-handle="w" cx="${x}" cy="${cy}" r="6"></circle>
+      let transformMarkup = "";
+      let vertexHandlesMarkup = "";
+      const selectionFrame = editorState.selectionFrame;
+      if (selectionFrame) {
+        const frameRotation = normalizeAngle(selectionFrame.rotation || 0);
+        const cx = selectionFrame.centerX * width;
+        const cy = selectionFrame.centerY * height;
+        const sw = Math.max(selectionFrame.width * width, 2);
+        const sh = Math.max(selectionFrame.height * height, 2);
+        const rotationDeg = (frameRotation * RAD_TO_DEG).toFixed(4);
+        transformMarkup = `
+          <g class="gesture-selection-group" transform="translate(${cx}, ${cy}) rotate(${rotationDeg})">
+            <rect class="gesture-selection-outline" x="${-(sw / 2)}" y="${-(sh / 2)}" width="${sw}" height="${sh}"></rect>
+          </g>
+        `;
+      } else if (selectionBounds) {
+        const sx = selectionBounds.minX * width;
+        const sy = selectionBounds.minY * height;
+        const sw = Math.max(selectionBounds.width * width, 2);
+        const sh = Math.max(selectionBounds.height * height, 2);
+        transformMarkup = `
+          <g class="gesture-selection-group">
+            <rect class="gesture-selection-outline" x="${sx}" y="${sy}" width="${sw}" height="${sh}"></rect>
           </g>
         `;
       }
-      gestureSvg.innerHTML = `<g class="gesture-shapes">${shapesMarkup}${previewMarkup}</g>${handlesMarkup}`;
+      if (selectedShape && selectedIds.length === 1 && selectedShape.type === "polyline") {
+        const vertices = normalizeVertices(selectedShape.vertices);
+        vertexHandlesMarkup = vertices.map((vertex, index) => {
+          const vx = clampUnit(vertex.x) * width;
+          const vy = clampUnit(vertex.y) * height;
+          return `<circle class="gesture-vertex-handle" data-handle="vertex-${index}" cx="${vx}" cy="${vy}" r="7"></circle>`;
+        }).join("");
+        if (vertexHandlesMarkup) {
+          vertexHandlesMarkup = `<g data-selected-controls="${selectedShape.id}" class="gesture-polyline-controls">${vertexHandlesMarkup}</g>`;
+        }
+      }
+      let marqueeMarkup = "";
+      if (editorState.selectionMarquee) {
+        const { anchor, current } = editorState.selectionMarquee;
+        if (anchor && current) {
+          const minX = Math.min(anchor.x, current.x) * width;
+          const minY = Math.min(anchor.y, current.y) * height;
+          const w = Math.abs(anchor.x - current.x) * width;
+          const h = Math.abs(anchor.y - current.y) * height;
+          marqueeMarkup = `<rect class="gesture-selection-marquee" x="${minX}" y="${minY}" width="${w}" height="${h}"></rect>`;
+        }
+      }
+      gestureSvg.innerHTML = `<g class="gesture-shapes">${shapesMarkup}${previewMarkup}</g>${transformMarkup}${vertexHandlesMarkup}${marqueeMarkup}`;
       if (editorSidebarDirty && isMapModalOpen()) {
         updateEditorSidebar();
       }
@@ -3027,10 +3338,19 @@ holistic = createHolistic();
         const y = shape.y * canvasHeight;
         const w = Math.max(shape.width * canvasWidth, 0);
         const h = Math.max(shape.height * canvasHeight, 0);
+        const rotation = normalizeAngle(shape.rotation || 0);
         if (shape.type === "ellipse") {
+          const radiusX = Math.max(w / 2, 1);
+          const radiusY = Math.max(h / 2, 1);
+          const centerX = x + w / 2;
+          const centerY = y + h / 2;
           ctx.save();
+          ctx.translate(centerX, centerY);
+          if (rotation) {
+            ctx.rotate(rotation);
+          }
           ctx.beginPath();
-          ctx.ellipse(x + w / 2, y + h / 2, Math.max(w / 2, 1), Math.max(h / 2, 1), 0, 0, Math.PI * 2);
+          ctx.ellipse(0, 0, radiusX, radiusY, 0, 0, Math.PI * 2);
           if (fillColor && fillColor !== "none") {
             ctx.fillStyle = fillColor;
             ctx.globalAlpha = 0.7;
@@ -3042,31 +3362,238 @@ holistic = createHolistic();
           ctx.stroke();
           ctx.restore();
         } else {
+          const centerX = x + w / 2;
+          const centerY = y + h / 2;
+          ctx.save();
+          ctx.translate(centerX, centerY);
+          if (rotation) {
+            ctx.rotate(rotation);
+          }
           if (fillColor && fillColor !== "none") {
             ctx.fillStyle = fillColor;
             ctx.globalAlpha = 0.7;
-            ctx.fillRect(x, y, w, h);
+            ctx.fillRect(-w / 2, -h / 2, w, h);
           }
           ctx.globalAlpha = 1;
           ctx.strokeStyle = strokeColor;
           ctx.lineWidth = strokeWidth;
-          ctx.strokeRect(x, y, w, h);
+          ctx.strokeRect(-w / 2, -h / 2, w, h);
+          ctx.restore();
         }
       }
       ctx.restore();
     };
 
-    const setSelectedShape = (shapeId, { suppressRender = false } = {}) => {
-      if (editorState.selectedId === shapeId) {
+    function getSelectedIds() {
+      return Array.from(editorState.selectedIds || []);
+    }
+    function getShapeAabb(shape) {
+      if (!shape) return null;
+      if (shape.type === "polyline") {
+        const { minX, minY, maxX, maxY } = computePolylineBounds(shape.vertices || []);
+        return { minX, minY, maxX, maxY };
+      }
+      const corners = getRectCorners(shape);
+      let minX = 1;
+      let minY = 1;
+      let maxX = 0;
+      let maxY = 0;
+      for (const corner of corners) {
+        minX = Math.min(minX, corner.x);
+        minY = Math.min(minY, corner.y);
+        maxX = Math.max(maxX, corner.x);
+        maxY = Math.max(maxY, corner.y);
+      }
+      return { minX, minY, maxX, maxY };
+    }
+    function computeSelectionBounds(shapeIds = getSelectedIds()) {
+      const ids = Array.isArray(shapeIds) ? shapeIds : [];
+      if (!ids.length) return null;
+      let minX = 1;
+      let minY = 1;
+      let maxX = 0;
+      let maxY = 0;
+      for (const id of ids) {
+        const shape = findShapeById(id);
+        const bounds = getShapeAabb(shape);
+        if (!bounds) continue;
+        minX = Math.min(minX, bounds.minX);
+        minY = Math.min(minY, bounds.minY);
+        maxX = Math.max(maxX, bounds.maxX);
+        maxY = Math.max(maxY, bounds.maxY);
+      }
+      if (maxX <= minX) {
+        maxX = Math.min(1, minX + MIN_METRIC_SPAN);
+      }
+      if (maxY <= minY) {
+        maxY = Math.min(1, minY + MIN_METRIC_SPAN);
+      }
+      const width = clampRange(maxX - minX, MIN_METRIC_SPAN, 1);
+      const height = clampRange(maxY - minY, MIN_METRIC_SPAN, 1);
+      const centerX = clampUnit(minX + width / 2);
+      const centerY = clampUnit(minY + height / 2);
+      return { minX, minY, maxX, maxY, x: minX, y: minY, width, height, centerX, centerY };
+    }
+    const cloneSelectionFrame = (frame) => frame ? {
+      centerX: frame.centerX,
+      centerY: frame.centerY,
+      width: frame.width,
+      height: frame.height,
+      rotation: frame.rotation || 0
+    } : null;
+    const toSelectionLocal = (point, frame) => {
+      if (!frame || !point) return null;
+      const rotation = normalizeAngle(frame.rotation || 0);
+      const cos = Math.cos(-rotation);
+      const sin = Math.sin(-rotation);
+      const dx = (point.x ?? 0) - frame.centerX;
+      const dy = (point.y ?? 0) - frame.centerY;
+      return {
+        x: dx * cos - dy * sin,
+        y: dx * sin + dy * cos
+      };
+    };
+    const fromSelectionLocal = (point, frame) => {
+      if (!frame || !point) return null;
+      const rotation = normalizeAngle(frame.rotation || 0);
+      const cos = Math.cos(rotation);
+      const sin = Math.sin(rotation);
+      return {
+        x: cos * point.x - sin * point.y + frame.centerX,
+        y: sin * point.x + cos * point.y + frame.centerY
+      };
+    };
+    const getSharedRotation = (shapeIds) => {
+      let rotation = null;
+      for (const id of shapeIds) {
+        const shape = findShapeById(id);
+        if (!shape) continue;
+        const value = normalizeAngle(typeof shape.rotation === "number" ? shape.rotation : 0);
+        if (rotation === null) {
+          rotation = value;
+        } else if (Math.abs(normalizeAngle(rotation - value)) > 1e-3) {
+          return null;
+        }
+      }
+      return rotation;
+    };
+    function updateSelectionFrame({ preserveRotation = false, frameOverride = null } = {}) {
+      if (frameOverride) {
+        editorState.selectionFrame = cloneSelectionFrame(frameOverride);
+        return;
+      }
+      const ids = getSelectedIds();
+      if (!ids.length) {
+        editorState.selectionFrame = null;
+        return;
+      }
+      const bounds = editorState.selectionBounds || computeSelectionBounds(ids);
+      if (!bounds) {
+        editorState.selectionFrame = null;
+        return;
+      }
+      let centerX = bounds.centerX;
+      let centerY = bounds.centerY;
+      let width = bounds.width;
+      let height = bounds.height;
+      let rotation = 0;
+      const previousRotation = editorState.selectionFrame?.rotation || 0;
+      if (preserveRotation && editorState.selectionFrame) {
+        rotation = previousRotation;
+      } else if (ids.length === 1) {
+        const shape = findShapeById(ids[0]);
+        if (shape) {
+          rotation = normalizeAngle(shape.rotation || 0);
+          if (shape.type !== "polyline") {
+            const shapeWidth = Math.max(shape.width ?? bounds.width, MIN_METRIC_SPAN);
+            const shapeHeight = Math.max(shape.height ?? bounds.height, MIN_METRIC_SPAN);
+            width = shapeWidth;
+            height = shapeHeight;
+            centerX = clampUnit((shape.x ?? 0) + shapeWidth / 2);
+            centerY = clampUnit((shape.y ?? 0) + shapeHeight / 2);
+          }
+        }
+      } else {
+        const shared = getSharedRotation(ids);
+        rotation = shared !== null ? shared : (preserveRotation ? previousRotation : 0);
+      }
+      editorState.selectionFrame = {
+        centerX,
+        centerY,
+        width: Math.max(width, MIN_METRIC_SPAN),
+        height: Math.max(height, MIN_METRIC_SPAN),
+        rotation
+      };
+    }
+    function refreshSelectionBounds(options = {}) {
+      const { preserveRotation = false, frameOverride = null } = options;
+      if (editorState.selectedIds && editorState.selectedIds.size) {
+        editorState.selectionBounds = computeSelectionBounds(getSelectedIds());
+        updateSelectionFrame({ preserveRotation, frameOverride });
+      } else {
+        editorState.selectionBounds = null;
+        if (!frameOverride) {
+          editorState.selectionFrame = null;
+        }
+      }
+    }
+    function getShapesInBounds(minX, minY, maxX, maxY, { contain = false } = {}) {
+      if (!editorState.shapes.length) return [];
+      const shapes = [];
+      const safeMinX = clampUnit(Math.min(minX, maxX));
+      const safeMaxX = clampUnit(Math.max(minX, maxX));
+      const safeMinY = clampUnit(Math.min(minY, maxY));
+      const safeMaxY = clampUnit(Math.max(minY, maxY));
+      for (const shape of editorState.shapes) {
+        const bounds = getShapeAabb(shape);
+        if (!bounds) continue;
+        if (contain) {
+          const inside = bounds.minX >= safeMinX && bounds.maxX <= safeMaxX && bounds.minY >= safeMinY && bounds.maxY <= safeMaxY;
+          if (inside) shapes.push(shape.id);
+        } else {
+          const overlaps = bounds.maxX >= safeMinX && bounds.minX <= safeMaxX && bounds.maxY >= safeMinY && bounds.minY <= safeMaxY;
+          if (overlaps) shapes.push(shape.id);
+        }
+      }
+      return shapes;
+    }
+    function setSelectedShapes(shapeIds, { append = false, suppressRender = false } = {}) {
+      const nextIds = new Set(append ? getSelectedIds() : []);
+      const incoming = Array.isArray(shapeIds) ? shapeIds.filter(Boolean) : [];
+      if (!append) {
+        editorState.selectedId = null;
+      }
+      incoming.forEach((id, index) => {
+        nextIds.add(id);
+        if (index === 0 && !editorState.selectedId) {
+          editorState.selectedId = id;
+        }
+      });
+      if (!incoming.length && !append) {
+        editorState.selectedId = null;
+      } else if (!incoming.length && append && !nextIds.size) {
+        editorState.selectedId = null;
+      } else if (!nextIds.has(editorState.selectedId)) {
+        editorState.selectedId = nextIds.size ? Array.from(nextIds)[0] : null;
+      }
+      const changed = (() => {
+        if (editorState.selectedIds?.size !== nextIds.size) return true;
+        for (const id of nextIds) {
+          if (!editorState.selectedIds.has(id)) return true;
+        }
+        return false;
+      })();
+      editorState.selectedIds = nextIds;
+      refreshSelectionBounds();
+      if (!nextIds.size) {
+        editorState.activePolylineId = null;
+        editorState.polylineHoverPoint = null;
+      }
+      if (!changed) {
         if (isMapModalOpen()) {
           syncEditorDetailForm();
         }
         return;
-      }
-      editorState.selectedId = shapeId || null;
-      if (!shapeId) {
-        editorState.activePolylineId = null;
-        editorState.polylineHoverPoint = null;
       }
       markEditorSidebarDirty();
       if (suppressRender) {
@@ -3076,28 +3603,542 @@ holistic = createHolistic();
       } else {
         renderEditor();
       }
+      if (!nextIds.size) {
+        setSelectionCursor(null);
+      }
+    }
+    function setSelectedShape(shapeId, options = {}) {
+      if (!shapeId) {
+        setSelectedShapes([], options);
+      } else {
+        setSelectedShapes([shapeId], options);
+      }
+    }
+    const EDGE_HANDLE_TOLERANCE_PX = 12;
+    const CORNER_HANDLE_TOLERANCE_PX = 18;
+    const ROTATION_HANDLE_BAND_PX = 28;
+    function getUnclampedNormalizedPoint(event) {
+      if (!gestureSvg) return null;
+      const rect = gestureSvg.getBoundingClientRect();
+      const viewportWidth = editorState.viewport.width || DEFAULT_WIDTH;
+      const viewportHeight = editorState.viewport.height || DEFAULT_HEIGHT;
+      const scale = Math.min(rect.width / viewportWidth, rect.height / viewportHeight) || 0;
+      if (!scale) return null;
+      const contentWidth = viewportWidth * scale;
+      const contentHeight = viewportHeight * scale;
+      const offsetX = rect.left + (rect.width - contentWidth) / 2;
+      const offsetY = rect.top + (rect.height - contentHeight) / 2;
+      const relativeX = ((event.clientX ?? 0) - offsetX) / contentWidth;
+      const relativeY = ((event.clientY ?? 0) - offsetY) / contentHeight;
+      const normalizedX = editorState.mirror ? 1 - relativeX : relativeX;
+      return { x: normalizedX, y: relativeY };
+    }
+    function resolveSelectionHandle(point, { allowRotation = true, rawPoint = null } = {}) {
+      const frame = editorState.selectionFrame;
+      const bounds = editorState.selectionBounds;
+      if (!frame || !bounds) return null;
+      const viewWidth = editorState.viewport.width || DEFAULT_WIDTH;
+      const viewHeight = editorState.viewport.height || DEFAULT_HEIGHT;
+      const localPoint = toSelectionLocal(point, frame);
+      const rawLocalPoint = rawPoint ? toSelectionLocal(rawPoint, frame) : localPoint;
+      if (!localPoint || !rawLocalPoint) return null;
+      const halfWidth = frame.width / 2;
+      const halfHeight = frame.height / 2;
+      const edgeThresholdX = Math.min(EDGE_HANDLE_TOLERANCE_PX, Math.max(frame.width * viewWidth / 2, 1));
+      const edgeThresholdY = Math.min(EDGE_HANDLE_TOLERANCE_PX, Math.max(frame.height * viewHeight / 2, 1));
+      const cornerThresholdX = Math.min(CORNER_HANDLE_TOLERANCE_PX, Math.max(frame.width * viewWidth / 2, 1));
+      const cornerThresholdY = Math.min(CORNER_HANDLE_TOLERANCE_PX, Math.max(frame.height * viewHeight / 2, 1));
+      const verticalBand = Math.abs(rawLocalPoint.y) <= halfHeight + edgeThresholdY / viewHeight;
+      const horizontalBand = Math.abs(rawLocalPoint.x) <= halfWidth + edgeThresholdX / viewWidth;
+      const cornerVerticalBand = Math.abs(rawLocalPoint.y) <= halfHeight + cornerThresholdY / viewHeight;
+      const cornerHorizontalBand = Math.abs(rawLocalPoint.x) <= halfWidth + cornerThresholdX / viewWidth;
+      const distLeftPx = Math.abs(rawLocalPoint.x + halfWidth) * viewWidth;
+      const distRightPx = Math.abs(rawLocalPoint.x - halfWidth) * viewWidth;
+      const distTopPx = Math.abs(rawLocalPoint.y + halfHeight) * viewHeight;
+      const distBottomPx = Math.abs(rawLocalPoint.y - halfHeight) * viewHeight;
+      const nearLeft = distLeftPx <= edgeThresholdX && verticalBand;
+      const nearRight = distRightPx <= edgeThresholdX && verticalBand;
+      const nearTop = distTopPx <= edgeThresholdY && horizontalBand;
+      const nearBottom = distBottomPx <= edgeThresholdY && horizontalBand;
+      const nearLeftCorner = distLeftPx <= cornerThresholdX && cornerVerticalBand;
+      const nearRightCorner = distRightPx <= cornerThresholdX && cornerVerticalBand;
+      const nearTopCorner = distTopPx <= cornerThresholdY && cornerHorizontalBand;
+      const nearBottomCorner = distBottomPx <= cornerThresholdY && cornerHorizontalBand;
+      if (allowRotation) {
+        const outsideLeft = rawLocalPoint.x < -halfWidth;
+        const outsideRight = rawLocalPoint.x > halfWidth;
+        const outsideTop = rawLocalPoint.y < -halfHeight;
+        const outsideBottom = rawLocalPoint.y > halfHeight;
+        if ((outsideLeft || outsideRight) && (outsideTop || outsideBottom)) {
+          const rotationBandPx = ROTATION_HANDLE_BAND_PX;
+          const outsideLeftPx = outsideLeft ? (-halfWidth - rawLocalPoint.x) * viewWidth : 0;
+          const outsideRightPx = outsideRight ? (rawLocalPoint.x - halfWidth) * viewWidth : 0;
+          const outsideTopPx = outsideTop ? (-halfHeight - rawLocalPoint.y) * viewHeight : 0;
+          const outsideBottomPx = outsideBottom ? (rawLocalPoint.y - halfHeight) * viewHeight : 0;
+          if (outsideLeft && outsideTop && outsideLeftPx <= rotationBandPx && outsideTopPx <= rotationBandPx) {
+            return "rotate-nw";
+          }
+          if (outsideRight && outsideTop && outsideRightPx <= rotationBandPx && outsideTopPx <= rotationBandPx) {
+            return "rotate-ne";
+          }
+          if (outsideRight && outsideBottom && outsideRightPx <= rotationBandPx && outsideBottomPx <= rotationBandPx) {
+            return "rotate-se";
+          }
+          if (outsideLeft && outsideBottom && outsideLeftPx <= rotationBandPx && outsideBottomPx <= rotationBandPx) {
+            return "rotate-sw";
+          }
+        }
+      }
+      if ((nearLeftCorner || nearRightCorner) && (nearTopCorner || nearBottomCorner)) {
+        if (nearLeftCorner && nearTopCorner) return "transform-nw";
+        if (nearRightCorner && nearTopCorner) return "transform-ne";
+        if (nearRightCorner && nearBottomCorner) return "transform-se";
+        if (nearLeftCorner && nearBottomCorner) return "transform-sw";
+      }
+      if (nearTop && !(nearLeftCorner || nearRightCorner)) return "transform-n";
+      if (nearRight && !(nearTopCorner || nearBottomCorner)) return "transform-e";
+      if (nearBottom && !(nearLeftCorner || nearRightCorner)) return "transform-s";
+      if (nearLeft && !(nearTopCorner || nearBottomCorner)) return "transform-w";
+      const insideX = Math.abs(rawLocalPoint.x) <= halfWidth;
+      const insideY = Math.abs(rawLocalPoint.y) <= halfHeight;
+      if (insideX && insideY) {
+        return "move";
+      }
+      return null;
+    }
+    function cursorForHandle(handle, { active = false } = {}) {
+      if (!handle) return "";
+      if (handle === "move") {
+        return active ? "grabbing" : "move";
+      }
+      if (handle.startsWith("transform-")) {
+        if (handle.endsWith("n") || handle.endsWith("s")) {
+          return "ns-resize";
+        }
+        if (handle.endsWith("e") || handle.endsWith("w")) {
+          return "ew-resize";
+        }
+        if (handle.endsWith("ne") || handle.endsWith("sw")) {
+          return "nesw-resize";
+        }
+        if (handle.endsWith("nw") || handle.endsWith("se")) {
+          return "nwse-resize";
+        }
+      }
+      if (handle.startsWith("rotate-")) {
+        return "crosshair";
+      }
+      return "";
+    }
+    function setSelectionCursor(handle, { active = false } = {}) {
+      if (editorState.tool !== "select") {
+        gestureSvg.style.cursor = "";
+        editorState.cursorHandle = null;
+        return;
+      }
+      editorState.cursorHandle = handle || null;
+      const cursor = cursorForHandle(handle, { active });
+      gestureSvg.style.cursor = cursor;
+    }
+    const cloneVertices = (vertices = []) => vertices.map((vertex) => ({ x: vertex.x, y: vertex.y }));
+    const snapshotShapeState = (shape, frame = null) => {
+      if (!shape) return null;
+      const base = {
+        type: shape.type,
+        x: shape.x,
+        y: shape.y,
+        width: shape.width,
+        height: shape.height,
+        rotation: normalizeAngle(shape.rotation || 0)
+      };
+      const bounds = getShapeAabb(shape) || { minX: shape.x ?? 0, minY: shape.y ?? 0, maxX: (shape.x ?? 0) + (shape.width ?? 0), maxY: (shape.y ?? 0) + (shape.height ?? 0) };
+      base.centerX = clampUnit(((bounds.minX ?? 0) + (bounds.maxX ?? 0)) / 2);
+      base.centerY = clampUnit(((bounds.minY ?? 0) + (bounds.maxY ?? 0)) / 2);
+      if (shape.type === "polyline") {
+        const normalizedVertices = cloneVertices(normalizeVertices(shape.vertices));
+        base.vertices = normalizedVertices;
+        if (frame) {
+          base.localVertices = normalizedVertices.map((vertex) => toSelectionLocal(vertex, frame));
+        }
+      }
+      if (frame) {
+        base.localCenter = toSelectionLocal({ x: base.centerX, y: base.centerY }, frame);
+      }
+      return base;
+    };
+    const beginSelectionTransform = (handle, event) => {
+      event.preventDefault();
+      const selectedIds = getSelectedIds();
+      if (!selectedIds.length) return;
+      const svgPoint = toSvgPoint(event);
+      if (!svgPoint) return;
+      const normalized = toNormalizedPoint(svgPoint);
+      const rawNormalized = getUnclampedNormalizedPoint(event) || normalized;
+      const initialBounds = editorState.selectionBounds || computeSelectionBounds(selectedIds);
+      if (!initialBounds) return;
+      const initialFrame = cloneSelectionFrame(editorState.selectionFrame) || {
+        centerX: initialBounds.centerX,
+        centerY: initialBounds.centerY,
+        width: initialBounds.width,
+        height: initialBounds.height,
+        rotation: 0
+      };
+      const initialShapes = new Map();
+      for (const id of selectedIds) {
+        const shape = findShapeById(id);
+        if (!shape) continue;
+        initialShapes.set(id, snapshotShapeState(shape, initialFrame));
+      }
+      if (!initialShapes.size) return;
+      const mode = handle === "move" ? "move" : (handle.startsWith("rotate") ? "rotate" : "scale");
+      const center = { x: initialFrame.centerX, y: initialFrame.centerY };
+      const pointerForAngle = rawNormalized || normalized;
+      const initialAngle = mode === "rotate" ? Math.atan2(pointerForAngle.y - center.y, pointerForAngle.x - center.x) : 0;
+      if (mode === "rotate" && !Number.isFinite(initialAngle)) {
+        return;
+      }
+      editorState.transformSession = {
+        handle,
+        mode,
+        pointerId: event.pointerId,
+        origin: normalized,
+        originRaw: rawNormalized,
+        initialBounds: { ...initialBounds },
+        initialFrame: cloneSelectionFrame(initialFrame),
+        frame: cloneSelectionFrame(initialFrame),
+        initialShapes,
+        didMutate: false,
+        center,
+        initialAngle,
+        initialSelectionRotation: initialFrame.rotation || 0
+      };
+      editorState.pointerId = event.pointerId;
+      editorState.pointerOrigin = { svg: svgPoint, normalized };
+      editorState.didMutate = false;
+      setSelectionCursor(handle, { active: true });
+      if (gestureSvg?.setPointerCapture) {
+        gestureSvg.setPointerCapture(event.pointerId);
+      }
+    };
+    const applySelectionMove = (normalized, session) => {
+      let dx = normalized.x - session.origin.x;
+      let dy = normalized.y - session.origin.y;
+      if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+      const bounds = session.initialBounds;
+      if (bounds) {
+        const minDx = -bounds.minX;
+        const maxDx = 1 - bounds.maxX;
+        const minDy = -bounds.minY;
+        const maxDy = 1 - bounds.maxY;
+        dx = clampRange(dx, minDx, maxDx);
+        dy = clampRange(dy, minDy, maxDy);
+      }
+      if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) {
+        return false;
+      }
+      for (const [id, initial] of session.initialShapes.entries()) {
+        const shape = findShapeById(id);
+        if (!shape) continue;
+        if (initial.type === "polyline") {
+          const originalVertices = initial.vertices || [];
+          shape.vertices = originalVertices.map((vertex) => ({
+            x: clampUnit(vertex.x + dx),
+            y: clampUnit(vertex.y + dy)
+          }));
+          updatePolylineBounds(shape);
+          ensurePolylineStyle(shape);
+        } else {
+          const width = initial.width ?? 0;
+          const height = initial.height ?? 0;
+          shape.x = clampRange(initial.x + dx, 0, 1 - width);
+          shape.y = clampRange(initial.y + dy, 0, 1 - height);
+          shape.width = clampRange(width, SHAPE_MIN_SIZE, 1);
+          shape.height = clampRange(height, SHAPE_MIN_SIZE, 1);
+        }
+      }
+      const newFrame = session.initialFrame ? cloneSelectionFrame(session.initialFrame) : null;
+      if (newFrame) {
+        newFrame.centerX = clampUnit(newFrame.centerX + dx);
+        newFrame.centerY = clampUnit(newFrame.centerY + dy);
+        session.frame = newFrame;
+        editorState.selectionFrame = cloneSelectionFrame(newFrame);
+      }
+      refreshSelectionBounds({ preserveRotation: true, frameOverride: session.frame || null });
+      return true;
+    };
+    const applySelectionScale = (normalized, session) => {
+      const initialFrame = session.initialFrame;
+      if (!initialFrame) return false;
+      const localPoint = toSelectionLocal(normalized, initialFrame);
+      if (!localPoint) return false;
+      const handle = session.handle || "transform-se";
+      const minSpan = Math.max(SHAPE_MIN_SIZE * 1.5, 0.01);
+      const initialMinX = -initialFrame.width / 2;
+      const initialMaxX = initialFrame.width / 2;
+      const initialMinY = -initialFrame.height / 2;
+      const initialMaxY = initialFrame.height / 2;
+      let newMinX = initialMinX;
+      let newMaxX = initialMaxX;
+      let newMinY = initialMinY;
+      let newMaxY = initialMaxY;
+      if (handle.includes("w")) {
+        const clampMax = initialMaxX - minSpan;
+        newMinX = clampRange(localPoint.x, initialMinX - initialFrame.width, clampMax);
+      }
+      if (handle.includes("e")) {
+        const clampMin = initialMinX + minSpan;
+        newMaxX = clampRange(localPoint.x, clampMin, initialMaxX + initialFrame.width);
+      }
+      if (!handle.includes("w") && !handle.includes("e")) {
+        newMinX = initialMinX;
+        newMaxX = initialMaxX;
+      }
+      if (handle.includes("n")) {
+        const clampMax = initialMaxY - minSpan;
+        newMinY = clampRange(localPoint.y, initialMinY - initialFrame.height, clampMax);
+      }
+      if (handle.includes("s")) {
+        const clampMin = initialMinY + minSpan;
+        newMaxY = clampRange(localPoint.y, clampMin, initialMaxY + initialFrame.height);
+      }
+      if (!handle.includes("n") && !handle.includes("s")) {
+        newMinY = initialMinY;
+        newMaxY = initialMaxY;
+      }
+      let newWidth = Math.max(newMaxX - newMinX, minSpan);
+      let newHeight = Math.max(newMaxY - newMinY, minSpan);
+      if (newWidth < minSpan) {
+        const adjust = (minSpan - newWidth) / 2;
+        newMinX -= adjust;
+        newMaxX += adjust;
+        newWidth = minSpan;
+      }
+      if (newHeight < minSpan) {
+        const adjust = (minSpan - newHeight) / 2;
+        newMinY -= adjust;
+        newMaxY += adjust;
+        newHeight = minSpan;
+      }
+      const widthDelta = Math.abs(newWidth - initialFrame.width);
+      const heightDelta = Math.abs(newHeight - initialFrame.height);
+      const newCenterLocalX = (newMinX + newMaxX) / 2;
+      const newCenterLocalY = (newMinY + newMaxY) / 2;
+      if (widthDelta < 1e-6 && heightDelta < 1e-6 && Math.abs(newCenterLocalX) < 1e-6 && Math.abs(newCenterLocalY) < 1e-6) {
+        return false;
+      }
+      const scaleX = initialFrame.width > 0 ? newWidth / initialFrame.width : 1;
+      const scaleY = initialFrame.height > 0 ? newHeight / initialFrame.height : 1;
+      const newCenterGlobal = fromSelectionLocal({ x: newCenterLocalX, y: newCenterLocalY }, initialFrame);
+      const newFrame = {
+        centerX: clampUnit(newCenterGlobal.x),
+        centerY: clampUnit(newCenterGlobal.y),
+        width: Math.max(newWidth, MIN_METRIC_SPAN),
+        height: Math.max(newHeight, MIN_METRIC_SPAN),
+        rotation: normalizeAngle(initialFrame.rotation || 0)
+      };
+      for (const [id, initialShape] of session.initialShapes.entries()) {
+        const shape = findShapeById(id);
+        if (!shape) continue;
+        const localCenter = initialShape.localCenter ?? toSelectionLocal({ x: initialShape.centerX, y: initialShape.centerY }, initialFrame) ?? { x: 0, y: 0 };
+        const scaledLocalCenter = {
+          x: localCenter.x * scaleX,
+          y: localCenter.y * scaleY
+        };
+        const nextCenter = fromSelectionLocal(scaledLocalCenter, newFrame);
+        if (initialShape.type === "polyline") {
+          const sourceVertices = initialShape.localVertices && initialShape.localVertices.length
+            ? initialShape.localVertices
+            : (initialShape.vertices || []).map((vertex) => toSelectionLocal(vertex, initialFrame));
+          const updatedVertices = sourceVertices.map((vertexLocal) => {
+            const scaledLocal = {
+              x: vertexLocal.x * scaleX,
+              y: vertexLocal.y * scaleY
+            };
+            const globalPoint = fromSelectionLocal(scaledLocal, newFrame);
+            return {
+              x: clampUnit(globalPoint.x),
+              y: clampUnit(globalPoint.y)
+            };
+          });
+          shape.vertices = updatedVertices;
+          updatePolylineBounds(shape);
+          ensurePolylineStyle(shape);
+        } else {
+          const baseWidth = initialShape.width ?? shape.width ?? 0;
+          const baseHeight = initialShape.height ?? shape.height ?? 0;
+          const nextWidth = clampRange(baseWidth * scaleX, SHAPE_MIN_SIZE, 1);
+          const nextHeight = clampRange(baseHeight * scaleY, SHAPE_MIN_SIZE, 1);
+          const nextX = clampRange(nextCenter.x - nextWidth / 2, 0, Math.max(1 - nextWidth, 0));
+          const nextY = clampRange(nextCenter.y - nextHeight / 2, 0, Math.max(1 - nextHeight, 0));
+          shape.x = clampUnit(nextX);
+          shape.y = clampUnit(nextY);
+          shape.width = nextWidth;
+          shape.height = nextHeight;
+          shape.rotation = initialShape.rotation;
+        }
+      }
+      session.frame = cloneSelectionFrame(newFrame);
+      editorState.selectionFrame = cloneSelectionFrame(newFrame);
+      refreshSelectionBounds({ preserveRotation: true, frameOverride: session.frame });
+      return true;
+    };
+    const applySelectionRotate = (normalized, rawNormalized, session, event) => {
+      const initialFrame = session.initialFrame;
+      if (!initialFrame) return false;
+      const bounds = session.initialBounds;
+      if (!bounds) return false;
+      const centerX = session.center?.x ?? initialFrame.centerX ?? bounds.centerX;
+      const centerY = session.center?.y ?? initialFrame.centerY ?? bounds.centerY;
+      const pivot = rawNormalized || normalized;
+      const angleNow = Math.atan2(pivot.y - centerY, pivot.x - centerX);
+      if (!Number.isFinite(angleNow)) return false;
+      let delta = angleNow - (session.initialAngle || 0);
+      if (event?.shiftKey) {
+        delta = Math.round(delta / SNAP_ROTATION_INCREMENT) * SNAP_ROTATION_INCREMENT;
+      }
+      delta = normalizeAngle(delta);
+      if (Math.abs(delta) < 1e-6) {
+        return false;
+      }
+      const cos = Math.cos(delta);
+      const sin = Math.sin(delta);
+      for (const [id, initialShape] of session.initialShapes.entries()) {
+        const shape = findShapeById(id);
+        if (!shape) continue;
+        if (initialShape.type === "polyline") {
+          const original = initialShape.vertices || [];
+          shape.vertices = original.map((vertex) => rotatePointAround(vertex.x, vertex.y, centerX, centerY, delta)).map((vertex) => ({
+            x: clampUnit(vertex.x),
+            y: clampUnit(vertex.y)
+          }));
+          updatePolylineBounds(shape);
+          ensurePolylineStyle(shape);
+          shape.rotation = 0;
+        } else {
+          const width = initialShape.width ?? shape.width ?? 0;
+          const height = initialShape.height ?? shape.height ?? 0;
+          const initialCenterX = initialShape.centerX ?? ((initialShape.x ?? 0) + width / 2);
+          const initialCenterY = initialShape.centerY ?? ((initialShape.y ?? 0) + height / 2);
+          const offsetX = initialCenterX - centerX;
+          const offsetY = initialCenterY - centerY;
+          const rotatedOffsetX = offsetX * cos - offsetY * sin;
+          const rotatedOffsetY = offsetX * sin + offsetY * cos;
+          const nextCenterX = centerX + rotatedOffsetX;
+          const nextCenterY = centerY + rotatedOffsetY;
+          const proposedX = nextCenterX - width / 2;
+          const proposedY = nextCenterY - height / 2;
+          const maxX = Math.max(1 - width, 0);
+          const maxY = Math.max(1 - height, 0);
+          shape.x = clampRange(proposedX, 0, maxX);
+          shape.y = clampRange(proposedY, 0, maxY);
+          shape.width = clampRange(width, SHAPE_MIN_SIZE, 1);
+          shape.height = clampRange(height, SHAPE_MIN_SIZE, 1);
+          shape.rotation = normalizeAngle((initialShape.rotation || 0) + delta);
+        }
+      }
+      const newFrame = {
+        centerX: clampUnit(centerX),
+        centerY: clampUnit(centerY),
+        width: initialFrame.width,
+        height: initialFrame.height,
+        rotation: normalizeAngle((session.initialSelectionRotation || 0) + delta)
+      };
+      session.frame = cloneSelectionFrame(newFrame);
+      editorState.selectionFrame = cloneSelectionFrame(newFrame);
+      session.center = { x: centerX, y: centerY };
+      refreshSelectionBounds({ preserveRotation: true, frameOverride: session.frame });
+      return true;
+    };
+    const updateSelectionTransform = (event) => {
+      const session = editorState.transformSession;
+      if (!session || event.pointerId !== session.pointerId) return;
+      const svgPoint = toSvgPoint(event);
+      if (!svgPoint) return;
+      const normalized = toNormalizedPoint(svgPoint);
+      const rawNormalized = getUnclampedNormalizedPoint(event) || normalized;
+      setSelectionCursor(session.handle, { active: true });
+      const mutated = session.mode === "move"
+        ? applySelectionMove(normalized, session)
+        : session.mode === "scale"
+          ? applySelectionScale(normalized, session)
+          : applySelectionRotate(normalized, rawNormalized, session, event);
+      if (mutated) {
+        session.didMutate = true;
+        editorState.didMutate = true;
+        markEditorSidebarDirty();
+        renderEditor();
+      }
+    };
+    const endSelectionTransform = (event) => {
+      const session = editorState.transformSession;
+      if (!session || (event && session.pointerId !== event.pointerId)) {
+        return false;
+      }
+      if (gestureSvg?.hasPointerCapture?.(session.pointerId)) {
+        gestureSvg.releasePointerCapture(session.pointerId);
+      }
+      editorState.transformSession = null;
+      editorState.pointerId = null;
+      editorState.pointerOrigin = null;
+      if (session.didMutate) {
+        refreshSelectionBounds({ preserveRotation: true, frameOverride: session.frame || null });
+        queuePersist();
+      }
+      editorState.didMutate = false;
+      let hoverHandle = null;
+      if (event) {
+        const svgPoint = toSvgPoint(event);
+        if (svgPoint) {
+          const normalizedPoint = toNormalizedPoint(svgPoint);
+          const rawPoint = getUnclampedNormalizedPoint(event);
+          hoverHandle = resolveSelectionHandle(normalizedPoint, { allowRotation: true, rawPoint });
+        }
+      }
+      setSelectionCursor(hoverHandle);
+      renderEditor();
+      return true;
     };
 
     const setEditorTool = (tool) => {
-      if (!tool) return;
+      if (!tool || editorState.tool === tool) {
+        updateToolButtons();
+        updateToolLockIndicator();
+        return;
+      }
       const previousTool = editorState.tool;
-      editorState.tool = tool;
       if (isPolylineTool(previousTool) && previousTool !== tool) {
         finalizeActivePolyline({ commit: true });
       }
+      if (previousTool === "hand" && editorState.panPointerId !== null) {
+        editorState.panPointerId = null;
+        editorState.panOrigin = null;
+        gestureSvgWrapper?.classList.remove("is-panning");
+      }
+      editorState.tool = tool;
+      editorState.hoverShapeId = null;
       if (tool !== "eraser") {
         editorState.eraserActive = false;
         editorState.erasedShapeIds.clear();
         editorState.eraserPointerId = null;
       }
-      if (tool === "eraser") {
+      if (tool === "eraser" || tool === "hand") {
         clearActivePolylineState();
         setSelectedShape(null, { suppressRender: true });
       }
       if (isPolylineTool(tool)) {
         editorState.polylineHoverPoint = null;
+      } else {
+        editorState.activePolylineId = null;
       }
+      applyEditorPan();
+      gestureEditorEl?.classList.toggle("is-hand-tool", tool === "hand");
+      gestureSvgWrapper?.classList.toggle("is-hand-tool", tool === "hand");
+      gestureToolbar?.classList.toggle("is-hand-tool", tool === "hand");
       updateToolButtons();
+      updateToolLockIndicator();
+      if (tool !== "select") {
+        setSelectionCursor(null);
+      }
       renderEditor();
     };
 
@@ -3129,6 +4170,7 @@ holistic = createHolistic();
         y: normalized.y,
         width: 0,
         height: 0,
+        rotation: 0,
         style: { ...DEFAULT_SHAPE_STYLE },
         interaction: createDefaultInteraction(),
         runtime: { inside: false, lastTriggerAt: 0, lastContinuousAt: 0, noteOn: false, eventState: {}, lastMetrics: { normX: 0, normY: 0, distance: 0 } }
@@ -3147,29 +4189,153 @@ holistic = createHolistic();
 
     const handlePolylinePointerDown = (event) => {
       if (event.button && event.button !== 0) return;
+      const shiftPressed = Boolean(event.shiftKey);
       const svgPoint = toSvgPoint(event);
       if (!svgPoint) return;
       event.preventDefault();
       const normalized = toNormalizedPoint(svgPoint);
-      if (!editorState.activePolylineId) {
-        startPolylineAt(normalized);
-        return;
+      let shape = editorState.activePolylineId ? findShapeById(editorState.activePolylineId) : null;
+      if (shape && editorState.tool === "line") {
+        const vertices = Array.isArray(shape.vertices) ? shape.vertices : (shape.vertices = []);
+        if (vertices.length >= 2 && !shiftPressed) {
+          finalizeActivePolyline({ commit: true });
+          shape = null;
+        }
       }
-      const shape = findShapeById(editorState.activePolylineId);
       if (!shape) {
+        if (!isPolylineTool(editorState.tool)) {
+          return;
+        }
         startPolylineAt(normalized);
-        return;
+        shape = findShapeById(editorState.activePolylineId);
       }
-      addPolylinePoint(shape, normalized);
+      if (!shape) return;
+      if (editorState.tool === "line") {
+        const vertices = Array.isArray(shape.vertices) ? shape.vertices : (shape.vertices = []);
+        const anchor = vertices.length ? vertices[vertices.length - 1] : normalized;
+        if (!vertices.length) {
+          vertices.push({ ...anchor });
+        }
+        vertices.push({ ...anchor });
+        editorState.polylineHoverPoint = null;
+        editorState.polylineExtendArmed = shiftPressed && vertices.length >= 2;
+      } else if (editorState.tool === "freehand") {
+        const vertices = Array.isArray(shape.vertices) ? shape.vertices : (shape.vertices = []);
+        const lastVertex = vertices[vertices.length - 1];
+        if (!lastVertex || distanceBetween(lastVertex, normalized) >= MIN_POLYLINE_SEGMENT * 0.25) {
+          vertices.push({ ...normalized });
+          updatePolylineBounds(shape);
+          ensurePolylineStyle(shape);
+        }
+        editorState.polylineExtendArmed = false;
+      }
+      editorState.polylinePointerId = event.pointerId;
+      if (gestureSvg?.setPointerCapture) {
+        gestureSvg.setPointerCapture(event.pointerId);
+      }
+      renderEditor();
     };
 
     const handlePolylinePointerMove = (event) => {
       if (!editorState.activePolylineId) return;
+      const shape = findShapeById(editorState.activePolylineId);
+      if (!shape) return;
       const svgPoint = toSvgPoint(event);
       if (!svgPoint) return;
-      // preview next vertex without toggling selection box
-      editorState.polylineHoverPoint = toNormalizedPoint(svgPoint);
-      renderEditor();
+      const normalized = toNormalizedPoint(svgPoint);
+      if (editorState.tool === "freehand") {
+        if (event.pointerId !== editorState.polylinePointerId) return;
+        const vertices = Array.isArray(shape.vertices) ? shape.vertices : (shape.vertices = []);
+        const lastVertex = vertices[vertices.length - 1];
+        if (!lastVertex || distanceBetween(lastVertex, normalized) >= MIN_POLYLINE_SEGMENT * 0.5) {
+          vertices.push({ ...normalized });
+          updatePolylineBounds(shape);
+          ensurePolylineStyle(shape);
+          editorState.didMutate = true;
+          renderEditor();
+        }
+        return;
+      }
+      if (editorState.tool === "line") {
+        if (event.pointerId === editorState.polylinePointerId) {
+          const vertices = Array.isArray(shape.vertices) ? shape.vertices : (shape.vertices = []);
+          if (vertices.length) {
+            vertices[vertices.length - 1] = { ...normalized };
+            updatePolylineBounds(shape);
+            ensurePolylineStyle(shape);
+            editorState.didMutate = true;
+            renderEditor();
+          }
+        } else {
+          const allowPreview = event.shiftKey && Array.isArray(shape.vertices) && shape.vertices.length > 0;
+          const prevHover = editorState.polylineHoverPoint;
+          if (allowPreview) {
+            editorState.polylineHoverPoint = { ...normalized };
+            editorState.polylineExtendArmed = true;
+            if (!prevHover || Math.hypot((prevHover.x ?? 0) - normalized.x, (prevHover.y ?? 0) - normalized.y) > VERTEX_EPSILON) {
+              renderEditor();
+            }
+          } else if (prevHover) {
+            editorState.polylineHoverPoint = null;
+            editorState.polylineExtendArmed = false;
+            renderEditor();
+          } else if (editorState.polylineExtendArmed) {
+            editorState.polylineExtendArmed = false;
+          }
+        }
+        return;
+      }
+    };
+
+    const handlePolylinePointerUp = (event) => {
+      if (!editorState.activePolylineId) return false;
+      if (editorState.polylinePointerId !== null && editorState.polylinePointerId !== event.pointerId) {
+        return false;
+      }
+      const shape = findShapeById(editorState.activePolylineId);
+      if (!shape) {
+        clearActivePolylineState();
+        return true;
+      }
+      if (gestureSvg?.hasPointerCapture?.(event.pointerId)) {
+        gestureSvg.releasePointerCapture(event.pointerId);
+      }
+      const svgPoint = toSvgPoint(event);
+      const normalized = svgPoint ? toNormalizedPoint(svgPoint) : null;
+      if (editorState.tool === "freehand") {
+        if (normalized) {
+          addPolylinePoint(shape, normalized);
+        }
+        if (Array.isArray(shape.vertices) && shape.vertices.length > 2) {
+          shape.vertices = simplifyPolyline(shape.vertices, FREEHAND_SIMPLIFY_TOLERANCE);
+          updatePolylineBounds(shape);
+          ensurePolylineStyle(shape);
+          editorState.didMutate = true;
+        }
+        editorState.polylinePointerId = null;
+        editorState.polylineHoverPoint = null;
+        finalizeActivePolyline({ commit: true });
+        return true;
+      }
+      if (editorState.tool === "line") {
+        const vertices = Array.isArray(shape.vertices) ? shape.vertices : (shape.vertices = []);
+        if (normalized && vertices.length) {
+          vertices[vertices.length - 1] = { ...normalized };
+          updatePolylineBounds(shape);
+          ensurePolylineStyle(shape);
+        }
+        editorState.polylinePointerId = null;
+        editorState.polylineHoverPoint = null;
+        const extend = Boolean(event.shiftKey);
+        editorState.polylineExtendArmed = extend;
+        if (extend) {
+          renderEditor();
+          return true;
+        }
+        finalizeActivePolyline({ commit: true });
+        return true;
+      }
+      return false;
     };
 
     const eraseAtEvent = (event) => {
@@ -3250,6 +4416,35 @@ holistic = createHolistic();
           updatePolylineBounds(shape);
           ensurePolylineStyle(shape);
           editorState.didMutate = true;
+          refreshSelectionBounds();
+          return;
+        }
+        if (handle?.startsWith("vertex-")) {
+          const index = Number.parseInt(handle.slice(7), 10);
+          if (!Number.isInteger(index) || index < 0 || index >= initialVertices.length) {
+            return;
+          }
+          const nextVertices = initialVertices.map((vertex, idx) => {
+            if (idx !== index) {
+              return { ...vertex };
+            }
+            return {
+              x: clampUnit(normalized.x),
+              y: clampUnit(normalized.y)
+            };
+          });
+          if (shape.closed && nextVertices.length >= 2) {
+            if (index === 0) {
+              nextVertices[nextVertices.length - 1] = { ...nextVertices[0] };
+            } else if (index === nextVertices.length - 1) {
+              nextVertices[0] = { ...nextVertices[nextVertices.length - 1] };
+            }
+          }
+          shape.vertices = nextVertices;
+          updatePolylineBounds(shape);
+          ensurePolylineStyle(shape);
+          editorState.didMutate = true;
+          refreshSelectionBounds();
           return;
         }
         if (handle.includes("w")) {
@@ -3279,6 +4474,7 @@ holistic = createHolistic();
         updatePolylineBounds(shape);
         ensurePolylineStyle(shape);
         editorState.didMutate = true;
+        refreshSelectionBounds();
         return;
       }
       if (handle === "move") {
@@ -3287,6 +4483,7 @@ holistic = createHolistic();
         shape.x = Number.isFinite(newX) ? newX : initial.x;
         shape.y = Number.isFinite(newY) ? newY : initial.y;
         editorState.didMutate = true;
+        refreshSelectionBounds();
         return;
       }
       if (handle.includes("w")) {
@@ -3308,6 +4505,7 @@ holistic = createHolistic();
       shape.width = clampRange(width, SHAPE_MIN_SIZE, 1);
       shape.height = clampRange(height, SHAPE_MIN_SIZE, 1);
       editorState.didMutate = true;
+      refreshSelectionBounds();
     };
 
     const updateDrawingShape = (shape, normalized) => {
@@ -3329,6 +4527,7 @@ holistic = createHolistic();
     };
 
     const finishPointerInteraction = (event) => {
+      const wasDrawing = Boolean(editorState.drawingShapeId);
       if (event.pointerId !== editorState.pointerId) {
         return;
       }
@@ -3360,6 +4559,9 @@ holistic = createHolistic();
         queuePersist();
       }
       renderEditor();
+      if (wasDrawing) {
+        maybeAutoRevertTool();
+      }
     };
 
     const handleEditorPointerDown = (event) => {
@@ -3380,6 +4582,10 @@ holistic = createHolistic();
           gestureSvg.focus();
         }
       }
+      if (editorState.tool === "hand") {
+        beginPan(event);
+        return;
+      }
       if (editorState.tool === "eraser") {
         beginErasing(event);
         return;
@@ -3388,34 +4594,118 @@ holistic = createHolistic();
         handlePolylinePointerDown(event);
         return;
       }
+      let svgPointForSelection = null;
+      let normalizedPointForSelection = null;
+      let rawNormalizedPointForSelection = null;
+      if (editorState.tool === "select" || handle || shapeTarget) {
+        svgPointForSelection = toSvgPoint(event);
+        if (svgPointForSelection) {
+          normalizedPointForSelection = toNormalizedPoint(svgPointForSelection);
+        }
+        rawNormalizedPointForSelection = getUnclampedNormalizedPoint(event);
+      }
       if (handle) {
-        const controlGroup = event.target.closest("[data-selected-controls]");
-        const shapeId = controlGroup?.getAttribute("data-selected-controls");
-        if (shapeId) {
-          beginShapeDrag(shapeId, handle, event);
+        if (handle.startsWith("vertex-")) {
+          const controlGroup = event.target.closest("[data-selected-controls]");
+          const shapeId = controlGroup?.getAttribute("data-selected-controls");
+          if (shapeId) {
+            beginShapeDrag(shapeId, handle, event);
+          }
+          return;
+        }
+        if (handle.startsWith("transform-")) {
+          beginSelectionTransform(handle, event);
+          return;
         }
         return;
       }
+      let selectionHandle = normalizedPointForSelection
+        ? resolveSelectionHandle(normalizedPointForSelection, { allowRotation: true, rawPoint: rawNormalizedPointForSelection })
+        : null;
       const shapeId = shapeTarget?.getAttribute?.("data-shape-id");
       if (shapeId) {
+        const selectedIds = getSelectedIds();
+        const isSelected = editorState.selectedIds?.has?.(shapeId) || editorState.selectedId === shapeId;
         if (event.altKey) {
-          setSelectedShape(shapeId, { suppressRender: true });
-          openAssignmentModal(shapeId);
+          if (isSelected) {
+            const remaining = selectedIds.filter((id) => id !== shapeId);
+            setSelectedShapes(remaining);
+          }
           event.preventDefault();
-          event.stopPropagation();
           return;
         }
-        beginShapeDrag(shapeId, "move", event);
+        if (event.shiftKey) {
+          if (!isSelected) {
+            setSelectedShapes([shapeId], { append: true });
+          }
+          event.preventDefault();
+          return;
+        }
+        if (!isSelected) {
+          setSelectedShape(shapeId);
+          if (normalizedPointForSelection) {
+            selectionHandle = resolveSelectionHandle(normalizedPointForSelection, { allowRotation: true, rawPoint: rawNormalizedPointForSelection });
+          }
+        }
+        if (selectionHandle && selectionHandle !== "move" && selectionHandle !== null) {
+          event.preventDefault();
+          beginSelectionTransform(selectionHandle, event);
+          return;
+        }
+        event.preventDefault();
+        beginSelectionTransform("move", event);
         return;
       }
       if (editorState.tool === "select") {
-        setSelectedShape(null);
+        if (!svgPointForSelection) {
+          setSelectedShape(null);
+          return;
+        }
+        if (selectionHandle) {
+          beginSelectionTransform(selectionHandle, event);
+          return;
+        }
+        const marqueeMode = event.shiftKey ? "add" : event.altKey ? "subtract" : "replace";
+        const initialSelection = getSelectedIds();
+        editorState.selectionMarquee = {
+          anchor: normalizedPointForSelection,
+          current: { ...normalizedPointForSelection },
+          mode: marqueeMode,
+          initialSelection
+        };
+        editorState.pointerId = event.pointerId;
+        editorState.pointerOrigin = { svg: svgPointForSelection, normalized: normalizedPointForSelection };
+        if (marqueeMode === "replace") {
+          setSelectedShapes([], { suppressRender: true });
+        }
+        if (gestureSvg?.setPointerCapture) {
+          gestureSvg.setPointerCapture(event.pointerId);
+        }
+        renderEditor();
         return;
       }
       beginDrawing(editorState.tool, event);
     };
 
     const handleEditorPointerMove = (event) => {
+      const session = editorState.transformSession;
+      if (session && event.pointerId === session.pointerId) {
+        updateSelectionTransform(event);
+        return;
+      }
+      const marquee = editorState.selectionMarquee;
+      if (marquee && editorState.pointerId === event.pointerId) {
+        const svgPoint = toSvgPoint(event);
+        if (!svgPoint) return;
+        const normalized = toNormalizedPoint(svgPoint);
+        marquee.current = { ...normalized };
+        renderEditor();
+        return;
+      }
+      if (editorState.tool === "hand") {
+        updatePan(event);
+        return;
+      }
       if (isPolylineTool(editorState.tool) && editorState.activePolylineId) {
         handlePolylinePointerMove(event);
         return;
@@ -3423,6 +4713,24 @@ holistic = createHolistic();
       if (editorState.tool === "eraser" && editorState.eraserActive) {
         handleEraserMove(event);
         return;
+      }
+      if (editorState.tool === "select" && !editorState.dragHandle && !editorState.drawingShapeId && !editorState.activePolylineId) {
+        const hoveredId = event.target?.closest?.("[data-shape-id]")?.getAttribute("data-shape-id") || null;
+        if (editorState.hoverShapeId !== hoveredId) {
+          editorState.hoverShapeId = hoveredId;
+          renderEditor();
+        }
+        if (!editorState.transformSession && editorState.pointerId === null) {
+          const hoverSvgPoint = toSvgPoint(event);
+          if (hoverSvgPoint) {
+            const hoverNormalized = toNormalizedPoint(hoverSvgPoint);
+            const hoverRaw = getUnclampedNormalizedPoint(event);
+            const hoverHandle = resolveSelectionHandle(hoverNormalized, { allowRotation: true, rawPoint: hoverRaw });
+            setSelectionCursor(hoverHandle);
+          } else {
+            setSelectionCursor(null);
+          }
+        }
       }
       if (event.pointerId !== editorState.pointerId) return;
       const svgPoint = toSvgPoint(event);
@@ -3446,6 +4754,58 @@ holistic = createHolistic();
     };
 
     const handleEditorPointerUp = (event) => {
+      if (editorState.transformSession && event.pointerId === editorState.transformSession.pointerId) {
+        endSelectionTransform(event);
+        return;
+      }
+      if (editorState.selectionMarquee && event.pointerId === editorState.pointerId) {
+        const marquee = editorState.selectionMarquee;
+        const anchor = marquee?.anchor;
+        const current = marquee?.current;
+        const marqueeMode = marquee?.mode || "replace";
+        const initialSelection = Array.isArray(marquee?.initialSelection) ? marquee.initialSelection : [];
+        editorState.selectionMarquee = null;
+        if (gestureSvg?.hasPointerCapture?.(event.pointerId)) {
+          gestureSvg.releasePointerCapture(event.pointerId);
+        }
+        const svgPoint = toSvgPoint(event);
+        const normalized = svgPoint ? toNormalizedPoint(svgPoint) : null;
+        const rawNormalized = getUnclampedNormalizedPoint(event);
+        if (anchor && current) {
+          const minX = clampUnit(anchor.x);
+          const minY = clampUnit(anchor.y);
+          const maxX = clampUnit(current.x);
+          const maxY = clampUnit(current.y);
+          const selected = getShapesInBounds(minX, minY, maxX, maxY);
+          let nextSelection;
+          if (marqueeMode === "add") {
+            const union = new Set(initialSelection);
+            selected.forEach((id) => union.add(id));
+            nextSelection = Array.from(union);
+          } else if (marqueeMode === "subtract") {
+            const removal = new Set(selected);
+            nextSelection = initialSelection.filter((id) => !removal.has(id));
+          } else {
+            nextSelection = selected;
+          }
+          setSelectedShapes(nextSelection, { suppressRender: true });
+          const hoverHandle = normalized ? resolveSelectionHandle(normalized, { allowRotation: true, rawPoint: rawNormalized }) : null;
+          setSelectionCursor(hoverHandle);
+        }
+        editorState.pointerId = null;
+        editorState.pointerOrigin = null;
+        renderEditor();
+        return;
+      }
+      if (editorState.tool === "hand" && event.pointerId === editorState.panPointerId) {
+        endPan(event);
+        return;
+      }
+      if (isPolylineTool(editorState.tool) && editorState.activePolylineId) {
+        if (handlePolylinePointerUp(event)) {
+          return;
+        }
+      }
       if (editorState.eraserActive && event.pointerId === editorState.eraserPointerId) {
         editorState.eraserActive = false;
         editorState.eraserPointerId = null;
@@ -3456,9 +4816,25 @@ holistic = createHolistic();
     };
 
     const handleEditorPointerLeave = (event) => {
+      if (editorState.transformSession && editorState.transformSession.pointerId === event.pointerId) {
+        endSelectionTransform(event);
+      }
+      if (editorState.tool === "hand" && editorState.panPointerId === event.pointerId) {
+        endPan(event);
+      }
       finishPointerInteraction(event);
+      if (!editorState.transformSession) {
+        setSelectionCursor(null);
+      }
       if (editorState.activePolylineId && editorState.polylineHoverPoint) {
         editorState.polylineHoverPoint = null;
+        editorState.polylineExtendArmed = false;
+        renderEditor();
+      } else if (editorState.polylineExtendArmed) {
+        editorState.polylineExtendArmed = false;
+      }
+      if (editorState.tool === "select" && editorState.hoverShapeId) {
+        editorState.hoverShapeId = null;
         renderEditor();
       }
       if (editorState.eraserActive && event.pointerId === editorState.eraserPointerId) {
@@ -3466,6 +4842,16 @@ holistic = createHolistic();
         editorState.eraserPointerId = null;
         editorState.erasedShapeIds.clear();
         gestureSvg?.releasePointerCapture?.(event.pointerId);
+      }
+      if (editorState.selectionMarquee && event.pointerId === editorState.pointerId) {
+        editorState.selectionMarquee = null;
+        editorState.pointerId = null;
+        editorState.pointerOrigin = null;
+        if (gestureSvg?.hasPointerCapture?.(event.pointerId)) {
+          gestureSvg.releasePointerCapture(event.pointerId);
+        }
+        setSelectionCursor(null);
+        renderEditor();
       }
     };
     const handleGlobalShortcut = (event) => {
@@ -3491,6 +4877,10 @@ holistic = createHolistic();
           setEditorTool("select");
           event.preventDefault();
           break;
+        case "h":
+          setEditorTool("hand");
+          event.preventDefault();
+          break;
         case "r":
           setEditorTool("rect");
           event.preventDefault();
@@ -3507,8 +4897,13 @@ holistic = createHolistic();
           setEditorTool("line");
           event.preventDefault();
           break;
-        case "p":
-          setEditorTool("polygon");
+        case "d":
+          setEditorTool("freehand");
+          event.preventDefault();
+          break;
+        case "q":
+          editorState.toolLocked = !editorState.toolLocked;
+          updateToolLockIndicator();
           event.preventDefault();
           break;
         case "backspace":
@@ -3741,17 +5136,29 @@ holistic = createHolistic();
         const distance = distanceToPolyline(vertices, px, py, Boolean(shape.closed));
         return distance <= 0.02;
       }
+      const rotation = normalizeAngle(shape.rotation || 0);
+      const width = shape.width ?? 0;
+      const height = shape.height ?? 0;
+      if (width <= 0 || height <= 0) return false;
+      const cx = (shape.x ?? 0) + width / 2;
+      const cy = (shape.y ?? 0) + height / 2;
+      let localX = px;
+      let localY = py;
+      if (rotation) {
+        const rotated = rotatePointAround(px, py, cx, cy, -rotation);
+        localX = rotated.x;
+        localY = rotated.y;
+      }
+      const dx = localX - cx;
+      const dy = localY - cy;
+      const halfWidth = width / 2;
+      const halfHeight = height / 2;
       if (shape.type === "ellipse") {
-        const cx = shape.x + shape.width / 2;
-        const cy = shape.y + shape.height / 2;
-        const rx = shape.width / 2;
-        const ry = shape.height / 2;
-        if (rx <= 0 || ry <= 0) return false;
-        const nx = (px - cx) / rx;
-        const ny = (py - cy) / ry;
+        const nx = halfWidth > 0 ? dx / halfWidth : 0;
+        const ny = halfHeight > 0 ? dy / halfHeight : 0;
         return (nx * nx + ny * ny) <= 1;
       }
-      return px >= shape.x && px <= shape.x + shape.width && py >= shape.y && py <= shape.y + shape.height;
+      return Math.abs(dx) <= halfWidth && Math.abs(dy) <= halfHeight;
     };
     const getLandmarkPoint = (landmarks, index) => {
       if (!landmarks || typeof index !== "number") return null;
@@ -3815,21 +5222,12 @@ holistic = createHolistic();
       if (!shape) {
         return { minX: 0, minY: 0, width: 1, height: 1, centerX: 0.5, centerY: 0.5 };
       }
-      if (shape.type === "polyline") {
-        const { minX, minY, maxX, maxY } = computePolylineBounds(shape.vertices || []);
-        const width = Math.max(maxX - minX, MIN_METRIC_SPAN);
-        const height = Math.max(maxY - minY, MIN_METRIC_SPAN);
-        const centerX = clampUnit(minX + width / 2);
-        const centerY = clampUnit(minY + height / 2);
-        return { minX, minY, width, height, centerX, centerY };
-      }
-      const minX = clampUnit(shape.x ?? 0);
-      const minY = clampUnit(shape.y ?? 0);
-      const width = Math.max(shape.width ?? 0, MIN_METRIC_SPAN);
-      const height = Math.max(shape.height ?? 0, MIN_METRIC_SPAN);
-      const centerX = clampUnit(minX + width / 2);
-      const centerY = clampUnit(minY + height / 2);
-      return { minX, minY, width, height, centerX, centerY };
+      const bounds = getShapeAabb(shape) || { minX: 0, minY: 0, maxX: 1, maxY: 1 };
+      const width = Math.max((bounds.maxX ?? 0) - (bounds.minX ?? 0), MIN_METRIC_SPAN);
+      const height = Math.max((bounds.maxY ?? 0) - (bounds.minY ?? 0), MIN_METRIC_SPAN);
+      const centerX = clampUnit((bounds.minX ?? 0) + width / 2);
+      const centerY = clampUnit((bounds.minY ?? 0) + height / 2);
+      return { minX: bounds.minX ?? 0, minY: bounds.minY ?? 0, width, height, centerX, centerY };
     };
     const computeShapeMetrics = (shape, point) => {
       if (!shape || !point) {
@@ -4027,6 +5425,10 @@ holistic = createHolistic();
     }
     window.addEventListener("keydown", handleGlobalShortcut);
     window.addEventListener("keydown", handleEditorKeyDown);
+    if (typeof window !== "undefined") {
+      window.mediamime = window.mediamime || {};
+      window.mediamime.generateScoreSvg = () => generateScoreSvg();
+    }
 
     for (const [tool, button] of Object.entries(gestureToolButtons)) {
       button?.addEventListener("click", () => {

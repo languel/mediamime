@@ -537,6 +537,8 @@ html, body {
       color: rgba(245, 247, 255, 0.76);
       padding: 0.25rem;
       border-radius: 2px;
+      position: relative;
+      border: 1px solid transparent;
       display: inline-flex;
       gap: 0;
       align-items: center;
@@ -549,13 +551,40 @@ html, body {
     .gesture-editor-toolbar button .material-icons-outlined {
       font-size: 18px;
     }
+    .gesture-editor-toolbar button[data-tool="hand"] .material-icons-outlined {
+      font-size: 19px;
+    }
+    .gesture-editor-toolbar button[data-tool="freehand"] .material-icons-outlined {
+      font-size: 20px;
+    }
     .gesture-editor-toolbar button:hover {
       background: rgba(255, 255, 255, calc(var(--surface-opacity) * 0.12));
       color: #f5f7ff;
     }
+    .gesture-editor-toolbar button:focus-visible {
+      outline: 2px solid rgba(82, 213, 255, 0.9);
+      outline-offset: 2px;
+    }
     .gesture-editor-toolbar button.is-active {
       background: rgba(82, 213, 255, calc(var(--surface-opacity) * 0.16));
       color: #52d5ff;
+      border-color: rgba(82, 213, 255, 0.25);
+      box-shadow: 0 0 0 1px rgba(82, 213, 255, 0.18), 0 6px 18px rgba(58, 132, 181, 0.3);
+    }
+    .gesture-editor-toolbar.is-hand-tool button[data-tool="hand"].is-active {
+      box-shadow: 0 0 0 1px rgba(82, 213, 255, 0.28), 0 8px 20px rgba(58, 132, 181, 0.42);
+    }
+    .gesture-editor-toolbar.is-tool-locked button.is-active::after {
+      content: "";
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      position: absolute;
+      bottom: 3px;
+      left: 50%;
+      transform: translateX(-50%);
     }
     .gesture-editor-toolbar .toolbar-divider {
       width: 1px;
@@ -576,6 +605,13 @@ html, body {
       pointer-events: auto;
       touch-action: none;
     }
+    .gesture-editor.is-hand-tool .gesture-svg,
+    .gesture-svg-wrapper.is-hand-tool .gesture-svg {
+      cursor: grab;
+    }
+    .gesture-svg-wrapper.is-panning .gesture-svg {
+      cursor: grabbing;
+    }
     .gesture-svg:focus {
       outline: none;
     }
@@ -586,6 +622,10 @@ html, body {
     .gesture-svg [data-shape-id] {
       cursor: pointer;
       transition: filter 0.18s ease, opacity 0.18s ease;
+    }
+    .gesture-svg [data-shape-id].is-hovered:not(.is-selected) {
+      filter: drop-shadow(0 0 10px rgba(82, 213, 255, 0.35));
+      opacity: 0.96;
     }
     .gesture-svg [data-shape-id].is-selected {
       filter: drop-shadow(0 0 12px rgba(82, 213, 255, 0.45));
@@ -598,33 +638,46 @@ html, body {
       pointer-events: none;
       opacity: 0.65;
     }
-    .gesture-svg .gesture-handle {
-      fill: rgba(52, 211, 153, 0.92);
-      stroke: rgba(13, 148, 136, 0.8);
-      stroke-width: 1;
-      cursor: nwse-resize;
+    .gesture-vertex-handle {
+      fill: rgba(82, 213, 255, 0.92);
+      stroke: rgba(9, 13, 22, 0.85);
+      stroke-width: 1.5;
+      cursor: grab;
+      box-shadow: 0 0 0 1px rgba(8, 12, 22, 0.65), 0 0 12px rgba(82, 213, 255, 0.4);
+      transition: transform 0.12s ease, fill 0.12s ease, box-shadow 0.12s ease;
     }
-    .gesture-svg .gesture-handle[data-handle="n"],
-    .gesture-svg .gesture-handle[data-handle="s"] {
-      cursor: ns-resize;
+    .gesture-vertex-handle:hover {
+      fill: rgba(249, 115, 22, 0.95);
+      stroke: rgba(120, 53, 15, 0.8);
+      box-shadow: 0 0 0 1px rgba(120, 53, 15, 0.85), 0 0 14px rgba(249, 115, 22, 0.65);
+      transform: scale(1.05);
     }
-    .gesture-svg .gesture-handle[data-handle="e"],
-    .gesture-svg .gesture-handle[data-handle="w"] {
-      cursor: ew-resize;
+    .gesture-vertex-handle:active {
+      cursor: grabbing;
+      transform: scale(0.95);
     }
-    .gesture-svg .gesture-handle[data-handle="ne"],
-    .gesture-svg .gesture-handle[data-handle="sw"] {
-      cursor: nesw-resize;
+    .gesture-polyline-controls {
+      pointer-events: none;
     }
-    .gesture-svg .gesture-handle[data-handle="nw"],
-    .gesture-svg .gesture-handle[data-handle="se"] {
-      cursor: nwse-resize;
+    .gesture-polyline-controls .gesture-vertex-handle {
+      pointer-events: auto;
     }
-    .gesture-svg .gesture-outline {
-      fill: none;
-      stroke: rgba(82, 213, 255, 0.75);
+    .gesture-selection-group .gesture-selection-outline {
+      fill: rgba(82, 213, 255, 0.05);
+      stroke: rgba(82, 213, 255, 0.4);
+      stroke-width: 1.2;
+      stroke-dasharray: 6 6;
+      pointer-events: none;
+    }
+    .gesture-selection-group {
+      pointer-events: none;
+    }
+    .gesture-selection-marquee {
+      fill: rgba(82, 213, 255, 0.08);
+      stroke: rgba(82, 213, 255, 0.4);
       stroke-width: 1.2;
       stroke-dasharray: 6 4;
+      pointer-events: none;
     }
     .gesture-editor.is-performing .gesture-svg {
       pointer-events: none;
