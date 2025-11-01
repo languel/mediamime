@@ -53,28 +53,17 @@
     <button id="editor-toggle" class="editor-toggle icon-button" type="button" title="Show tool palette" aria-label="Show tool palette" aria-pressed="false">
       <span class="material-icons-outlined" aria-hidden="true">visibility_off</span>
     </button>
-    <button id="panel-toggle" class="panel-toggle icon-button" type="button" title="Show control panel" aria-label="Show control panel" aria-expanded="false" aria-controls="mediamime-panel">
-      <span class="material-icons-outlined" aria-hidden="true">tune</span>
-    </button>
-    <div id="panel-backdrop" class="panel-backdrop"></div>
-    <aside class="panel" id="mediamime-panel" role="dialog" aria-modal="false" aria-label="Mediamime control panel" aria-hidden="true" tabindex="-1">
-      <div class="panel-header">
-        <h2>Streams</h2>
-        <div class="panel-actions">
-          <button id="mediamime-reset" class="icon-button" title="Reset overlays" aria-label="Reset overlays">
-            <span class="material-icons-outlined" aria-hidden="true">refresh</span>
-          </button>
-          <button id="panel-close" class="icon-button panel-close" type="button" title="Hide control panel" aria-label="Hide control panel">
-            <span class="material-icons-outlined" aria-hidden="true">close</span>
-          </button>
+    <div id="modal-layer" class="floating-modal-layer">
+      <section id="modal-input" class="panel floating-modal is-open" role="dialog" aria-modal="false" aria-label="Input panel" data-modal="input" data-resizable="true" tabindex="-1">
+        <div class="panel-header" data-modal-handle>
+          <h2>Input</h2>
+          <div class="panel-actions">
+            <button type="button" class="icon-button panel-close" data-modal-close="input" title="Hide Input panel" aria-label="Hide Input panel">
+              <span class="material-icons-outlined" aria-hidden="true">close</span>
+            </button>
+          </div>
         </div>
-      </div>
-      <div class="panel-tabs" role="tablist" aria-label="Panel sections">
-        <button type="button" data-panel-tab="streams" role="tab" aria-selected="false" aria-controls="panel-streams">Streams</button>
-        <button type="button" class="is-active" data-panel-tab="editor" role="tab" aria-selected="true" aria-controls="panel-editor">Editor</button>
-      </div>
-      <div class="panel-content">
-        <div class="panel-section" data-panel-section="streams" id="panel-streams" role="tabpanel" aria-label="Stream controls">
+        <div class="floating-modal-body">
           <div class="stream-controls">
             <label class="stream-toggle" title="Mirror camera">
               <input type="checkbox" id="mediamime-mirror" checked aria-label="Mirror camera">
@@ -84,180 +73,270 @@
               <span class="material-icons-outlined" aria-hidden="true">switch_video</span>
             </button>
           </div>
-          <div class="background-opacity-control">
-            <label for="background-opacity">Background opacity</label>
-            <div class="background-opacity-input">
-              <input type="range" id="background-opacity" min="0" max="1" step="0.05" value="1">
-              <span id="background-opacity-value">100%</span>
+        </div>
+        <button type="button" class="modal-resize-handle" aria-label="Resize Input panel" data-modal-resize="input">
+          <span class="material-icons-outlined" aria-hidden="true">open_in_full</span>
+        </button>
+      </section>
+      <section id="modal-layers" class="panel floating-modal is-open" role="dialog" aria-modal="false" aria-label="Layers panel" data-modal="layers" tabindex="-1">
+        <div class="panel-header" data-modal-handle>
+          <h2>Layers</h2>
+          <div class="panel-actions">
+            <button id="mediamime-reset" class="icon-button" title="Reset overlays" aria-label="Reset overlays">
+              <span class="material-icons-outlined" aria-hidden="true">refresh</span>
+            </button>
+            <button type="button" class="icon-button panel-close" data-modal-close="layers" title="Hide Layers panel" aria-label="Hide Layers panel">
+              <span class="material-icons-outlined" aria-hidden="true">close</span>
+            </button>
+          </div>
+        </div>
+        <div class="panel-content">
+          <div class="panel-section is-active" data-panel-section="streams" id="panel-streams" role="tabpanel" aria-label="Stream controls">
+            <div class="background-opacity-control">
+              <label for="background-opacity">Background opacity</label>
+              <div class="background-opacity-input">
+                <input type="range" id="background-opacity" min="0" max="1" step="0.05" value="1">
+                <span id="background-opacity-value">100%</span>
+              </div>
+            </div>
+            <div class="stream-option-row">
+              <label for="toggle-trails">
+                <input type="checkbox" id="toggle-trails">
+                <span>Persistent trails</span>
+              </label>
+            </div>
+            <div class="overlay-table-wrapper">
+              <table class="overlay-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Stream</th>
+                    <th scope="col">Main</th>
+                    <th scope="col">Preview</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row">Source</th>
+                    <td>
+                      <label class="overlay-switch" title="Source main">
+                        <input type="checkbox" id="overlay-underlay-main" checked aria-label="Source main">
+                      </label>
+                    </td>
+                    <td>
+                      <label class="overlay-switch" title="Source preview">
+                        <input type="checkbox" id="overlay-underlay-preview" aria-label="Source preview">
+                      </label>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Pose</th>
+                    <td>
+                      <label class="overlay-switch" title="Pose main">
+                        <input type="checkbox" id="overlay-pose-main" checked aria-label="Pose main">
+                      </label>
+                    </td>
+                    <td>
+                      <label class="overlay-switch" title="Pose preview">
+                        <input type="checkbox" id="overlay-pose-preview" aria-label="Pose preview">
+                      </label>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Left hand</th>
+                    <td>
+                      <label class="overlay-switch" title="Left hand main">
+                        <input type="checkbox" id="overlay-left-hand-main" checked aria-label="Left hand main">
+                      </label>
+                    </td>
+                    <td>
+                      <label class="overlay-switch" title="Left hand preview">
+                        <input type="checkbox" id="overlay-left-hand-preview" aria-label="Left hand preview">
+                      </label>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Right hand</th>
+                    <td>
+                      <label class="overlay-switch" title="Right hand main">
+                        <input type="checkbox" id="overlay-right-hand-main" checked aria-label="Right hand main">
+                      </label>
+                    </td>
+                    <td>
+                      <label class="overlay-switch" title="Right hand preview">
+                        <input type="checkbox" id="overlay-right-hand-preview" aria-label="Right hand preview">
+                      </label>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Face</th>
+                    <td>
+                      <label class="overlay-switch" title="Face main">
+                        <input type="checkbox" id="overlay-face-main" checked aria-label="Face main">
+                      </label>
+                    </td>
+                    <td>
+                      <label class="overlay-switch" title="Face preview">
+                        <input type="checkbox" id="overlay-face-preview" aria-label="Face preview">
+                      </label>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Segmentation</th>
+                    <td>
+                      <label class="overlay-switch" title="Segmentation main">
+                        <input type="checkbox" id="overlay-segmentation-main" aria-label="Segmentation main">
+                      </label>
+                    </td>
+                    <td>
+                      <label class="overlay-switch" title="Segmentation preview">
+                        <input type="checkbox" id="overlay-segmentation-preview" checked aria-label="Segmentation preview">
+                      </label>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Depth</th>
+                    <td>
+                      <label class="overlay-switch" title="Depth main">
+                        <input type="checkbox" id="overlay-depth-main" aria-label="Depth main">
+                      </label>
+                    </td>
+                    <td>
+                      <label class="overlay-switch" title="Depth preview">
+                        <input type="checkbox" id="overlay-depth-preview" checked aria-label="Depth preview">
+                      </label>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Performance</th>
+                    <td>
+                      <label class="overlay-switch" title="Performance main">
+                        <input type="checkbox" id="overlay-performance-main" aria-label="Performance main">
+                      </label>
+                    </td>
+                    <td>
+                      <label class="overlay-switch" title="Performance preview">
+                        <input type="checkbox" id="overlay-performance-preview" checked aria-label="Performance preview">
+                      </label>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Score</th>
+                    <td>
+                      <label class="overlay-switch" title="Score main">
+                        <input type="checkbox" id="overlay-score-main" checked aria-label="Score main">
+                      </label>
+                    </td>
+                    <td>
+                      <label class="overlay-switch" title="Score preview">
+                        <input type="checkbox" id="overlay-score-preview" checked aria-label="Score preview">
+                      </label>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="panel-footnote">
+              <span id="mediamime-status" class="status-chip">Initializing…</span>
+              <div class="tip">
+                Toggle Main overlays to affect the canvas, and use Preview toggles to stage diagnostics or capture snapshots.
+              </div>
+            </div>
             </div>
           </div>
-          <div class="stream-option-row">
-            <label for="toggle-trails">
-              <input type="checkbox" id="toggle-trails">
-              <span>Persistent trails</span>
-            </label>
+      </section>
+      <section id="modal-map" class="panel floating-modal is-open" role="dialog" aria-modal="false" aria-label="Map panel" data-modal="map" tabindex="-1">
+        <div class="panel-header" data-modal-handle>
+          <h2>Map</h2>
+          <div class="panel-actions">
+            <button type="button" class="icon-button panel-close" data-modal-close="map" title="Hide Map panel" aria-label="Hide Map panel">
+              <span class="material-icons-outlined" aria-hidden="true">close</span>
+            </button>
           </div>
-          <div class="overlay-toggles">
-            <div class="overlay-toggles-header">
-              <span>Stream</span>
-              <span>Main</span>
-              <span>Preview</span>
-            </div>
-            <div class="overlay-toggle">
-              <span class="overlay-name">Source</span>
-              <label class="overlay-switch" title="Source main">
-                <input type="checkbox" id="overlay-underlay-main" checked aria-label="Source main">
-              </label>
-              <label class="overlay-switch" title="Source preview">
-                <input type="checkbox" id="overlay-underlay-preview" aria-label="Source preview">
-              </label>
-            </div>
-            <div class="overlay-toggle">
-              <span class="overlay-name">Pose</span>
-              <label class="overlay-switch" title="Pose main">
-                <input type="checkbox" id="overlay-pose-main" checked aria-label="Pose main">
-              </label>
-              <label class="overlay-switch" title="Pose preview">
-                <input type="checkbox" id="overlay-pose-preview" aria-label="Pose preview">
-              </label>
-            </div>
-            <div class="overlay-toggle">
-              <span class="overlay-name">LHand</span>
-              <label class="overlay-switch" title="Left hand main">
-                <input type="checkbox" id="overlay-left-hand-main" checked aria-label="Left hand main">
-              </label>
-              <label class="overlay-switch" title="Left hand preview">
-                <input type="checkbox" id="overlay-left-hand-preview" aria-label="Left hand preview">
-              </label>
-            </div>
-            <div class="overlay-toggle">
-              <span class="overlay-name">RHand</span>
-              <label class="overlay-switch" title="Right hand main">
-                <input type="checkbox" id="overlay-right-hand-main" checked aria-label="Right hand main">
-              </label>
-              <label class="overlay-switch" title="Right hand preview">
-                <input type="checkbox" id="overlay-right-hand-preview" aria-label="Right hand preview">
-              </label>
-            </div>
-            <div class="overlay-toggle">
-              <span class="overlay-name">Face</span>
-              <label class="overlay-switch" title="Face main">
-                <input type="checkbox" id="overlay-face-main" checked aria-label="Face main">
-              </label>
-              <label class="overlay-switch" title="Face preview">
-                <input type="checkbox" id="overlay-face-preview" aria-label="Face preview">
-              </label>
-            </div>
-            <div class="overlay-toggle">
-              <span class="overlay-name">Segmentation</span>
-              <label class="overlay-switch" title="Segmentation main">
-                <input type="checkbox" id="overlay-segmentation-main" aria-label="Segmentation main">
-              </label>
-              <label class="overlay-switch" title="Segmentation preview">
-                <input type="checkbox" id="overlay-segmentation-preview" checked aria-label="Segmentation preview">
-              </label>
-            </div>
-            <div class="overlay-toggle">
-              <span class="overlay-name">Depth</span>
-              <label class="overlay-switch" title="Depth main">
-                <input type="checkbox" id="overlay-depth-main" aria-label="Depth main">
-              </label>
-              <label class="overlay-switch" title="Depth preview">
-                <input type="checkbox" id="overlay-depth-preview" checked aria-label="Depth preview">
-              </label>
-            </div>
-            <div class="overlay-toggle">
-              <span class="overlay-name">Performance</span>
-              <label class="overlay-switch" title="Performance main">
-                <input type="checkbox" id="overlay-performance-main" aria-label="Performance main">
-              </label>
-              <label class="overlay-switch" title="Performance preview">
-                <input type="checkbox" id="overlay-performance-preview" checked aria-label="Performance preview">
-              </label>
-            </div>
-            <div class="overlay-toggle">
-              <span class="overlay-name">Score</span>
-              <label class="overlay-switch" title="Score main">
-                <input type="checkbox" id="overlay-score-main" checked aria-label="Score main">
-              </label>
-              <label class="overlay-switch" title="Score preview">
-                <input type="checkbox" id="overlay-score-preview" checked aria-label="Score preview">
-              </label>
+        </div>
+        <div class="panel-content">
+            <div class="panel-section is-active" data-panel-section="editor" id="panel-editor" role="tabpanel" aria-label="Score editor">
+              <div class="panel-routing" aria-label="Global routing settings">
+                <div class="panel-routing-row">
+                  <label for="editor-midi-port">MIDI Port</label>
+                  <div class="input-with-button">
+                    <select id="editor-midi-port">
+                      <option value="broadcast">All Outputs</option>
+                    </select>
+                    <button id="editor-midi-port-refresh" type="button" class="icon-button" title="Refresh MIDI ports" aria-label="Refresh MIDI ports">
+                      <span class="material-icons-outlined" aria-hidden="true">refresh</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="panel-routing-actions">
+                  <button id="snapshot-export" type="button" class="icon-button" title="Export snapshot" aria-label="Export snapshot">
+                    <span class="material-icons-outlined" aria-hidden="true">download</span>
+                  </button>
+                  <button id="snapshot-import" type="button" class="icon-button" title="Import snapshot" aria-label="Import snapshot">
+                    <span class="material-icons-outlined" aria-hidden="true">upload</span>
+                  </button>
+                </div>
+              </div>
+              <input id="snapshot-import-input" type="file" accept="application/json" hidden>
+              <div class="editor-panel">
+                <div class="editor-shape-list" id="editor-shape-list" role="listbox" aria-label="Score elements"></div>
+                <div class="editor-detail" id="editor-detail">
+                  <div class="editor-detail-empty" id="editor-detail-empty">
+                    Draw a shape to begin. Select it to edit MIDI mappings.
+                  </div>
+                  <form id="editor-detail-form" class="editor-detail-form" autocomplete="off">
+                    <div class="form-row">
+                      <label for="editor-stream-select">Mediapipe Stream</label>
+                      <select id="editor-stream-select">
+                        <option value="pose">Pose Landmarks</option>
+                        <option value="leftHand">Left Hand</option>
+                        <option value="rightHand">Right Hand</option>
+                        <option value="face">Face (centroid)</option>
+                      </select>
+                    </div>
+                    <div class="form-row">
+                      <label for="editor-landmark-select">Landmark</label>
+                      <select id="editor-landmark-select"></select>
+                    </div>
+                    <div class="event-list-header">
+                      <span>Events</span>
+                      <button type="button" id="editor-add-event" class="icon-button" title="Add event" aria-label="Add event">
+                        <span class="material-icons-outlined" aria-hidden="true">add</span>
+                      </button>
+                    </div>
+                    <div id="editor-event-list" class="event-list" role="list"></div>
+                    <p class="event-hint">
+                      Velocity and CC values can follow constant or normalised sources (X, Y, distance).
+                    </p>
+                    <div class="editor-detail-actions">
+                      <button type="button" id="editor-open-modal" class="secondary">Pop-out editor</button>
+                      <button type="button" id="editor-delete-shape" class="danger">Delete shape</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
             </div>
           </div>
+        </div>
+      </section>
+      <section id="modal-preview" class="panel floating-modal is-open" role="dialog" aria-modal="false" aria-label="Preview panel" data-modal="preview" data-resizable="true" tabindex="-1">
+        <div class="panel-header" data-modal-handle>
+          <h2>Preview</h2>
+          <div class="panel-actions">
+            <button type="button" class="icon-button panel-close" data-modal-close="preview" title="Hide Preview panel" aria-label="Hide Preview panel">
+              <span class="material-icons-outlined" aria-hidden="true">close</span>
+            </button>
+          </div>
+        </div>
+        <div class="floating-modal-body">
           <div class="segment-preview" aria-hidden="false">
             <canvas id="segmentation-preview" width="320" height="180"></canvas>
           </div>
-          <div class="panel-footnote">
-            <span id="mediamime-status" class="status-chip">Initializing…</span>
-            <div class="tip">
-              Toggle Main overlays to affect the canvas, and use Preview toggles to stage diagnostics or capture snapshots.
-            </div>
-          </div>
         </div>
-        <div class="panel-section is-active" data-panel-section="editor" id="panel-editor" role="tabpanel" aria-label="Score editor">
-          <div class="panel-routing" aria-label="Global routing settings">
-            <div class="panel-routing-row">
-              <label for="editor-midi-port">MIDI Port</label>
-              <div class="input-with-button">
-                <select id="editor-midi-port">
-                  <option value="broadcast">All Outputs</option>
-                </select>
-                <button id="editor-midi-port-refresh" type="button" class="icon-button" title="Refresh MIDI ports" aria-label="Refresh MIDI ports">
-                  <span class="material-icons-outlined" aria-hidden="true">refresh</span>
-                </button>
-              </div>
-            </div>
-            <div class="panel-routing-actions">
-              <button id="snapshot-export" type="button" class="icon-button" title="Export snapshot" aria-label="Export snapshot">
-                <span class="material-icons-outlined" aria-hidden="true">download</span>
-              </button>
-              <button id="snapshot-import" type="button" class="icon-button" title="Import snapshot" aria-label="Import snapshot">
-                <span class="material-icons-outlined" aria-hidden="true">upload</span>
-              </button>
-            </div>
-          </div>
-          <input id="snapshot-import-input" type="file" accept="application/json" hidden>
-          <div class="editor-panel">
-            <div class="editor-shape-list" id="editor-shape-list" role="listbox" aria-label="Score elements"></div>
-            <div class="editor-detail" id="editor-detail">
-              <div class="editor-detail-empty" id="editor-detail-empty">
-                Draw a shape to begin. Select it to edit MIDI mappings.
-              </div>
-              <form id="editor-detail-form" class="editor-detail-form" autocomplete="off">
-                <div class="form-row">
-                  <label for="editor-stream-select">Mediapipe Stream</label>
-                  <select id="editor-stream-select">
-                    <option value="pose">Pose Landmarks</option>
-                    <option value="leftHand">Left Hand</option>
-                    <option value="rightHand">Right Hand</option>
-                    <option value="face">Face (centroid)</option>
-                  </select>
-                </div>
-                <div class="form-row">
-                  <label for="editor-landmark-select">Landmark</label>
-                  <select id="editor-landmark-select"></select>
-                </div>
-                <div class="event-list-header">
-                  <span>Events</span>
-                  <button type="button" id="editor-add-event" class="icon-button" title="Add event" aria-label="Add event">
-                    <span class="material-icons-outlined" aria-hidden="true">add</span>
-                  </button>
-                </div>
-                <div id="editor-event-list" class="event-list" role="list"></div>
-                <p class="event-hint">
-                  Velocity and CC values can follow constant or normalised sources (X, Y, distance).
-                </p>
-                <div class="editor-detail-actions">
-                  <button type="button" id="editor-open-modal" class="secondary">Pop-out editor</button>
-                  <button type="button" id="editor-delete-shape" class="danger">Delete shape</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      </div>
-    </aside>
+        <button type="button" class="modal-resize-handle" aria-label="Resize Preview panel" data-modal-resize="preview">
+          <span class="material-icons-outlined" aria-hidden="true">open_in_full</span>
+        </button>
+      </section>
+    </div>
   </main>
   <div id="assignment-backdrop" class="modal-backdrop" aria-hidden="true"></div>
   <div id="assignment-modal" class="assignment-modal" role="dialog" aria-modal="true" aria-labelledby="assignment-modal-title" aria-hidden="true">
@@ -360,15 +439,243 @@ const SAMPLE_VIDEO_URL = "https://thefoxofsky.github.io/project_pages/RealisDanc
         preview: document.getElementById("overlay-score-preview")
       }
     };
-    const panelEl = document.getElementById("mediamime-panel");
-    const panelToggleBtn = document.getElementById("panel-toggle");
-    const panelCloseBtn = document.getElementById("panel-close");
-    const panelBackdrop = document.getElementById("panel-backdrop");
-    const panelToggleIcon = panelToggleBtn?.querySelector(".material-icons-outlined");
-    const panelTitleEl = panelEl?.querySelector(".panel-header h2");
-    const panelTabs = Array.from(document.querySelectorAll("[data-panel-tab]"));
-    const panelSections = Array.from(document.querySelectorAll("[data-panel-section]"));
     const editorToggleBtn = document.getElementById("editor-toggle");
+    const modalElements = Array.from(document.querySelectorAll(".floating-modal[data-modal]"));
+    const modalState = new Map();
+    const modalStateListeners = [];
+    const modalShortcutMap = new Map([
+      ["i", "input"],
+      ["p", "preview"],
+      ["l", "layers"],
+      ["m", "map"]
+    ]);
+    const DEFAULT_MODAL_POSITIONS = {
+      input: { top: 16, align: "right" },
+      layers: { top: 176, align: "right" },
+      preview: { top: 336, align: "right" },
+      map: { top: 496, align: "right" }
+    };
+    const onModalStateChange = (listener) => {
+      if (typeof listener === "function") {
+        modalStateListeners.push(listener);
+      }
+    };
+const getModalById = (id) => modalElements.find((modal) => modal.dataset.modal === id);
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+let modalZIndexSeed = 500;
+let lastActiveModalId = null;
+
+const ensureModalInViewport = (modal) => {
+  if (!modal) return;
+  let rect = modal.getBoundingClientRect();
+  if (modal.dataset.resizable === "true") {
+    const maxWidth = Math.max(240, window.innerWidth - 32);
+    const maxHeight = Math.max(200, window.innerHeight - 32);
+    if (rect.width > maxWidth) {
+      modal.style.width = `${maxWidth}px`;
+      rect = modal.getBoundingClientRect();
+    }
+    if (rect.height > maxHeight) {
+      modal.style.height = `${maxHeight}px`;
+      rect = modal.getBoundingClientRect();
+    }
+  }
+  const maxLeft = Math.max(16, window.innerWidth - rect.width - 16);
+  const maxTop = Math.max(16, window.innerHeight - rect.height - 16);
+  modal.style.left = `${clamp(rect.left, 16, maxLeft)}px`;
+  modal.style.top = `${clamp(rect.top, 16, maxTop)}px`;
+  modal.style.right = "auto";
+  modal.style.bottom = "auto";
+};
+
+const initializeModalPosition = (modal) => {
+  if (!modal) return;
+  modal.style.right = "auto";
+  modal.style.bottom = "auto";
+  const id = modal.dataset.modal;
+  if (modal.dataset.resizable === "true") {
+    const rect = modal.getBoundingClientRect();
+    modal.style.width = `${Math.min(rect.width, window.innerWidth - 32)}px`;
+    modal.style.height = `${Math.min(rect.height, window.innerHeight - 32)}px`;
+  }
+  const rect = modal.getBoundingClientRect();
+  const defaults = DEFAULT_MODAL_POSITIONS[id];
+  if (defaults) {
+    if (typeof defaults.top === "number") {
+      modal.style.top = `${defaults.top}px`;
+    }
+    if (defaults.align === "right") {
+      const alignedLeft = Math.max(16, window.innerWidth - rect.width - 16);
+      modal.style.left = `${alignedLeft}px`;
+    } else if (typeof defaults.left === "number") {
+      modal.style.left = `${defaults.left}px`;
+    }
+  }
+  ensureModalInViewport(modal);
+};
+
+const bringModalToFront = (modal) => {
+  if (!modal) return;
+  modalZIndexSeed += 1;
+  modal.style.zIndex = modalZIndexSeed;
+  const id = modal.dataset.modal;
+  if (id) {
+    lastActiveModalId = id;
+  }
+};
+
+const isModalVisible = (id) => modalState.get(id) !== false;
+
+const setModalVisibility = (id, open, { skipFocus } = {}) => {
+  const modal = getModalById(id);
+  if (!modal) return;
+  const nextState = Boolean(open);
+  modalState.set(id, nextState);
+  modal.classList.toggle("is-hidden", !nextState);
+  modal.setAttribute("aria-hidden", nextState ? "false" : "true");
+  if (nextState) {
+    initializeModalPosition(modal);
+    bringModalToFront(modal);
+    if (!skipFocus) {
+      requestAnimationFrame(() => {
+        try {
+          modal.focus({ preventScroll: true });
+        } catch (err) {
+          modal.focus();
+        }
+      });
+    }
+  } else if (lastActiveModalId === id) {
+    lastActiveModalId = null;
+  }
+  modalStateListeners.forEach((listener) => {
+    try {
+      listener({ id, open: nextState, modal });
+    } catch (err) {
+      console.warn("Modal listener error", err);
+    }
+  });
+};
+
+const openModal = (id, options) => setModalVisibility(id, true, options);
+const closeModal = (id, options) => setModalVisibility(id, false, options);
+const toggleModal = (id, options) => setModalVisibility(id, !isModalVisible(id), options);
+const isMapModalOpen = () => isModalVisible("map");
+
+const attachModalDrag = (modal) => {
+  const handle = modal?.querySelector("[data-modal-handle]");
+  if (!modal || !handle) return;
+  handle.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    bringModalToFront(modal);
+    handle.setPointerCapture(event.pointerId);
+    const rect = modal.getBoundingClientRect();
+    const offsetX = event.clientX - rect.left;
+    const offsetY = event.clientY - rect.top;
+    modal.style.right = "auto";
+    modal.style.bottom = "auto";
+    const handlePointerMove = (moveEvent) => {
+      const maxLeft = Math.max(16, window.innerWidth - rect.width - 16);
+      const maxTop = Math.max(16, window.innerHeight - rect.height - 16);
+      modal.style.left = `${clamp(moveEvent.clientX - offsetX, 16, maxLeft)}px`;
+      modal.style.top = `${clamp(moveEvent.clientY - offsetY, 16, maxTop)}px`;
+    };
+    const stopDrag = () => {
+      handle.releasePointerCapture(event.pointerId);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopDrag);
+      handle.removeEventListener("lostpointercapture", stopDrag);
+      ensureModalInViewport(modal);
+    };
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopDrag, { once: true });
+    handle.addEventListener("lostpointercapture", stopDrag);
+  });
+};
+
+const attachModalResize = (modal) => {
+  if (!modal || modal.dataset.resizable !== "true") return;
+  const handle = modal.querySelector("[data-modal-resize]");
+  if (!handle) return;
+  handle.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    bringModalToFront(modal);
+    handle.setPointerCapture(event.pointerId);
+    const rect = modal.getBoundingClientRect();
+    const startWidth = rect.width;
+    const startHeight = rect.height;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const minWidth = 220;
+    const minHeight = 160;
+    const handlePointerMove = (moveEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      const maxWidth = Math.max(minWidth, window.innerWidth - 32);
+      const maxHeight = Math.max(minHeight, window.innerHeight - 32);
+      const nextWidth = clamp(startWidth + deltaX, minWidth, maxWidth);
+      const nextHeight = clamp(startHeight + deltaY, minHeight, maxHeight);
+      modal.style.width = `${nextWidth}px`;
+      modal.style.height = `${nextHeight}px`;
+      ensureModalInViewport(modal);
+    };
+    const stopResize = () => {
+      handle.releasePointerCapture(event.pointerId);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResize);
+      handle.removeEventListener("lostpointercapture", stopResize);
+      ensureModalInViewport(modal);
+    };
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResize, { once: true });
+    handle.addEventListener("lostpointercapture", stopResize);
+  });
+};
+
+modalElements.forEach((modal) => {
+  initializeModalPosition(modal);
+  const id = modal.dataset.modal;
+  const open = !modal.classList.contains("is-hidden");
+  modalState.set(id, open);
+  modal.setAttribute("aria-hidden", open ? "false" : "true");
+  bringModalToFront(modal);
+  modal.addEventListener("pointerdown", () => bringModalToFront(modal));
+  attachModalDrag(modal);
+  attachModalResize(modal);
+});
+lastActiveModalId = null;
+
+document.querySelectorAll("[data-modal-close]").forEach((button) => {
+  const targetId = button.dataset.modalClose;
+  button.addEventListener("click", () => {
+    if (targetId) {
+      closeModal(targetId, { skipFocus: true });
+    }
+  });
+});
+
+document.addEventListener("keydown", (event) => {
+  if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey) {
+    const key = event.key?.toLowerCase();
+    const targetModal = modalShortcutMap.get(key);
+    if (targetModal) {
+      event.preventDefault();
+      toggleModal(targetModal);
+      return;
+    }
+  }
+  if (event.key === "Escape" && !event.defaultPrevented && lastActiveModalId && isModalVisible(lastActiveModalId)) {
+    event.preventDefault();
+    closeModal(lastActiveModalId, { skipFocus: true });
+  }
+});
+
+window.addEventListener("resize", () => {
+  modalElements.forEach((modal) => ensureModalInViewport(modal));
+});
+
 const previewCanvas = document.getElementById("segmentation-preview");
 const previewCtx = previewCanvas.getContext("2d", { willReadFrequently: true }) || previewCanvas.getContext("2d");
 const previewSection = document.querySelector(".segment-preview");
@@ -489,7 +796,6 @@ const SAFE_FACEMESH_TESSELATION = typeof FACEMESH_TESSELATION !== "undefined"
     let sampleHandle = null;
     let latestResults = null;
     let holisticBusy = false;
-    let isPanelOpen = panelEl?.classList.contains("is-open");
 let segmentationBuffer = null;
 let segmentationMaskAvailable = false;
 
@@ -637,48 +943,6 @@ const updateOverlayState = () => {
   drawPreviewCanvas();
 };
 
-const setPanelState = (open, { skipFocus = false } = {}) => {
-  if (!panelEl || !panelToggleBtn || !panelBackdrop) {
-    return;
-  }
-  isPanelOpen = open;
-  panelEl.classList.toggle("is-open", open);
-  panelBackdrop.classList.toggle("is-visible", open);
-  panelEl.setAttribute("aria-hidden", open ? "false" : "true");
-  panelToggleBtn.setAttribute("aria-expanded", open ? "true" : "false");
-  panelToggleBtn.setAttribute("title", open ? "Hide control panel" : "Show control panel");
-  panelToggleBtn.setAttribute("aria-label", open ? "Hide control panel" : "Show control panel");
-  if (panelToggleIcon) {
-    panelToggleIcon.textContent = open ? "close" : "tune";
-  }
-  if (panelCloseBtn) {
-    panelCloseBtn.setAttribute("title", "Hide control panel");
-    panelCloseBtn.setAttribute("aria-label", "Hide control panel");
-  }
-  if (open) {
-    try {
-      panelEl.focus({ preventScroll: true });
-    } catch (err) {
-      panelEl.focus();
-    }
-  } else if (!skipFocus) {
-    try {
-      panelToggleBtn.focus({ preventScroll: true });
-    } catch (err) {
-      panelToggleBtn.focus();
-    }
-  }
-};
-
-const openPanel = (options) => setPanelState(true, options);
-const closePanel = (options) => setPanelState(false, options);
-const togglePanel = () => setPanelState(!isPanelOpen);
-const setToggleButtonsVisibility = (visible) => {
-  const shouldShow = Boolean(visible);
-  panelToggleBtn?.classList.toggle("is-visible", shouldShow);
-  editorToggleBtn?.classList.toggle("is-visible", shouldShow);
-};
-
 const waitForHolisticIdle = async () => {
   while (holisticBusy) {
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -697,16 +961,6 @@ const resetHolistic = async () => {
   holisticBusy = false;
   holistic = createHolistic();
 };
-    setPanelState(Boolean(isPanelOpen), { skipFocus: true });
-    setToggleButtonsVisibility(false);
-    document.addEventListener("keydown", (event) => {
-      const isToggleShortcut = (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'u';
-      if (!isToggleShortcut) return;
-      event.preventDefault();
-      const shouldShow = !panelToggleBtn?.classList.contains('is-visible');
-      setToggleButtonsVisibility(shouldShow);
-    });
-
     const overlayInputs = Object.values(overlayControls)
       .flatMap((controls) => [controls.main, controls.preview])
       .filter(Boolean);
@@ -718,23 +972,6 @@ const resetHolistic = async () => {
     if (mirrorCheckbox) {
       mirrorCheckbox.addEventListener("change", updateOverlayState);
     }
-
-    if (panelToggleBtn) {
-      panelToggleBtn.addEventListener("click", () => {
-        togglePanel();
-      });
-    }
-    if (panelCloseBtn) {
-      panelCloseBtn.addEventListener("click", () => {
-        closePanel();
-      });
-    }
-    // Backdrop is visual only; closing is manual via toggle or close button.
-    document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && !event.defaultPrevented && isPanelOpen) {
-        closePanel({ skipFocus: true });
-      }
-    });
 
     const applyStatus = (text) => {
       statusLabel.textContent = text;
@@ -1250,7 +1487,6 @@ holistic = createHolistic();
     const isPolylineTool = (tool) => tool === "line" || tool === "polygon";
     const STORAGE_KEY = "mediamime:gesture-shapes";
     let persistTimer = null;
-    let activePanelTab = panelTabs.find((button) => button.classList.contains("is-active"))?.dataset?.panelTab || "streams";
     let activeAssignmentShapeId = null;
     let assignmentDraftInteraction = null;
     const CONTINUOUS_TRIGGER_INTERVAL_MS = 220;
@@ -1484,39 +1720,19 @@ const toggleEditorVisibility = () => {
       isSyncingEditorForm = false;
     };
     const updateEditorSidebar = () => {
-      if (activePanelTab !== "editor") {
+      if (!isMapModalOpen()) {
         return;
       }
       updateEditorShapeList();
       syncEditorDetailForm();
       editorSidebarDirty = false;
     };
-    const setActivePanelTab = (tabId) => {
-      if (!tabId) {
-        return;
-      }
-      activePanelTab = tabId;
-      panelTabs.forEach((button) => {
-        const matches = button.dataset.panelTab === tabId;
-        button.classList.toggle("is-active", matches);
-        if (button.getAttribute("role") === "tab") {
-          button.setAttribute("aria-selected", matches ? "true" : "false");
-          button.setAttribute("tabindex", matches ? "0" : "-1");
-        }
-      });
-      panelSections.forEach((section) => {
-        const matches = section.dataset.panelSection === tabId;
-        section.classList.toggle("is-active", matches);
-        section.setAttribute("aria-hidden", matches ? "false" : "true");
-      });
-      if (panelTitleEl) {
-        panelTitleEl.textContent = tabId === "editor" ? "Editor" : "Streams";
-      }
-      if (tabId === "editor") {
+    onModalStateChange(({ id, open }) => {
+      if (id === "map" && open) {
         markEditorSidebarDirty();
         updateEditorSidebar();
       }
-    };
+    });
     const mutateSelectedShape = (mutator, { skipRender = false, skipSidebar = false, skipDirty = false } = {}) => {
       const shape = findShapeById(editorState.selectedId);
       if (!shape) {
@@ -1541,7 +1757,7 @@ const toggleEditorVisibility = () => {
       }
       queuePersist();
       if (skipRender) {
-        if (!skipSidebar && activePanelTab === "editor") {
+        if (!skipSidebar && isMapModalOpen()) {
           updateEditorSidebar();
         }
       } else {
@@ -2270,7 +2486,7 @@ const toggleEditorVisibility = () => {
       editorState.drawingShapeId = null;
       editorState.dragHandle = null;
       markEditorSidebarDirty();
-      if (activePanelTab === "editor") {
+      if (isMapModalOpen()) {
         updateEditorSidebar();
       }
       syncEditorDetailForm();
@@ -2541,7 +2757,7 @@ const toggleEditorVisibility = () => {
         `;
       }
       gestureSvg.innerHTML = `<g class="gesture-shapes">${shapesMarkup}${previewMarkup}</g>${handlesMarkup}`;
-      if (editorSidebarDirty && activePanelTab === "editor") {
+      if (editorSidebarDirty && isMapModalOpen()) {
         updateEditorSidebar();
       }
     };
@@ -2620,7 +2836,7 @@ const toggleEditorVisibility = () => {
 
     const setSelectedShape = (shapeId, { suppressRender = false } = {}) => {
       if (editorState.selectedId === shapeId) {
-        if (activePanelTab === "editor") {
+        if (isMapModalOpen()) {
           syncEditorDetailForm();
         }
         return;
@@ -2632,7 +2848,7 @@ const toggleEditorVisibility = () => {
       }
       markEditorSidebarDirty();
       if (suppressRender) {
-        if (activePanelTab === "editor") {
+        if (isMapModalOpen()) {
           updateEditorSidebar();
         }
       } else {
@@ -3034,11 +3250,6 @@ const toggleEditorVisibility = () => {
       if (event.altKey) return;
       if (event.repeat) return;
       const key = event.key?.toLowerCase();
-      if (key === ",") {
-        event.preventDefault();
-        togglePanel();
-        return;
-      }
       if (key === "e") {
         event.preventDefault();
         toggleEditorVisibility();
@@ -3551,7 +3762,7 @@ const toggleEditorVisibility = () => {
             state.noteOn = false;
           });
         }
-        if (activePanelTab === "editor") {
+        if (isMapModalOpen()) {
           const item = document.getElementById(`editor-shape-${shape.id}`);
           if (item) {
             if (inside) {
@@ -3672,12 +3883,6 @@ const toggleEditorVisibility = () => {
       }
     });
     editorToggleBtn?.addEventListener("click", toggleEditorVisibility);
-    panelTabs.forEach((button) => {
-      button.addEventListener("click", () => {
-        const tabId = button.dataset.panelTab || "streams";
-        setActivePanelTab(tabId);
-      });
-    });
     editorShapeList?.addEventListener("click", (event) => {
       const target = event.target?.closest("button[data-shape-id]");
       if (!target) return;
@@ -3780,7 +3985,6 @@ const toggleEditorVisibility = () => {
     loadPersistedShapes();
     setEditorMode(editorState.mode);
     setEditorTool(editorState.tool);
-    setActivePanelTab(activePanelTab);
     populateLandmarkOptions("pose", "left_wrist", assignmentLandmarkSelect);
     populateLandmarkOptions("pose", "left_wrist", editorLandmarkSelect);
     syncEditorDetailForm();
