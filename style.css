@@ -964,6 +964,13 @@ html, body {
       justify-content: space-between;
       gap: 0.6rem;
       margin-bottom: 0.6rem;
+      cursor: move;
+    }
+    .assignment-modal header button {
+      cursor: pointer;
+    }
+    .assignment-modal.is-dragging header {
+      cursor: grabbing;
     }
     .assignment-modal header h3 {
       margin: 0;

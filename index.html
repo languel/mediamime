@@ -54,7 +54,7 @@
       <video id="mediamime-video" muted></video>
     </section>
         <div id="modal-layer" class="floating-modal-layer">
-      <section id="modal-input" class="panel floating-modal is-open" role="dialog" aria-modal="false" aria-label="Input panel" data-modal="input" data-resizable="true" tabindex="-1">
+      <section id="modal-input" class="panel floating-modal is-open is-hidden" role="dialog" aria-modal="false" aria-label="Input panel" aria-hidden="true" data-modal="input" data-resizable="true" tabindex="-1">
         <div class="modal-chrome">
           <div class="modal-handle" data-modal-handle aria-label="Move Input panel" tabindex="0">
             <span class="material-icons-outlined" aria-hidden="true">drag_indicator</span>
@@ -77,7 +77,7 @@
           </div>
         </div>
       </section>
-      <section id="modal-layers" class="panel floating-modal is-open" role="dialog" aria-modal="false" aria-label="Layers panel" data-modal="layers" tabindex="-1">
+      <section id="modal-layers" class="panel floating-modal is-open is-hidden" role="dialog" aria-modal="false" aria-label="Layers panel" aria-hidden="true" data-modal="layers" tabindex="-1">
         <div class="modal-chrome">
           <div class="modal-handle" data-modal-handle aria-label="Move Layers panel" tabindex="0">
             <span class="material-icons-outlined" aria-hidden="true">drag_indicator</span>
@@ -245,7 +245,7 @@
             </div>
           </div>
       </section>
-      <section id="modal-map" class="panel floating-modal is-open" role="dialog" aria-modal="false" aria-label="Map panel" data-modal="map" tabindex="-1">
+      <section id="modal-map" class="panel floating-modal is-open is-hidden" role="dialog" aria-modal="false" aria-label="Map panel" aria-hidden="true" data-modal="map" tabindex="-1">
         <div class="modal-chrome">
           <div class="modal-handle" data-modal-handle aria-label="Move Map panel" tabindex="0">
             <span class="material-icons-outlined" aria-hidden="true">drag_indicator</span>
@@ -350,6 +350,10 @@
         <span class="material-icons-outlined" aria-hidden="true">close</span>
       </button>
     </header>
+    <section class="form-group">
+      <label for="assignment-shape-name">Shape Name</label>
+      <input id="assignment-shape-name" type="text" name="shapeName" placeholder="Untitled shape">
+    </section>
     <section class="form-group">
       <label for="assignment-stream">Input Stream</label>
       <select id="assignment-stream">
@@ -460,6 +464,12 @@ const SAMPLE_VIDEO_URL = "https://thefoxofsky.github.io/project_pages/RealisDanc
       preview: { top: 336, align: "right" },
       map: { top: 496, align: "right" }
     };
+    const DEFAULT_MODAL_VISIBILITY = {
+      input: false,
+      layers: false,
+      preview: true,
+      map: false
+    };
     const MODAL_MARGIN = 0;
     const MODAL_LAYOUT_KEY = "mediamime:modal-layout";
     const loadModalLayout = () => {
@@ -496,6 +506,7 @@ const SAMPLE_VIDEO_URL = "https://thefoxofsky.github.io/project_pages/RealisDanc
     };
 const getModalById = (id) => modalElements.find((modal) => modal.dataset.modal === id);
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (match) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[match]));
 let modalZIndexSeed = 500;
 let lastActiveModalId = null;
 
@@ -619,6 +630,7 @@ const setModalVisibility = (id, open, { skipFocus } = {}) => {
   const nextState = Boolean(open);
   modalState.set(id, nextState);
   modal.classList.toggle("is-hidden", !nextState);
+  modal.classList.toggle("is-open", nextState);
   modal.setAttribute("aria-hidden", nextState ? "false" : "true");
   if (nextState) {
     initializeModalPosition(modal);
@@ -853,9 +865,13 @@ modalElements.forEach((modal) => {
   initializeModalPosition(modal);
   const id = modal.dataset.modal;
   const saved = modalLayout[id] || {};
-  const open = saved.open ?? !modal.classList.contains("is-hidden");
+  const defaultOpen = Object.prototype.hasOwnProperty.call(DEFAULT_MODAL_VISIBILITY, id)
+    ? DEFAULT_MODAL_VISIBILITY[id]
+    : !modal.classList.contains("is-hidden");
+  const open = typeof saved.open === "boolean" ? saved.open : defaultOpen;
   modalState.set(id, open);
   modal.classList.toggle("is-hidden", !open);
+  modal.classList.toggle("is-open", open);
   modal.setAttribute("aria-hidden", open ? "false" : "true");
   if (open) {
     bringModalToFront(modal);
@@ -910,6 +926,9 @@ window.addEventListener("resize", () => {
       updateModalLayout(modal.dataset.modal, updates);
     }
   });
+  if (assignmentModal?.classList.contains("is-visible")) {
+    ensureAssignmentModalPosition();
+  }
 });
 
 const previewCanvas = document.getElementById("segmentation-preview");
@@ -935,6 +954,7 @@ const assignmentBackdrop = document.getElementById("assignment-backdrop");
 const assignmentCloseBtn = document.getElementById("assignment-modal-close");
 const assignmentCancelBtn = document.getElementById("assignment-modal-cancel");
 const assignmentApplyBtn = document.getElementById("assignment-modal-apply");
+const assignmentShapeNameInput = document.getElementById("assignment-shape-name");
 const assignmentStreamSelect = document.getElementById("assignment-stream");
 const assignmentLandmarkSelect = document.getElementById("assignment-landmark");
 const assignmentMidiPortSelect = document.getElementById("assignment-midi-port");
@@ -1051,14 +1071,14 @@ let segmentationMaskAvailable = false;
 
 const DEFAULT_OVERLAY_STATE = {
   mirror: true,
-  underlay: { main: true, preview: false },
-  pose: { main: true, preview: false },
-  leftHand: { main: true, preview: false },
-  rightHand: { main: true, preview: false },
-  face: { main: true, preview: false },
-  segmentation: { main: false, preview: true },
-  depth: { main: false, preview: true },
-  performance: { main: false, preview: true },
+  underlay: { main: false, preview: false },
+  pose: { main: true, preview: true },
+  leftHand: { main: true, preview: true },
+  rightHand: { main: true, preview: true },
+  face: { main: false, preview: false },
+  segmentation: { main: false, preview: false },
+  depth: { main: false, preview: false },
+  performance: { main: false, preview: false },
   score: { main: true, preview: true }
 };
 
@@ -1224,7 +1244,13 @@ const resetHolistic = async () => {
     }
 
     const applyStatus = (text) => {
-      statusLabel.textContent = text;
+      if (!statusLabel) return;
+      statusLabel.setAttribute("title", text);
+      statusLabel.setAttribute("aria-label", text);
+      const hiddenText = statusLabel.querySelector(".status-text");
+      if (hiddenText) {
+        hiddenText.textContent = text;
+      }
     };
 
     const segmentationOffscreen = document.createElement("canvas");
@@ -1325,30 +1351,7 @@ function drawPreviewCanvas() {
       drawLandmarkDots(rightHandLandmarks, "rgba(255, 143, 163, 0.9)", Math.max(2.2, width * 0.009));
     }
     if (overlayState.face?.preview && faceLandmarks) {
-      ctx.save();
-      ctx.strokeStyle = "rgba(249, 199, 79, 0.85)";
-      ctx.lineWidth = Math.max(0.8, width * 0.0025);
-      ctx.globalAlpha = 0.85;
-      if (SAFE_FACEMESH_TESSELATION.length) {
-        ctx.beginPath();
-        for (let i = 0; i < SAFE_FACEMESH_TESSELATION.length; i++) {
-          const [startIndex, endIndex] = SAFE_FACEMESH_TESSELATION[i];
-          const start = faceLandmarks[startIndex];
-          const end = faceLandmarks[endIndex];
-          if (!start || !end) continue;
-          ctx.moveTo(start.x * width, start.y * height);
-          ctx.lineTo(end.x * width, end.y * height);
-        }
-        ctx.stroke();
-      } else {
-        ctx.fillStyle = "rgba(249, 199, 79, 0.75)";
-        for (const lm of faceLandmarks) {
-          ctx.beginPath();
-          ctx.arc(lm.x * width, lm.y * height, Math.max(1.5, width * 0.004), 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-      ctx.restore();
+      drawLandmarkDots(faceLandmarks, "rgba(249, 199, 79, 0.85)", Math.max(2.4, width * 0.008));
     }
     if (overlayState.depth?.preview && poseLandmarks) {
       ctx.save();
@@ -1806,7 +1809,10 @@ holistic = createHolistic();
     let persistTimer = null;
     let activeAssignmentShapeId = null;
     let assignmentDraftInteraction = null;
+    let assignmentDraftName = "";
+    let assignmentModalHasCustomPosition = false;
     const CONTINUOUS_TRIGGER_INTERVAL_MS = 220;
+    const ASSIGNMENT_MODAL_MARGIN = 16;
     let editorSidebarDirty = true;
     let isSyncingEditorForm = false;
     let isSyncingAssignmentForm = false;
@@ -2015,6 +2021,9 @@ holistic = createHolistic();
         } else if (shape.type === "polyline") {
           typeLabel = shape.closed ? "Polygon" : "Polyline";
         }
+        const fallbackLabel = `Shape ${index + 1}`;
+        const rawName = typeof shape.name === "string" ? shape.name.trim() : "";
+        const shapeLabel = rawName || fallbackLabel;
         const streamDefinition = getStreamDefinition(shape.interaction?.stream || "pose");
         const streamLabel = streamDefinition?.label || "Stream";
         const events = Array.isArray(shape.interaction?.events) ? shape.interaction.events : [];
@@ -2041,8 +2050,8 @@ holistic = createHolistic();
           classes.push("is-active");
         }
         const highlight = shape.runtime?.inside ? " data-active=\"true\"" : "";
-        return `<button type="button" id="editor-shape-${shape.id}" class="${classes.join(" ")}"${highlight} data-shape-id="${shape.id}" role="option" aria-selected="${isActive ? "true" : "false"}">
-            <span class="shape-label">Shape ${index + 1}</span>
+        return `<button type="button" id="editor-shape-${shape.id}" class="${classes.join(" ")}"${highlight} data-shape-id="${shape.id}" role="option" aria-selected="${isActive ? "true" : "false"}" title="${escapeHtml(shapeLabel)}">
+            <span class="shape-label">${escapeHtml(shapeLabel)}</span>
             <span class="shape-meta">${meta}</span>
           </button>`;
       }).join("");
@@ -2267,7 +2276,6 @@ holistic = createHolistic();
       }
       return mergeInteraction(interaction);
     };
-    const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (match) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[match]));
     const normalizeVertices = (vertices) => {
       if (!Array.isArray(vertices)) return [];
       const normalized = [];
@@ -2566,6 +2574,7 @@ holistic = createHolistic();
       const shape = {
         id: ensureUuid(),
         type: "polyline",
+        name: "",
         vertices: [{ ...point }],
         closed: false,
         style: { ...DEFAULT_SHAPE_STYLE },
@@ -2889,6 +2898,9 @@ holistic = createHolistic();
     const syncAssignmentForm = () => {
       if (!assignmentStreamSelect) return;
       isSyncingAssignmentForm = true;
+      if (assignmentShapeNameInput) {
+        assignmentShapeNameInput.value = assignmentDraftName || "";
+      }
       const draft = assignmentDraftInteraction ? mergeInteraction(assignmentDraftInteraction) : createDefaultInteraction();
       const stream = draft.stream || "pose";
       assignmentStreamSelect.value = stream;
@@ -2947,6 +2959,7 @@ holistic = createHolistic();
       return editorState.shapes.map((shape) => ({
         id: shape.id,
         type: shape.type,
+        name: typeof shape.name === "string" ? shape.name : "",
         x: shape.x,
         y: shape.y,
         width: shape.width,
@@ -3125,14 +3138,15 @@ holistic = createHolistic();
       editorState.shapes = data.map((shape) => {
         const type = shape.type === "ellipse" ? "ellipse" : (shape.type === "polyline" ? "polyline" : "rect");
         const mergedInteraction = migrateLegacyInteraction(shape.interaction);
-        const normalized = {
-          id: shape.id || ensureUuid(),
-          type,
-          x: clampUnit(shape.x ?? 0),
-          y: clampUnit(shape.y ?? 0),
-          width: clampRange(shape.width ?? SHAPE_MIN_SIZE, SHAPE_MIN_SIZE, 1),
-          height: clampRange(shape.height ?? SHAPE_MIN_SIZE, SHAPE_MIN_SIZE, 1),
-          rotation: typeof shape.rotation === "number" ? normalizeAngle(shape.rotation) : 0,
+      const normalized = {
+        id: shape.id || ensureUuid(),
+        type,
+        name: typeof shape.name === "string" ? shape.name : "",
+        x: clampUnit(shape.x ?? 0),
+        y: clampUnit(shape.y ?? 0),
+        width: clampRange(shape.width ?? SHAPE_MIN_SIZE, SHAPE_MIN_SIZE, 1),
+        height: clampRange(shape.height ?? SHAPE_MIN_SIZE, SHAPE_MIN_SIZE, 1),
+        rotation: typeof shape.rotation === "number" ? normalizeAngle(shape.rotation) : 0,
           style: { ...DEFAULT_SHAPE_STYLE, ...(shape.style || {}) },
           interaction: mergedInteraction,
           runtime: {
@@ -3947,17 +3961,20 @@ holistic = createHolistic();
       refreshSelectionBounds({ preserveRotation: true, frameOverride: session.frame || null });
       return true;
     };
-    const applySelectionScale = (normalized, session) => {
+    const applySelectionScale = (normalized, rawNormalized, session) => {
       const initialFrame = session.initialFrame;
       if (!initialFrame) return false;
-      const localPoint = toSelectionLocal(normalized, initialFrame);
+      const referencePoint = rawNormalized || normalized;
+      const localPoint = toSelectionLocal(referencePoint, initialFrame);
       if (!localPoint) return false;
       const handle = session.handle || "transform-se";
-      const minSpan = Math.max(SHAPE_MIN_SIZE * 1.5, 0.01);
+      const minSpan = Math.max(SHAPE_MIN_SIZE, 0.01);
       const initialMinX = -initialFrame.width / 2;
       const initialMaxX = initialFrame.width / 2;
       const initialMinY = -initialFrame.height / 2;
       const initialMaxY = initialFrame.height / 2;
+      const adjustsX = handle.includes("w") || handle.includes("e");
+      const adjustsY = handle.includes("n") || handle.includes("s");
       let newMinX = initialMinX;
       let newMaxX = initialMaxX;
       let newMinY = initialMinY;
@@ -3986,15 +4003,15 @@ holistic = createHolistic();
         newMinY = initialMinY;
         newMaxY = initialMaxY;
       }
-      let newWidth = Math.max(newMaxX - newMinX, minSpan);
-      let newHeight = Math.max(newMaxY - newMinY, minSpan);
-      if (newWidth < minSpan) {
+      let newWidth = adjustsX ? Math.max(newMaxX - newMinX, minSpan) : initialFrame.width;
+      let newHeight = adjustsY ? Math.max(newMaxY - newMinY, minSpan) : initialFrame.height;
+      if (adjustsX && newWidth < minSpan) {
         const adjust = (minSpan - newWidth) / 2;
         newMinX -= adjust;
         newMaxX += adjust;
         newWidth = minSpan;
       }
-      if (newHeight < minSpan) {
+      if (adjustsY && newHeight < minSpan) {
         const adjust = (minSpan - newHeight) / 2;
         newMinY -= adjust;
         newMaxY += adjust;
@@ -4141,7 +4158,7 @@ holistic = createHolistic();
       const mutated = session.mode === "move"
         ? applySelectionMove(normalized, session)
         : session.mode === "scale"
-          ? applySelectionScale(normalized, session)
+          ? applySelectionScale(normalized, rawNormalized, session)
           : applySelectionRotate(normalized, rawNormalized, session, event);
       if (mutated) {
         session.didMutate = true;
@@ -4247,6 +4264,7 @@ holistic = createHolistic();
       const shape = {
         id: ensureUuid(),
         type: shapeType,
+        name: "",
         x: normalized.x,
         y: normalized.y,
         width: 0,
@@ -5036,6 +5054,106 @@ holistic = createHolistic();
       }
     };
 
+    const clampAssignmentModalPosition = () => {
+      if (!assignmentModal) return;
+      assignmentModal.style.transform = "none";
+      assignmentModal.style.right = "auto";
+      assignmentModal.style.bottom = "auto";
+      const rect = assignmentModal.getBoundingClientRect();
+      const width = rect.width || assignmentModal.offsetWidth || 0;
+      const height = rect.height || assignmentModal.offsetHeight || 0;
+      const margin = ASSIGNMENT_MODAL_MARGIN;
+      const maxLeft = Math.max(margin, window.innerWidth - width - margin);
+      const maxTop = Math.max(margin, window.innerHeight - height - margin);
+      const nextLeft = clamp(rect.left, margin, maxLeft);
+      const nextTop = clamp(rect.top, margin, maxTop);
+      assignmentModal.style.left = `${nextLeft}px`;
+      assignmentModal.style.top = `${nextTop}px`;
+    };
+
+    const centerAssignmentModal = () => {
+      if (!assignmentModal) return;
+      assignmentModal.style.transform = "none";
+      assignmentModal.style.right = "auto";
+      assignmentModal.style.bottom = "auto";
+      const rect = assignmentModal.getBoundingClientRect();
+      const width = rect.width || assignmentModal.offsetWidth || 0;
+      const height = rect.height || assignmentModal.offsetHeight || 0;
+      const margin = ASSIGNMENT_MODAL_MARGIN;
+      const idealLeft = (window.innerWidth - width) / 2;
+      const idealTop = (window.innerHeight - height) / 2;
+      const maxLeft = Math.max(margin, window.innerWidth - width - margin);
+      const maxTop = Math.max(margin, window.innerHeight - height - margin);
+      const nextLeft = clamp(Number.isFinite(idealLeft) ? idealLeft : margin, margin, maxLeft);
+      const nextTop = clamp(Number.isFinite(idealTop) ? idealTop : margin, margin, maxTop);
+      assignmentModal.style.left = `${nextLeft}px`;
+      assignmentModal.style.top = `${nextTop}px`;
+      assignmentModalHasCustomPosition = false;
+    };
+
+    const ensureAssignmentModalPosition = () => {
+      if (!assignmentModal) return;
+      if (assignmentModalHasCustomPosition) {
+        clampAssignmentModalPosition();
+      } else {
+        centerAssignmentModal();
+      }
+    };
+
+    const attachAssignmentModalDrag = () => {
+      if (!assignmentModal) return;
+      const handle = assignmentModal.querySelector("header");
+      if (!handle) return;
+      handle.style.cursor = "move";
+      handle.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        if (event.target.closest("button")) return;
+        event.preventDefault();
+        assignmentModal.style.transform = "none";
+        assignmentModal.style.right = "auto";
+        assignmentModal.style.bottom = "auto";
+        const rect = assignmentModal.getBoundingClientRect();
+        const offsetX = event.clientX - rect.left;
+        const offsetY = event.clientY - rect.top;
+        assignmentModal.classList.add("is-dragging");
+        try {
+          handle.setPointerCapture(event.pointerId);
+        } catch (err) {
+          // Pointer capture not supported; continue without it.
+        }
+        const handlePointerMove = (moveEvent) => {
+          const currentRect = assignmentModal.getBoundingClientRect();
+          const width = currentRect.width || rect.width || 0;
+          const height = currentRect.height || rect.height || 0;
+          const margin = ASSIGNMENT_MODAL_MARGIN;
+          const maxLeft = Math.max(margin, window.innerWidth - width - margin);
+          const maxTop = Math.max(margin, window.innerHeight - height - margin);
+          const nextLeft = clamp(moveEvent.clientX - offsetX, margin, maxLeft);
+          const nextTop = clamp(moveEvent.clientY - offsetY, margin, maxTop);
+          assignmentModal.style.left = `${nextLeft}px`;
+          assignmentModal.style.top = `${nextTop}px`;
+        };
+        const finalizeDrag = (releaseEvent) => {
+          handle.removeEventListener("pointermove", handlePointerMove);
+          handle.removeEventListener("pointerup", finalizeDrag);
+          handle.removeEventListener("lostpointercapture", finalizeDrag);
+          try {
+            handle.releasePointerCapture(event.pointerId);
+          } catch (err) {
+            // ignore
+          }
+          assignmentModal.classList.remove("is-dragging");
+          clampAssignmentModalPosition();
+          assignmentModalHasCustomPosition = true;
+        };
+        handle.addEventListener("pointermove", handlePointerMove);
+        handle.addEventListener("pointerup", finalizeDrag, { once: true });
+        handle.addEventListener("lostpointercapture", finalizeDrag);
+      });
+    };
+
+    attachAssignmentModalDrag();
+
     const openAssignmentModal = (shapeId) => {
       if (!assignmentModal || !assignmentBackdrop) return;
       const shape = findShapeById(shapeId);
@@ -5043,13 +5161,26 @@ holistic = createHolistic();
       refreshMidiPortOptions();
       activeAssignmentShapeId = shapeId;
       assignmentDraftInteraction = JSON.parse(JSON.stringify(mergeInteraction(shape.interaction)));
+      assignmentDraftName = typeof shape.name === "string" ? shape.name : "";
       syncAssignmentForm();
       assignmentBackdrop.classList.add("is-visible");
       assignmentModal.classList.add("is-visible");
       assignmentBackdrop.setAttribute("aria-hidden", "false");
       assignmentModal.setAttribute("aria-hidden", "false");
+      ensureAssignmentModalPosition();
       setTimeout(() => {
-        assignmentStreamSelect?.focus();
+        if (assignmentShapeNameInput) {
+          try {
+            assignmentShapeNameInput.focus({ preventScroll: true });
+          } catch (err) {
+            assignmentShapeNameInput.focus();
+          }
+          if (typeof assignmentShapeNameInput.select === "function") {
+            assignmentShapeNameInput.select();
+          }
+        } else {
+          assignmentStreamSelect?.focus();
+        }
       }, 20);
     };
 
@@ -5057,10 +5188,15 @@ holistic = createHolistic();
       if (!assignmentModal || !assignmentBackdrop) return;
       assignmentBackdrop.classList.remove("is-visible");
       assignmentModal.classList.remove("is-visible");
+      assignmentModal.classList.remove("is-dragging");
       assignmentBackdrop.setAttribute("aria-hidden", "true");
       assignmentModal.setAttribute("aria-hidden", "true");
       activeAssignmentShapeId = null;
       assignmentDraftInteraction = null;
+      assignmentDraftName = "";
+      if (assignmentShapeNameInput) {
+        assignmentShapeNameInput.value = "";
+      }
     };
 
     const applyAssignmentModal = () => {
@@ -5075,12 +5211,16 @@ holistic = createHolistic();
         stream,
         landmark
       });
+      const rawName = assignmentShapeNameInput ? assignmentShapeNameInput.value : assignmentDraftName;
+      assignmentDraftName = typeof rawName === "string" ? rawName : "";
+      const normalizedName = assignmentDraftName.trim();
       const targetId = activeAssignmentShapeId;
       if (editorState.selectedId !== targetId) {
         setSelectedShape(targetId, { suppressRender: true });
       }
       mutateSelectedShape((target) => {
         if (target.id === targetId) {
+          target.name = normalizedName;
           target.interaction = assignmentDraftInteraction;
         }
       }, { skipRender: true });
@@ -5146,7 +5286,7 @@ holistic = createHolistic();
         return Promise.resolve(midiManager.outputs);
       }
       if (!midiManager.pending) {
-        midiManager.pending = navigator.requestMIDIAccess({ sysex: false, software: false }).then((access) => {
+        midiManager.pending = navigator.requestMIDIAccess({ sysex: false }).then((access) => {
           midiManager.access = access;
           midiManager.outputs = Array.from(access.outputs.values());
           midiManager.ready = true;
@@ -5737,6 +5877,16 @@ holistic = createHolistic();
       renderEditor();
       queuePersist();
     });
+    assignmentShapeNameInput?.addEventListener("input", (event) => {
+      if (isSyncingAssignmentForm) return;
+      assignmentDraftName = event.target?.value ?? "";
+    });
+    assignmentShapeNameInput?.addEventListener("change", (event) => {
+      if (!assignmentShapeNameInput) return;
+      const trimmed = (event.target?.value ?? "").trim();
+      assignmentShapeNameInput.value = trimmed;
+      assignmentDraftName = trimmed;
+    });
     assignmentStreamSelect?.addEventListener("change", () => {
       if (isSyncingAssignmentForm) return;
       const streamId = assignmentStreamSelect.value || "pose";
@@ -5989,20 +6139,7 @@ holistic = createHolistic();
         drawLandmarkPoints(rightHandLandmarks, "rgba(255, 143, 163, 0.9)", 4);
       }
       if (overlayState.face?.main && faceLandmarks) {
-        p.noFill();
-        p.stroke("#f9c74f");
-        p.strokeWeight(1.2);
-        if (SAFE_FACEMESH_TESSELATION.length) {
-          for (let i = 0; i < SAFE_FACEMESH_TESSELATION.length; i++) {
-            const [startIndex, endIndex] = SAFE_FACEMESH_TESSELATION[i];
-            const start = faceLandmarks[startIndex];
-            const end = faceLandmarks[endIndex];
-            if (!start || !end) continue;
-            p.line(start.x * canvasWidth, start.y * canvasHeight, end.x * canvasWidth, end.y * canvasHeight);
-          }
-        } else {
-          drawLandmarkPoints(faceLandmarks, "rgba(249, 199, 79, 0.8)", 3);
-        }
+        drawLandmarkPoints(faceLandmarks, "rgba(249, 199, 79, 0.8)", 4);
       }
       if (overlayState.depth?.main && poseLandmarks) {
         p.noStroke();
