@@ -2348,7 +2348,6 @@ holistic = createHolistic();
       return normalized;
     };
     const RAD_TO_DEG = 180 / Math.PI;
-    const SNAP_ROTATION_INCREMENT = Math.PI / 12;
     function normalizeAngle(angle) {
       if (!Number.isFinite(angle)) return 0;
       return Math.atan2(Math.sin(angle), Math.cos(angle));
@@ -3735,7 +3734,6 @@ holistic = createHolistic();
     }
     const EDGE_HANDLE_TOLERANCE_PX = 12;
     const CORNER_HANDLE_TOLERANCE_PX = 18;
-    const ROTATION_HANDLE_BAND_PX = 28;
     function getUnclampedNormalizedPoint(event) {
       if (!gestureSvg) return null;
       const rect = gestureSvg.getBoundingClientRect();
@@ -3752,7 +3750,7 @@ holistic = createHolistic();
       const normalizedX = editorState.mirror ? 1 - relativeX : relativeX;
       return { x: normalizedX, y: relativeY };
     }
-    function resolveSelectionHandle(point, { allowRotation = true, rawPoint = null } = {}) {
+    function resolveSelectionHandle(point, { rawPoint = null } = {}) {
       const frame = editorState.selectionFrame;
       const bounds = editorState.selectionBounds;
       if (!frame || !bounds) return null;
@@ -3783,31 +3781,6 @@ holistic = createHolistic();
       const nearRightCorner = distRightPx <= cornerThresholdX && cornerVerticalBand;
       const nearTopCorner = distTopPx <= cornerThresholdY && cornerHorizontalBand;
       const nearBottomCorner = distBottomPx <= cornerThresholdY && cornerHorizontalBand;
-      if (allowRotation) {
-        const outsideLeft = rawLocalPoint.x < -halfWidth;
-        const outsideRight = rawLocalPoint.x > halfWidth;
-        const outsideTop = rawLocalPoint.y < -halfHeight;
-        const outsideBottom = rawLocalPoint.y > halfHeight;
-        if ((outsideLeft || outsideRight) && (outsideTop || outsideBottom)) {
-          const rotationBandPx = ROTATION_HANDLE_BAND_PX;
-          const outsideLeftPx = outsideLeft ? (-halfWidth - rawLocalPoint.x) * viewWidth : 0;
-          const outsideRightPx = outsideRight ? (rawLocalPoint.x - halfWidth) * viewWidth : 0;
-          const outsideTopPx = outsideTop ? (-halfHeight - rawLocalPoint.y) * viewHeight : 0;
-          const outsideBottomPx = outsideBottom ? (rawLocalPoint.y - halfHeight) * viewHeight : 0;
-          if (outsideLeft && outsideTop && outsideLeftPx <= rotationBandPx && outsideTopPx <= rotationBandPx) {
-            return "rotate-nw";
-          }
-          if (outsideRight && outsideTop && outsideRightPx <= rotationBandPx && outsideTopPx <= rotationBandPx) {
-            return "rotate-ne";
-          }
-          if (outsideRight && outsideBottom && outsideRightPx <= rotationBandPx && outsideBottomPx <= rotationBandPx) {
-            return "rotate-se";
-          }
-          if (outsideLeft && outsideBottom && outsideLeftPx <= rotationBandPx && outsideBottomPx <= rotationBandPx) {
-            return "rotate-sw";
-          }
-        }
-      }
       if ((nearLeftCorner || nearRightCorner) && (nearTopCorner || nearBottomCorner)) {
         if (nearLeftCorner && nearTopCorner) return "transform-nw";
         if (nearRightCorner && nearTopCorner) return "transform-ne";
@@ -3843,9 +3816,6 @@ holistic = createHolistic();
         if (handle.endsWith("nw") || handle.endsWith("se")) {
           return "nwse-resize";
         }
-      }
-      if (handle.startsWith("rotate-")) {
-        return "crosshair";
       }
       return "";
     }
@@ -3909,13 +3879,8 @@ holistic = createHolistic();
         initialShapes.set(id, snapshotShapeState(shape, initialFrame));
       }
       if (!initialShapes.size) return;
-      const mode = handle === "move" ? "move" : (handle.startsWith("rotate") ? "rotate" : "scale");
+      const mode = handle === "move" ? "move" : "scale";
       const center = { x: initialFrame.centerX, y: initialFrame.centerY };
-      const pointerForAngle = rawNormalized || normalized;
-      const initialAngle = mode === "rotate" ? Math.atan2(pointerForAngle.y - center.y, pointerForAngle.x - center.x) : 0;
-      if (mode === "rotate" && !Number.isFinite(initialAngle)) {
-        return;
-      }
       editorState.transformSession = {
         handle,
         mode,
@@ -3927,9 +3892,7 @@ holistic = createHolistic();
         frame: cloneSelectionFrame(initialFrame),
         initialShapes,
         didMutate: false,
-        center,
-        initialAngle,
-        initialSelectionRotation: initialFrame.rotation || 0
+        center
       };
       editorState.pointerId = event.pointerId;
       editorState.pointerOrigin = { svg: svgPoint, normalized };
@@ -3975,200 +3938,97 @@ holistic = createHolistic();
           shape.height = clampRange(height, SHAPE_MIN_SIZE, 1);
         }
       }
-      const newFrame = session.initialFrame ? cloneSelectionFrame(session.initialFrame) : null;
-      if (newFrame) {
-        newFrame.centerX = clampUnit(newFrame.centerX + dx);
-        newFrame.centerY = clampUnit(newFrame.centerY + dy);
-        session.frame = newFrame;
-        editorState.selectionFrame = cloneSelectionFrame(newFrame);
-      }
-      refreshSelectionBounds({ preserveRotation: true, frameOverride: session.frame || null });
+      refreshSelectionBounds({ preserveRotation: true });
+      session.frame = editorState.selectionFrame ? cloneSelectionFrame(editorState.selectionFrame) : null;
       return true;
     };
     const applySelectionScale = (normalized, rawNormalized, session) => {
       const initialFrame = session.initialFrame;
       if (!initialFrame) return false;
-      const referencePoint = rawNormalized || normalized;
-      const localPoint = toSelectionLocal(referencePoint, initialFrame);
-      if (!localPoint) return false;
       const handle = session.handle || "transform-se";
-      const minSpan = Math.max(SHAPE_MIN_SIZE, 0.01);
-      const initialMinX = -initialFrame.width / 2;
-      const initialMaxX = initialFrame.width / 2;
-      const initialMinY = -initialFrame.height / 2;
-      const initialMaxY = initialFrame.height / 2;
       const adjustsX = handle.includes("w") || handle.includes("e");
       const adjustsY = handle.includes("n") || handle.includes("s");
-      let newMinX = initialMinX;
-      let newMaxX = initialMaxX;
-      let newMinY = initialMinY;
-      let newMaxY = initialMaxY;
-      if (handle.includes("w")) {
-        const clampMax = initialMaxX - minSpan;
-        newMinX = clampRange(localPoint.x, initialMinX - initialFrame.width, clampMax);
-      }
-      if (handle.includes("e")) {
-        const clampMin = initialMinX + minSpan;
-        newMaxX = clampRange(localPoint.x, clampMin, initialMaxX + initialFrame.width);
-      }
-      if (!handle.includes("w") && !handle.includes("e")) {
-        newMinX = initialMinX;
-        newMaxX = initialMaxX;
-      }
-      if (handle.includes("n")) {
-        const clampMax = initialMaxY - minSpan;
-        newMinY = clampRange(localPoint.y, initialMinY - initialFrame.height, clampMax);
-      }
-      if (handle.includes("s")) {
-        const clampMin = initialMinY + minSpan;
-        newMaxY = clampRange(localPoint.y, clampMin, initialMaxY + initialFrame.height);
-      }
-      if (!handle.includes("n") && !handle.includes("s")) {
-        newMinY = initialMinY;
-        newMaxY = initialMaxY;
-      }
-      let newWidth = adjustsX ? Math.max(newMaxX - newMinX, minSpan) : initialFrame.width;
-      let newHeight = adjustsY ? Math.max(newMaxY - newMinY, minSpan) : initialFrame.height;
-      if (adjustsX && newWidth < minSpan) {
-        const adjust = (minSpan - newWidth) / 2;
-        newMinX -= adjust;
-        newMaxX += adjust;
-        newWidth = minSpan;
-      }
-      if (adjustsY && newHeight < minSpan) {
-        const adjust = (minSpan - newHeight) / 2;
-        newMinY -= adjust;
-        newMaxY += adjust;
-        newHeight = minSpan;
-      }
-      const widthDelta = Math.abs(newWidth - initialFrame.width);
-      const heightDelta = Math.abs(newHeight - initialFrame.height);
-      const newCenterLocalX = (newMinX + newMaxX) / 2;
-      const newCenterLocalY = (newMinY + newMaxY) / 2;
-      if (widthDelta < 1e-6 && heightDelta < 1e-6 && Math.abs(newCenterLocalX) < 1e-6 && Math.abs(newCenterLocalY) < 1e-6) {
-        return false;
-      }
-      const scaleX = initialFrame.width > 0 ? newWidth / initialFrame.width : 1;
-      const scaleY = initialFrame.height > 0 ? newHeight / initialFrame.height : 1;
-      const newCenterGlobal = fromSelectionLocal({ x: newCenterLocalX, y: newCenterLocalY }, initialFrame);
-      const newFrame = {
-        centerX: clampUnit(newCenterGlobal.x),
-        centerY: clampUnit(newCenterGlobal.y),
-        width: Math.max(newWidth, MIN_METRIC_SPAN),
-        height: Math.max(newHeight, MIN_METRIC_SPAN),
-        rotation: normalizeAngle(initialFrame.rotation || 0)
+      if (!adjustsX && !adjustsY) return false;
+      const pointer = rawNormalized || normalized;
+      const minSpan = Math.max(SHAPE_MIN_SIZE, 0.01);
+      const pivot = {
+        x: adjustsX
+          ? (handle.includes("w")
+            ? initialFrame.centerX + initialFrame.width / 2
+            : initialFrame.centerX - initialFrame.width / 2)
+          : initialFrame.centerX,
+        y: adjustsY
+          ? (handle.includes("n")
+            ? initialFrame.centerY + initialFrame.height / 2
+            : initialFrame.centerY - initialFrame.height / 2)
+          : initialFrame.centerY
       };
+      let targetWidth = initialFrame.width;
+      if (adjustsX) {
+        const diff = handle.includes("w") ? pivot.x - pointer.x : pointer.x - pivot.x;
+        targetWidth = Math.max(minSpan, Math.abs(diff));
+      }
+      let targetHeight = initialFrame.height;
+      if (adjustsY) {
+        const diff = handle.includes("n") ? pivot.y - pointer.y : pointer.y - pivot.y;
+        targetHeight = Math.max(minSpan, Math.abs(diff));
+      }
+      const scaleX = adjustsX && initialFrame.width > 0 ? targetWidth / initialFrame.width : 1;
+      const scaleY = adjustsY && initialFrame.height > 0 ? targetHeight / initialFrame.height : 1;
+      if (Math.abs(scaleX - 1) < 1e-6 && Math.abs(scaleY - 1) < 1e-6) return false;
       for (const [id, initialShape] of session.initialShapes.entries()) {
         const shape = findShapeById(id);
         if (!shape) continue;
-        const localCenter = initialShape.localCenter ?? toSelectionLocal({ x: initialShape.centerX, y: initialShape.centerY }, initialFrame) ?? { x: 0, y: 0 };
-        const scaledLocalCenter = {
-          x: localCenter.x * scaleX,
-          y: localCenter.y * scaleY
-        };
-        const nextCenter = fromSelectionLocal(scaledLocalCenter, newFrame);
         if (initialShape.type === "polyline") {
-          const sourceVertices = initialShape.localVertices && initialShape.localVertices.length
-            ? initialShape.localVertices
-            : (initialShape.vertices || []).map((vertex) => toSelectionLocal(vertex, initialFrame));
-          const updatedVertices = sourceVertices.map((vertexLocal) => {
-            const scaledLocal = {
-              x: vertexLocal.x * scaleX,
-              y: vertexLocal.y * scaleY
-            };
-            const globalPoint = fromSelectionLocal(scaledLocal, newFrame);
-            return {
-              x: clampUnit(globalPoint.x),
-              y: clampUnit(globalPoint.y)
-            };
+          const vertices = initialShape.vertices || [];
+          shape.vertices = vertices.map((vertex) => {
+            let { x, y } = vertex;
+            if (adjustsX) {
+              const dx = x - pivot.x;
+              x = pivot.x + dx * scaleX;
+            }
+            if (adjustsY) {
+              const dy = y - pivot.y;
+              y = pivot.y + dy * scaleY;
+            }
+            return { x: clampUnit(x), y: clampUnit(y) };
           });
-          shape.vertices = updatedVertices;
           updatePolylineBounds(shape);
           ensurePolylineStyle(shape);
         } else {
           const baseWidth = initialShape.width ?? shape.width ?? 0;
           const baseHeight = initialShape.height ?? shape.height ?? 0;
-          const nextWidth = clampRange(baseWidth * scaleX, SHAPE_MIN_SIZE, 1);
-          const nextHeight = clampRange(baseHeight * scaleY, SHAPE_MIN_SIZE, 1);
-          const nextX = clampRange(nextCenter.x - nextWidth / 2, 0, Math.max(1 - nextWidth, 0));
-          const nextY = clampRange(nextCenter.y - nextHeight / 2, 0, Math.max(1 - nextHeight, 0));
-          shape.x = clampUnit(nextX);
-          shape.y = clampUnit(nextY);
+          const nextWidth = adjustsX ? clampRange(baseWidth * scaleX, minSpan, 1) : baseWidth;
+          const nextHeight = adjustsY ? clampRange(baseHeight * scaleY, minSpan, 1) : baseHeight;
+          let centerX = initialShape.centerX ?? (shape.x ?? 0) + baseWidth / 2;
+          let centerY = initialShape.centerY ?? (shape.y ?? 0) + baseHeight / 2;
+          if (adjustsX) {
+            const dx = centerX - pivot.x;
+            centerX = pivot.x + dx * scaleX;
+          }
+          if (adjustsY) {
+            const dy = centerY - pivot.y;
+            centerY = pivot.y + dy * scaleY;
+          }
           shape.width = nextWidth;
           shape.height = nextHeight;
-          shape.rotation = initialShape.rotation;
+          shape.x = clampUnit(centerX - nextWidth / 2);
+          shape.y = clampUnit(centerY - nextHeight / 2);
         }
       }
-      session.frame = cloneSelectionFrame(newFrame);
-      editorState.selectionFrame = cloneSelectionFrame(newFrame);
-      refreshSelectionBounds({ preserveRotation: true, frameOverride: session.frame });
-      return true;
-    };
-    const applySelectionRotate = (normalized, rawNormalized, session, event) => {
-      const initialFrame = session.initialFrame;
-      if (!initialFrame) return false;
-      const bounds = session.initialBounds;
-      if (!bounds) return false;
-      const centerX = session.center?.x ?? initialFrame.centerX ?? bounds.centerX;
-      const centerY = session.center?.y ?? initialFrame.centerY ?? bounds.centerY;
-      const pivot = rawNormalized || normalized;
-      const angleNow = Math.atan2(pivot.y - centerY, pivot.x - centerX);
-      if (!Number.isFinite(angleNow)) return false;
-      let delta = angleNow - (session.initialAngle || 0);
-      if (event?.shiftKey) {
-        delta = Math.round(delta / SNAP_ROTATION_INCREMENT) * SNAP_ROTATION_INCREMENT;
+      editorState.selectionBounds = computeSelectionBounds();
+      if (editorState.selectionBounds) {
+        editorState.selectionFrame = {
+          centerX: editorState.selectionBounds.centerX,
+          centerY: editorState.selectionBounds.centerY,
+          width: editorState.selectionBounds.width,
+          height: editorState.selectionBounds.height,
+          rotation: 0
+        };
+      } else {
+        editorState.selectionFrame = null;
       }
-      delta = normalizeAngle(delta);
-      if (Math.abs(delta) < 1e-6) {
-        return false;
-      }
-      const cos = Math.cos(delta);
-      const sin = Math.sin(delta);
-      for (const [id, initialShape] of session.initialShapes.entries()) {
-        const shape = findShapeById(id);
-        if (!shape) continue;
-        if (initialShape.type === "polyline") {
-          const original = initialShape.vertices || [];
-          shape.vertices = original.map((vertex) => rotatePointAround(vertex.x, vertex.y, centerX, centerY, delta)).map((vertex) => ({
-            x: clampUnit(vertex.x),
-            y: clampUnit(vertex.y)
-          }));
-          updatePolylineBounds(shape);
-          ensurePolylineStyle(shape);
-          shape.rotation = 0;
-        } else {
-          const width = initialShape.width ?? shape.width ?? 0;
-          const height = initialShape.height ?? shape.height ?? 0;
-          const initialCenterX = initialShape.centerX ?? ((initialShape.x ?? 0) + width / 2);
-          const initialCenterY = initialShape.centerY ?? ((initialShape.y ?? 0) + height / 2);
-          const offsetX = initialCenterX - centerX;
-          const offsetY = initialCenterY - centerY;
-          const rotatedOffsetX = offsetX * cos - offsetY * sin;
-          const rotatedOffsetY = offsetX * sin + offsetY * cos;
-          const nextCenterX = centerX + rotatedOffsetX;
-          const nextCenterY = centerY + rotatedOffsetY;
-          const proposedX = nextCenterX - width / 2;
-          const proposedY = nextCenterY - height / 2;
-          const maxX = Math.max(1 - width, 0);
-          const maxY = Math.max(1 - height, 0);
-          shape.x = clampRange(proposedX, 0, maxX);
-          shape.y = clampRange(proposedY, 0, maxY);
-          shape.width = clampRange(width, SHAPE_MIN_SIZE, 1);
-          shape.height = clampRange(height, SHAPE_MIN_SIZE, 1);
-          shape.rotation = normalizeAngle((initialShape.rotation || 0) + delta);
-        }
-      }
-      const newFrame = {
-        centerX: clampUnit(centerX),
-        centerY: clampUnit(centerY),
-        width: initialFrame.width,
-        height: initialFrame.height,
-        rotation: normalizeAngle((session.initialSelectionRotation || 0) + delta)
-      };
-      session.frame = cloneSelectionFrame(newFrame);
-      editorState.selectionFrame = cloneSelectionFrame(newFrame);
-      session.center = { x: centerX, y: centerY };
-      refreshSelectionBounds({ preserveRotation: true, frameOverride: session.frame });
+      session.frame = editorState.selectionFrame ? cloneSelectionFrame(editorState.selectionFrame) : null;
       return true;
     };
     const updateSelectionTransform = (event) => {
@@ -4181,9 +4041,7 @@ holistic = createHolistic();
       setSelectionCursor(session.handle, { active: true });
       const mutated = session.mode === "move"
         ? applySelectionMove(normalized, session)
-        : session.mode === "scale"
-          ? applySelectionScale(normalized, rawNormalized, session)
-          : applySelectionRotate(normalized, rawNormalized, session, event);
+        : applySelectionScale(normalized, rawNormalized, session);
       if (mutated) {
         session.didMutate = true;
         editorState.didMutate = true;
@@ -4213,7 +4071,7 @@ holistic = createHolistic();
         if (svgPoint) {
           const normalizedPoint = toNormalizedPoint(svgPoint);
           const rawPoint = getUnclampedNormalizedPoint(event);
-          hoverHandle = resolveSelectionHandle(normalizedPoint, { allowRotation: true, rawPoint });
+          hoverHandle = resolveSelectionHandle(normalizedPoint, { rawPoint });
         }
       }
       setSelectionCursor(hoverHandle);
@@ -4743,7 +4601,7 @@ holistic = createHolistic();
         return;
       }
       let selectionHandle = normalizedPointForSelection
-        ? resolveSelectionHandle(normalizedPointForSelection, { allowRotation: true, rawPoint: rawNormalizedPointForSelection })
+        ? resolveSelectionHandle(normalizedPointForSelection, { rawPoint: rawNormalizedPointForSelection })
         : null;
       const shapeId = shapeTarget?.getAttribute?.("data-shape-id");
       if (shapeId) {
@@ -4774,7 +4632,7 @@ holistic = createHolistic();
         if (!isSelected) {
           setSelectedShape(shapeId);
           if (normalizedPointForSelection) {
-            selectionHandle = resolveSelectionHandle(normalizedPointForSelection, { allowRotation: true, rawPoint: rawNormalizedPointForSelection });
+            selectionHandle = resolveSelectionHandle(normalizedPointForSelection, { rawPoint: rawNormalizedPointForSelection });
           }
         }
         if (selectionHandle && selectionHandle !== "move" && selectionHandle !== null) {
@@ -4795,19 +4653,19 @@ holistic = createHolistic();
           beginSelectionTransform(selectionHandle, event);
           return;
         }
-        const marqueeMode = event.shiftKey ? "add" : event.altKey ? "subtract" : "replace";
-        const initialSelection = getSelectedIds();
-        editorState.selectionMarquee = {
-          anchor: normalizedPointForSelection,
-          current: { ...normalizedPointForSelection },
-          mode: marqueeMode,
-          initialSelection
-        };
-        editorState.pointerId = event.pointerId;
-        editorState.pointerOrigin = { svg: svgPointForSelection, normalized: normalizedPointForSelection };
-        if (marqueeMode === "replace") {
-          setSelectedShapes([], { suppressRender: true });
-        }
+      const marqueeMode = event.shiftKey ? "add" : event.altKey ? "subtract" : "replace";
+      const initialSelection = getSelectedIds();
+      editorState.selectionMarquee = {
+        anchor: normalizedPointForSelection,
+        current: { ...normalizedPointForSelection },
+        mode: marqueeMode,
+        initialSelection
+      };
+      editorState.pointerId = event.pointerId;
+      editorState.pointerOrigin = { svg: svgPointForSelection, normalized: normalizedPointForSelection };
+      if (marqueeMode === "replace") {
+        setSelectedShapes([], { suppressRender: true });
+      }
         if (gestureSvg?.setPointerCapture) {
           gestureSvg.setPointerCapture(event.pointerId);
         }
@@ -4855,7 +4713,7 @@ holistic = createHolistic();
           if (hoverSvgPoint) {
             const hoverNormalized = toNormalizedPoint(hoverSvgPoint);
             const hoverRaw = getUnclampedNormalizedPoint(event);
-            const hoverHandle = resolveSelectionHandle(hoverNormalized, { allowRotation: true, rawPoint: hoverRaw });
+            const hoverHandle = resolveSelectionHandle(hoverNormalized, { rawPoint: hoverRaw });
             setSelectionCursor(hoverHandle);
           } else {
             setSelectionCursor(null);
@@ -4919,7 +4777,7 @@ holistic = createHolistic();
             nextSelection = selected;
           }
           setSelectedShapes(nextSelection, { suppressRender: true });
-          const hoverHandle = normalized ? resolveSelectionHandle(normalized, { allowRotation: true, rawPoint: rawNormalized }) : null;
+          const hoverHandle = normalized ? resolveSelectionHandle(normalized, { rawPoint: rawNormalized }) : null;
           setSelectionCursor(hoverHandle);
         }
         editorState.pointerId = null;
