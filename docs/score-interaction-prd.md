@@ -50,6 +50,8 @@ All trigger handlers run in event order. Continuous events share the same thrott
 - Card headers remain icon-light with abbreviated labels (`Ch`, `Note`, `Vel`, `CC#`, `Val`, `Amt`).
 - “Pop-out editor” button is optional; keyboard shortcut `Enter` still opens the modal.
 - Provide inline hint text describing value modes (no OSC references).
+- Surface the shape name field inside the interaction modal; updates should reflect immediately in the sidebar list and snapshot exports.
+- The interaction modal uses a top drag handle/tongue instead of body dragging so performers can reposition it without accidental form input.
 
 ## 6. Persistence
 
@@ -78,4 +80,3 @@ All trigger handlers run in event order. Continuous events share the same thrott
 - Add websocket transport once the event dispatcher abstraction is ready.
 - Provide quick duplication (`Cmd/Ctrl + D`) to accelerate choreography workflows.
 - Consider velocity curves per value mode for finer expressive control.
-

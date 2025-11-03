@@ -27,7 +27,9 @@ Key flows:
 ### 4.1 Sources & Rendering
 - Switch between live webcam and sample footage with visual status feedback.
 - Mirror output independently of the camera feed (mirroring is disabled for prerecorded sources).
-- Overlay pose, hands, face, segmentation, and diagnostics with per-stream toggles.
+- Overlay pose, hands, face, segmentation, and diagnostics with per-stream toggles. Default state enables pose, left/right hand, face, and score overlays on both the main canvas and preview while keeping other diagnostics off until needed.
+- Render face landmarks as highlighted points instead of the tessellated wireframe to improve legibility against busy footage.
+- Load with only the Preview panel visible; other floating panels remember their last layout but start hidden on first launch to reduce visual clutter.
 
 ### 4.2 Editor
 - Provide rectangle, ellipse, polyline, and polygon tools with keyboard shortcuts.
@@ -35,6 +37,8 @@ Key flows:
 - Allow multiple MIDI events per shape with ordered evaluation.
 - Support triggers: enter, exit, enter+exit, and while-inside (with throttling).
 - Value modes: constant, normX, normY, distance (auto-scaled to MIDI 0–127).
+- Let performers rename shapes from the interaction modal; the label appears in the sidebar, snapshot exports, and assignment workflows.
+- Make the Interaction Mapping modal draggable via its top handle so it can relocate without covering the video feed.
 
 ### 4.3 MIDI Routing
 - Global port selector with broadcast option and refresh.
@@ -63,4 +67,3 @@ Key flows:
 - Surface CPU/GPU load and inference timings directly in the Streams tab.
 - Allow per-event port overrides once websocket output lands.
 - Explore templated shapes and quick duplication for choreography-heavy setups.
-
