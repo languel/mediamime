@@ -4,9 +4,10 @@ Mediamime is a browser-based gesture mapper that pairs MediaPipe Holistic with a
 
 ## Quick Start
 
-1. Serve the repository with any static file host (for example `npx live-server`).
-2. Open the served URL, grant webcam permission, or switch to the bundled sample clip.
-3. Use the floating editor toggle to reveal the control panel. The **Editor** tab is enabled by default for fast mapping. The overlay toggle buttons are hidden by default—press `Cmd/Ctrl + U` whenever you need them.
+1. The project is a work-in-progress prototype meant for personal experimentation and pedagogy. It is not production-ready, ships without warranties, and may change rapidly.
+2. Open `index.html` directly in any modern browser (double-click the file or drag it into a tab). If you prefer a server, any static host (for example `npx live-server`) works, but no build tooling is required.
+3. Grant webcam permission, or switch to the bundled sample clip from the **Streams** panel.
+4. Use the floating editor toggle to reveal the control panel. The **Editor** tab is enabled by default for fast mapping. The overlay toggle buttons are hidden by default—press `Cmd/Ctrl + U` whenever you need them.
 
 ## Interface Overview
 
