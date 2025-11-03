@@ -288,13 +288,14 @@
                   </div>
                   <form id="editor-detail-form" class="editor-detail-form" autocomplete="off">
                     <div class="form-row">
-                      <label for="editor-stream-select">Input</label>
+                      <label for="editor-stream-select">Input Stream</label>
                       <select id="editor-stream-select">
                         <option value="pose">Pose Landmarks</option>
                         <option value="leftHand">Left Hand</option>
                         <option value="rightHand">Right Hand</option>
                         <option value="face">Face (centroid)</option>
                         <option value="pointer">Pointer Input</option>
+                        <option value="keyboard">Keyboard</option>
                       </select>
                     </div>
                     <div class="form-row">
@@ -350,12 +351,14 @@
       </button>
     </header>
     <section class="form-group">
-      <label for="assignment-stream">Mediapipe Stream</label>
+      <label for="assignment-stream">Input Stream</label>
       <select id="assignment-stream">
         <option value="pose">Pose Landmarks</option>
         <option value="leftHand">Left Hand</option>
         <option value="rightHand">Right Hand</option>
         <option value="face">Face (centroid)</option>
+        <option value="pointer">Pointer Input</option>
+        <option value="keyboard">Keyboard</option>
       </select>
     </section>
     <section class="form-group">
@@ -1029,6 +1032,19 @@ const SAFE_FACEMESH_TESSELATION = typeof FACEMESH_TESSELATION !== "undefined"
     let cameraFrameHandle = null;
     let sampleHandle = null;
     let latestResults = null;
+    const inputState = {
+      holistic: null,
+      pointer: {
+        normalized: null,
+        isDown: false,
+        pointerId: null,
+        isOverCanvas: false,
+        lastUpdate: 0
+      },
+      keyboard: {
+        keys: new Map()
+      }
+    };
     let holisticBusy = false;
 let segmentationBuffer = null;
 let segmentationMaskAvailable = false;
@@ -1496,6 +1512,7 @@ function refreshSegmentationTint() {
 
 const handleHolisticResults = (results) => {
   latestResults = results;
+  inputState.holistic = results;
   if (results.segmentationMask) {
     segmentationOffscreen.width = results.segmentationMask.width || videoEl.videoWidth || 640;
     segmentationOffscreen.height = results.segmentationMask.height || videoEl.videoHeight || 480;
@@ -1507,7 +1524,7 @@ const handleHolisticResults = (results) => {
     segmentationBuffer = null;
     refreshSegmentationTint();
   }
-  evaluateShapeInteractions(results);
+  evaluateShapeInteractions();
 };
 
 const createHolistic = () => {
@@ -1862,6 +1879,41 @@ holistic = createHolistic();
       { key: "centroid", label: "Face centroid" },
       { key: "nose_tip", label: "Nose tip", index: 1 }
     ];
+    const POINTER_REFERENCE_POINTS = [
+      { key: "position", label: "Pointer position" },
+      { key: "button", label: "Pointer button (inside shape)" }
+    ];
+    const KEYBOARD_DIGIT_KEYS = Array.from({ length: 10 }, (_, index) => ({
+      key: `Digit${index}`,
+      label: `${index}`
+    }));
+    const KEYBOARD_LETTER_KEYS = Array.from("ABCDEFGHIJKLMNOPQRSTUVWXYZ").map((char) => ({
+      key: `Key${char}`,
+      label: char
+    }));
+    const KEYBOARD_REFERENCE_KEYS = [
+      { key: "Space", label: "Space" },
+      { key: "Enter", label: "Enter" },
+      { key: "Escape", label: "Escape" },
+      { key: "Tab", label: "Tab" },
+      { key: "Backspace", label: "Backspace" },
+      { key: "ArrowUp", label: "Arrow Up" },
+      { key: "ArrowDown", label: "Arrow Down" },
+      { key: "ArrowLeft", label: "Arrow Left" },
+      { key: "ArrowRight", label: "Arrow Right" },
+      { key: "ShiftLeft", label: "Shift (Left)" },
+      { key: "ShiftRight", label: "Shift (Right)" },
+      { key: "AltLeft", label: "Option / Alt (Left)" },
+      { key: "AltRight", label: "Option / Alt (Right)" },
+      { key: "ControlLeft", label: "Control (Left)" },
+      { key: "ControlRight", label: "Control (Right)" },
+      { key: "MetaLeft", label: "Command (Left)" },
+      { key: "MetaRight", label: "Command (Right)" },
+      { key: "NumpadEnter", label: "Numpad Enter" },
+      ...KEYBOARD_DIGIT_KEYS,
+      ...KEYBOARD_LETTER_KEYS
+    ];
+    const KEYBOARD_REFERENCE_SET = new Set(KEYBOARD_REFERENCE_KEYS.map((entry) => entry.key));
     const STREAM_DEFINITIONS = {
       pose: {
         id: "pose",
@@ -1882,12 +1934,23 @@ holistic = createHolistic();
         id: "face",
         label: "Face",
         options: FACE_REFERENCE_POINTS
+      },
+      pointer: {
+        id: "pointer",
+        label: "Pointer Input",
+        options: POINTER_REFERENCE_POINTS
+      },
+      keyboard: {
+        id: "keyboard",
+        label: "Keyboard",
+        options: KEYBOARD_REFERENCE_KEYS
       }
     };
     const resetShapeRuntime = (shape) => {
       if (!shape) return;
       shape.runtime = {
         inside: false,
+        hoverInside: false,
         lastTriggerAt: 0,
         lastContinuousAt: 0,
         noteOn: false,
@@ -1954,8 +2017,25 @@ holistic = createHolistic();
         }
         const streamDefinition = getStreamDefinition(shape.interaction?.stream || "pose");
         const streamLabel = streamDefinition?.label || "Stream";
-        const triggerLabel = (shape.interaction?.trigger || "enter").replace(/^\w/, (char) => char.toUpperCase());
-        const meta = `${typeLabel} · ${streamLabel} · ${triggerLabel}`;
+        const events = Array.isArray(shape.interaction?.events) ? shape.interaction.events : [];
+        const activeEvents = events.filter((event) => event && event.type && event.type !== "none");
+        const primaryEvent = activeEvents[0];
+        const extraEventCount = primaryEvent ? Math.max(0, activeEvents.length - 1) : 0;
+        let eventLabel = "No events";
+        let triggerLabel = null;
+        if (primaryEvent) {
+          eventLabel = primaryEvent.type === "midiCc" ? "MIDI CC" : primaryEvent.type === "midiNote" ? "MIDI Note" : "Event";
+          const triggerId = typeof primaryEvent.trigger === "string" && primaryEvent.trigger ? primaryEvent.trigger : "enter";
+          triggerLabel = triggerId.replace(/^\w/, (char) => char.toUpperCase());
+          if (extraEventCount > 0) {
+            eventLabel = `${eventLabel} (+${extraEventCount})`;
+          }
+        }
+        const metaParts = [typeLabel, streamLabel, eventLabel];
+        if (triggerLabel) {
+          metaParts.push(triggerLabel);
+        }
+        const meta = metaParts.join(" · ");
         const classes = ["editor-shape-item"];
         if (isActive) {
           classes.push("is-active");
@@ -2135,12 +2215,12 @@ holistic = createHolistic();
     const createDefaultInteraction = () => ({
       stream: "pose",
       landmark: "left_wrist",
-      events: [createDefaultEvent("none")]
+      events: [createDefaultEvent("midiNote")]
     });
     const mergeInteraction = (input) => {
       const defaults = createDefaultInteraction();
       const source = input || {};
-      const events = Array.isArray(source.events) && source.events.length
+      const events = Array.isArray(source.events)
         ? source.events.map(normalizeEvent)
         : defaults.events.map(cloneEvent);
       return {
@@ -2491,7 +2571,7 @@ holistic = createHolistic();
         style: { ...DEFAULT_SHAPE_STYLE },
         rotation: 0,
         interaction: createDefaultInteraction(),
-        runtime: { inside: false, lastTriggerAt: 0, lastContinuousAt: 0, noteOn: false, eventState: {}, lastMetrics: { normX: 0, normY: 0, distance: 0 } }
+        runtime: { inside: false, hoverInside: false, lastTriggerAt: 0, lastContinuousAt: 0, noteOn: false, eventState: {}, lastMetrics: { normX: 0, normY: 0, distance: 0 } }
       };
       ensurePolylineStyle(shape);
       updatePolylineBounds(shape);
@@ -3191,14 +3271,14 @@ holistic = createHolistic();
         if (shape.id === editorState.hoverShapeId && editorState.tool === "select") {
           classes.push("is-hovered");
         }
-        if (shape.runtime?.inside) {
+        if (shape.runtime?.hoverInside || shape.runtime?.inside) {
           classes.push("is-active");
         }
         const className = classes.join(" ");
         const baseFill = shape.style?.fill ?? DEFAULT_SHAPE_STYLE.fill;
         const baseStroke = shape.style?.stroke ?? DEFAULT_SHAPE_STYLE.stroke;
         const strokeWidth = shape.style?.strokeWidth ?? DEFAULT_SHAPE_STYLE.strokeWidth;
-        const isActive = Boolean(shape.runtime?.inside);
+        const isActive = Boolean(shape.runtime?.hoverInside || shape.runtime?.inside);
         const strokeColor = isActive ? ACTIVE_STROKE_COLOR : baseStroke;
         const fillColor = isActive && baseFill !== "none" ? ACTIVE_FILL_COLOR : baseFill;
         if (shape.type === "polyline") {
@@ -4174,7 +4254,7 @@ holistic = createHolistic();
         rotation: 0,
         style: { ...DEFAULT_SHAPE_STYLE },
         interaction: createDefaultInteraction(),
-        runtime: { inside: false, lastTriggerAt: 0, lastContinuousAt: 0, noteOn: false, eventState: {}, lastMetrics: { normX: 0, normY: 0, distance: 0 } }
+        runtime: { inside: false, hoverInside: false, lastTriggerAt: 0, lastContinuousAt: 0, noteOn: false, eventState: {}, lastMetrics: { normX: 0, normY: 0, distance: 0 } }
       };
       editorState.shapes.push(shape);
       setSelectedShape(shape.id, { suppressRender: true });
@@ -4628,9 +4708,16 @@ holistic = createHolistic();
         const selectedIds = getSelectedIds();
         const isSelected = editorState.selectedIds?.has?.(shapeId) || editorState.selectedId === shapeId;
         if (event.altKey) {
-          if (isSelected) {
-            const remaining = selectedIds.filter((id) => id !== shapeId);
-            setSelectedShapes(remaining);
+          if (event.shiftKey) {
+            if (isSelected) {
+              const remaining = selectedIds.filter((id) => id !== shapeId);
+              setSelectedShapes(remaining);
+            }
+          } else {
+            if (!isSelected) {
+              setSelectedShape(shapeId);
+            }
+            openAssignmentModal(shapeId);
           }
           event.preventDefault();
           return;
@@ -5217,6 +5304,7 @@ holistic = createHolistic();
       // so incoming landmark points can be compared as-is without flipping them again.
       return point;
     };
+    const getNow = () => (typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now());
     const DEFAULT_METRICS = Object.freeze({ normX: 0, normY: 0, distance: 0 });
     const MIN_METRIC_SPAN = 1e-4;
     const computeShapeBounds = (shape) => {
@@ -5273,9 +5361,13 @@ holistic = createHolistic();
         }
       }
     };
-    const evaluateShapeInteractions = (results) => {
-      if (!results || !editorState.shapes.length || !isScoreMainEnabled()) return;
-      const now = typeof performance !== "undefined" && performance?.now ? performance.now() : Date.now();
+    const evaluateShapeInteractions = () => {
+      if (!editorState.shapes.length || !isScoreMainEnabled()) return;
+      const holisticResults = inputState.holistic;
+      const pointerState = inputState.pointer;
+      const pointerPoint = pointerState.normalized;
+      const pointerIsDown = pointerState.isDown;
+      const now = getNow();
       const pointCache = new Map();
       for (const shape of editorState.shapes) {
         if (!shape.interaction) continue;
@@ -5283,15 +5375,9 @@ holistic = createHolistic();
         const interaction = shape.interaction;
         const events = interaction.events?.filter((event) => event && event.type && event.type !== "none") || [];
         if (!events.length) continue;
-        const cacheKey = `${interaction.stream}:${interaction.landmark}`;
-        if (!pointCache.has(cacheKey)) {
-          const point = resolveStreamPoint(interaction.stream, interaction.landmark, results);
-          pointCache.set(cacheKey, adjustPointForMirror(point));
-        }
-        const targetPoint = pointCache.get(cacheKey);
-        const inside = targetPoint ? shapeContainsPoint(shape, targetPoint) : false;
         const runtime = shape.runtime || (shape.runtime = {
           inside: false,
+          hoverInside: false,
           lastTriggerAt: 0,
           lastContinuousAt: 0,
           noteOn: false,
@@ -5300,13 +5386,43 @@ holistic = createHolistic();
         });
         if (!runtime.eventState) runtime.eventState = {};
         if (!runtime.lastMetrics) runtime.lastMetrics = { normX: 0, normY: 0, distance: 0 };
+        let inside = false;
+        let hoverInside = false;
+        let metrics = runtime.lastMetrics;
+        const streamId = interaction.stream || "pose";
+        const landmarkKey = interaction.landmark;
+        if (streamId === "pointer") {
+          const pointerInside = pointerPoint ? shapeContainsPoint(shape, pointerPoint) : false;
+          hoverInside = pointerInside;
+          if (pointerInside && pointerPoint) {
+            metrics = computeShapeMetrics(shape, pointerPoint);
+            runtime.lastMetrics = metrics;
+          }
+          inside = landmarkKey === "button" ? pointerInside && pointerIsDown : pointerInside;
+        } else if (streamId === "keyboard") {
+          const keyId = landmarkKey || "Space";
+          const keyState = inputState.keyboard.keys.get(keyId);
+          inside = Boolean(keyState?.isDown);
+          hoverInside = inside;
+          metrics = runtime.lastMetrics;
+        } else {
+          const cacheKey = `${streamId}:${landmarkKey}`;
+          if (!pointCache.has(cacheKey)) {
+            const point = resolveStreamPoint(streamId, landmarkKey, holisticResults);
+            pointCache.set(cacheKey, adjustPointForMirror(point));
+          }
+          const targetPoint = pointCache.get(cacheKey);
+          const isInsideShape = targetPoint ? shapeContainsPoint(shape, targetPoint) : false;
+          inside = isInsideShape;
+          hoverInside = isInsideShape;
+          if (isInsideShape && targetPoint) {
+            metrics = computeShapeMetrics(shape, targetPoint);
+            runtime.lastMetrics = metrics;
+          }
+        }
         const justEntered = inside && !runtime.inside;
         const justExited = !inside && runtime.inside;
-        let metrics = runtime.lastMetrics;
-        if (inside && targetPoint) {
-          metrics = computeShapeMetrics(shape, targetPoint);
-          runtime.lastMetrics = metrics;
-        }
+        runtime.hoverInside = hoverInside;
         events.forEach((event) => {
           const normalizedEvent = normalizeEvent(event);
           const eventState = runtime.eventState[normalizedEvent.id] || (runtime.eventState[normalizedEvent.id] = { noteOn: false, lastContinuousAt: 0 });
@@ -5391,7 +5507,7 @@ holistic = createHolistic();
         if (isMapModalOpen()) {
           const item = document.getElementById(`editor-shape-${shape.id}`);
           if (item) {
-            if (inside) {
+            if (hoverInside || inside) {
               item.setAttribute("data-active", "true");
             } else {
               item.removeAttribute("data-active");
@@ -5400,6 +5516,168 @@ holistic = createHolistic();
         }
       }
       renderEditor();
+    };
+
+    const getPointerNormalized = (event) => {
+      if (!event || !gestureSvg) return null;
+      const raw = getUnclampedNormalizedPoint(event);
+      if (!raw || !Number.isFinite(raw.x) || !Number.isFinite(raw.y)) {
+        return null;
+      }
+      if (raw.x < 0 || raw.x > 1 || raw.y < 0 || raw.y > 1) {
+        return null;
+      }
+      return { x: clampUnit(raw.x), y: clampUnit(raw.y) };
+    };
+
+    const applyPointerState = (updates = {}) => {
+      const target = inputState.pointer;
+      let changed = false;
+      if ("normalized" in updates) {
+        const nextPoint = updates.normalized;
+        const prevPoint = target.normalized;
+        const bothNull = !prevPoint && !nextPoint;
+        let samePoint = false;
+        if (prevPoint && nextPoint) {
+          samePoint = Math.abs(prevPoint.x - nextPoint.x) < 1e-4 && Math.abs(prevPoint.y - nextPoint.y) < 1e-4;
+        }
+        if (!bothNull && !samePoint) {
+          changed = true;
+        }
+        target.normalized = nextPoint || null;
+      }
+      if ("isDown" in updates) {
+        if (updates.isDown !== target.isDown) {
+          changed = true;
+        }
+        target.isDown = Boolean(updates.isDown);
+      }
+      if ("pointerId" in updates) {
+        if (updates.pointerId !== target.pointerId) {
+          changed = true;
+        }
+        target.pointerId = updates.pointerId;
+      }
+      if ("isOverCanvas" in updates) {
+        if (Boolean(updates.isOverCanvas) !== Boolean(target.isOverCanvas)) {
+          changed = true;
+        }
+        target.isOverCanvas = Boolean(updates.isOverCanvas);
+      }
+      target.lastUpdate = getNow();
+      return changed;
+    };
+
+    const handleInputPointerMove = (event) => {
+      const normalized = getPointerNormalized(event);
+      if (applyPointerState({
+        normalized,
+        isOverCanvas: Boolean(normalized)
+      })) {
+        evaluateShapeInteractions();
+      }
+    };
+
+    const handleInputPointerDown = (event) => {
+      const normalized = getPointerNormalized(event);
+      const isPrimaryButton = event.button === 0 || event.button === -1;
+      const updates = {
+        normalized,
+        isOverCanvas: Boolean(normalized)
+      };
+      if (isPrimaryButton && normalized) {
+        updates.pointerId = event.pointerId;
+        updates.isDown = true;
+      } else if (isPrimaryButton) {
+        updates.pointerId = null;
+        updates.isDown = false;
+      }
+      if (applyPointerState(updates)) {
+        evaluateShapeInteractions();
+      }
+    };
+
+    const handleInputPointerUp = (event) => {
+      const normalized = getPointerNormalized(event);
+      const isPrimaryButton = event.button === 0 || event.button === -1;
+      const shouldRelease = isPrimaryButton && (inputState.pointer.pointerId === event.pointerId || inputState.pointer.pointerId === null);
+      const updates = {
+        normalized,
+        isOverCanvas: Boolean(normalized)
+      };
+      if (shouldRelease) {
+        updates.pointerId = null;
+        updates.isDown = false;
+      }
+      if (applyPointerState(updates)) {
+        evaluateShapeInteractions();
+      }
+    };
+
+    const handleInputPointerCancel = (event) => {
+      if (inputState.pointer.pointerId !== null && event.pointerId !== inputState.pointer.pointerId) {
+        return;
+      }
+      if (applyPointerState({
+        normalized: null,
+        isOverCanvas: false,
+        isDown: false,
+        pointerId: null
+      })) {
+        evaluateShapeInteractions();
+      }
+    };
+
+    const shouldCaptureKeyboardInput = (event) => {
+      if (!event) return false;
+      const code = event.code;
+      if (!code || !KEYBOARD_REFERENCE_SET.has(code)) {
+        return false;
+      }
+      const target = event.target;
+      if (!target) return true;
+      const tag = target.tagName?.toLowerCase?.() || "";
+      if (["input", "textarea", "select"].includes(tag)) {
+        return false;
+      }
+      if (target.isContentEditable) {
+        return false;
+      }
+      return true;
+    };
+
+    const updateKeyboardState = (code, isDown) => {
+      const keys = inputState.keyboard.keys;
+      const existing = keys.get(code) || { isDown: false, lastDownAt: 0, lastUpAt: 0 };
+      const nextState = {
+        isDown: Boolean(isDown),
+        lastDownAt: existing.lastDownAt,
+        lastUpAt: existing.lastUpAt
+      };
+      const timestamp = getNow();
+      if (isDown) {
+        nextState.lastDownAt = timestamp;
+      } else {
+        nextState.lastUpAt = timestamp;
+      }
+      const changed = existing.isDown !== nextState.isDown;
+      keys.set(code, nextState);
+      return changed;
+    };
+
+    const handleInputKeyDown = (event) => {
+      if (!shouldCaptureKeyboardInput(event)) return;
+      const changed = updateKeyboardState(event.code, true);
+      if (changed || event.repeat) {
+        evaluateShapeInteractions();
+      }
+    };
+
+    const handleInputKeyUp = (event) => {
+      if (!shouldCaptureKeyboardInput(event)) return;
+      if (updateKeyboardState(event.code, false)) {
+        evaluateShapeInteractions();
+      }
     };
 
 
@@ -5422,8 +5700,15 @@ holistic = createHolistic();
       gestureSvg.addEventListener("pointerup", handleEditorPointerUp);
       gestureSvg.addEventListener("pointerleave", handleEditorPointerLeave);
       gestureSvg.addEventListener("lostpointercapture", handleEditorPointerUp);
+      gestureSvg.addEventListener("lostpointercapture", handleInputPointerCancel);
       gestureSvg.addEventListener("dblclick", handleEditorDoubleClick);
     }
+    window.addEventListener("pointermove", handleInputPointerMove, { passive: true });
+    window.addEventListener("pointerdown", handleInputPointerDown, { passive: true });
+    window.addEventListener("pointerup", handleInputPointerUp, { passive: true });
+    window.addEventListener("pointercancel", handleInputPointerCancel);
+    window.addEventListener("keydown", handleInputKeyDown, true);
+    window.addEventListener("keyup", handleInputKeyUp);
     window.addEventListener("keydown", handleGlobalShortcut);
     window.addEventListener("keydown", handleEditorKeyDown);
     if (typeof window !== "undefined") {
