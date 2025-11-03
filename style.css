@@ -964,17 +964,28 @@ html, body {
       justify-content: space-between;
       gap: 0.6rem;
       margin-bottom: 0.6rem;
-      cursor: move;
     }
     .assignment-modal header button {
       cursor: pointer;
     }
-    .assignment-modal.is-dragging header {
-      cursor: grabbing;
-    }
     .assignment-modal header h3 {
       margin: 0;
       font-size: 1rem;
+    }
+    .assignment-modal-handle {
+      width: 9rem;
+      height: 0.6rem;
+      margin: 0 auto 0.75rem;
+      border-radius: 999px 999px 4px 4px;
+      background: rgba(82, 213, 255, calc(var(--surface-opacity) * 0.18));
+      border: 1px solid rgba(82, 213, 255, 0.32);
+      cursor: move;
+      touch-action: none;
+      user-select: none;
+    }
+    .assignment-modal.is-dragging .assignment-modal-handle {
+      cursor: grabbing;
+      background: rgba(82, 213, 255, calc(var(--surface-opacity) * 0.28));
     }
     .assignment-modal .form-group {
       display: grid;
