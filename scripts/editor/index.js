@@ -4,24 +4,11 @@ const MIN_DRAW_DISTANCE = 0.0025;
 const LINE_CLOSE_THRESHOLD = 0.02;
 const ERASER_TOLERANCE = 0.02;
 const FREEHAND_SIMPLIFY_TOLERANCE = 0.0015;
-const ROTATION_HANDLE_OFFSET = 0.06;
-const VERTEX_HANDLE_RADIUS = 6;
 const DEFAULT_STYLE = {
   stroke: "rgba(82, 213, 255, 0.92)",
   fill: "rgba(82, 213, 255, 0.14)",
   strokeWidth: 2
 };
-
-const HANDLE_DEFINITIONS = [
-  { id: "nw", x: -0.5, y: -0.5, cursor: "nwse-resize" },
-  { id: "ne", x: 0.5, y: -0.5, cursor: "nesw-resize" },
-  { id: "se", x: 0.5, y: 0.5, cursor: "nwse-resize" },
-  { id: "sw", x: -0.5, y: 0.5, cursor: "nesw-resize" },
-  { id: "n", x: 0, y: -0.5, cursor: "ns-resize" },
-  { id: "s", x: 0, y: 0.5, cursor: "ns-resize" },
-  { id: "w", x: -0.5, y: 0, cursor: "ew-resize" },
-  { id: "e", x: 0.5, y: 0, cursor: "ew-resize" }
-];
 
 class SvgShapeStore {
   constructor(layer, viewBox) {
@@ -139,12 +126,9 @@ class Editor {
       mode: "edit",
       tool: "select",
       toolLocked: false,
-      selection: new Set(),
-      selectionRotation: 0,
-      selectionFrame: null
+      selectedShapeId: null
     };
     this.shapeStore = null;
-    this.overlay = null;
     this.session = null;
     this.events = new Map();
     this.pendingLine = null;
@@ -152,7 +136,6 @@ class Editor {
     this.modeToggle = document.getElementById("gesture-mode-toggle") || this.toolbar.querySelector("#gesture-mode-toggle");
     this.clearButton = document.getElementById("gesture-clear") || this.toolbar.querySelector("#gesture-clear");
     this.toolbarHidden = false;
-    this.vertexEdit = null;
   }
 
   init() {
@@ -197,7 +180,7 @@ class Editor {
         tool: this.state.tool,
         toolLocked: this.state.toolLocked,
         shapes: (this.shapeStore ? this.shapeStore.list() : []).map(cloneShape),
-        selection: Array.from(this.state.selection)
+        selection: this.state.selectedShapeId ? [this.state.selectedShapeId] : []
       }),
       setTool: (tool) => this.setTool(tool),
       on: (event, handler) => this.on(event, handler),
@@ -233,22 +216,11 @@ class Editor {
     this.svg.setAttribute("data-editor", "score");
     this.svg.setAttribute("tabindex", "0");
     let shapesLayer = this.svg.querySelector('[data-layer="shapes"]');
-    let overlayLayer = this.svg.querySelector('[data-layer="overlay"]');
     if (!shapesLayer) {
       shapesLayer = createSvgElement("g", { "data-layer": "shapes" });
       this.svg.appendChild(shapesLayer);
     }
-    if (!overlayLayer) {
-      overlayLayer = createSvgElement("g", { "data-layer": "overlay", class: "editor-overlay" });
-      this.svg.appendChild(overlayLayer);
-    }
     this.shapesLayer = shapesLayer;
-    this.overlayLayer = overlayLayer;
-    this.overlay = buildSelectionOverlay();
-    overlayLayer.appendChild(this.overlay.root);
-    if (this.overlay.container) {
-      this.overlay.container.style.display = "none";
-    }
     this.shapeStore = new SvgShapeStore(this.shapesLayer, this.view);
   }
 
@@ -296,9 +268,6 @@ class Editor {
       this.state.toolLocked = false;
     }
     this.state.tool = tool;
-    if (tool !== "select") {
-      this.disableVertexEditing();
-    }
     if (tool !== "line") {
       this.pendingLine = null;
     }
@@ -348,25 +317,26 @@ class Editor {
     if (mode !== "edit" && mode !== "perform") return;
     if (this.state.mode === mode) return;
     if (mode === "perform" && this.session) {
-      if (this.session.type === "draw") {
-        this.abortDrawing();
-      } else if (this.session.type === "transform") {
-        this.cancelTransform();
-      } else if (this.session.type === "marquee") {
-        this.clearMarquee();
-      } else if (this.session.type === "vertex") {
-        this.cancelVertexDrag();
-      } else if (this.session.type === "erase") {
-        if (!this.state.toolLocked) {
-          this.setTool("select");
-        }
+      switch (this.session.type) {
+        case "draw":
+          this.abortDrawing();
+          break;
+        case "shape-drag":
+          this.cancelShapeDrag();
+          break;
+        case "erase":
+          if (!this.state.toolLocked) {
+            this.setTool("select");
+          }
+          break;
+        default:
+          break;
       }
       this.session = null;
     }
     this.state.mode = mode;
     if (mode === "perform") {
       this.pendingLine = null;
-      this.disableVertexEditing();
     }
     this.updateModeUI();
     this.render();
@@ -405,11 +375,8 @@ class Editor {
 
   clearShapes() {
     if (!this.shapeStore || !this.shapeStore.order.length) return;
-    this.disableVertexEditing();
     this.shapeStore.clear();
-    this.state.selection.clear();
-    this.state.selectionFrame = null;
-    this.state.selectionRotation = 0;
+    this.state.selectedShapeId = null;
     this.pendingLine = null;
     this.render();
     this.notifyShapesChanged();
@@ -433,149 +400,37 @@ class Editor {
   handlePointerDown = (event) => {
     if (event.button !== 0) return;
     if (this.state.mode === "perform") return;
-    const target = event.target;
     const rawPoint = this.getNormalizedPoint(event, { clamp: false });
+    if (!rawPoint) return;
     const point = {
       x: clampUnit(rawPoint.x),
       y: clampUnit(rawPoint.y)
     };
-
-    const vertexIndexAttr = target?.dataset?.vertexIndex;
-    if (vertexIndexAttr !== undefined) {
-      const vertexShapeId = target?.dataset?.vertexShape || this.vertexEdit?.shapeId;
-      const vertexIndex = Number(vertexIndexAttr);
-      if (
-        this.vertexEdit &&
-        vertexShapeId &&
-        this.vertexEdit.shapeId === vertexShapeId &&
-        Number.isInteger(vertexIndex)
-      ) {
-        event.preventDefault();
-        this.svg.setPointerCapture(event.pointerId);
-        this.startVertexDrag({
-          shapeId: vertexShapeId,
-          pointerId: event.pointerId,
-          vertexIndex
-        });
-        return;
-      }
-    }
-
-    // Rotation handle or transform handle interactions
-    if (target?.dataset?.handle) {
-      event.preventDefault();
-      this.svg.setPointerCapture(event.pointerId);
-      this.startTransformSession({
-        mode: target.dataset.handle === "rotate" ? "rotate" : "scale",
-        handle: target.dataset.handle,
-        pointerId: event.pointerId,
-        origin: point,
-        originRaw: rawPoint
-      });
-      return;
-    }
-
-    const shapeId = target?.closest?.("[data-shape-id]")?.dataset?.shapeId;
     const tool = this.state.tool;
+    const target = event.target;
+    const shapeId = target?.closest?.("[data-shape-id]")?.dataset?.shapeId || null;
 
     if (tool === "select") {
-      const shape = shapeId ? this.shapeStore?.read(shapeId) : null;
-      const isMetaKey = Boolean(event.metaKey);
-      const isCtrlKey = Boolean(event.ctrlKey);
-      const optionMapping = Boolean(
-        shapeId && event.altKey && !event.shiftKey && !isMetaKey && !isCtrlKey
-      );
-      const subtract = !optionMapping && (event.altKey || event.key === "AltGraph");
-      const supportsVertexEdit = Boolean(shape && (shape.type === "line" || shape.type === "path"));
-      const wantsVertexEdit = Boolean(shapeId && supportsVertexEdit && isMetaKey && !event.shiftKey && !subtract);
-      const extend = event.shiftKey || (!wantsVertexEdit && (isMetaKey || isCtrlKey));
       if (shapeId) {
-        if (wantsVertexEdit) {
-          if (this.state.selection.size !== 1 || !this.state.selection.has(shapeId)) {
-            this.updateSelection(shapeId);
-          }
-          this.enableVertexEditing(shapeId);
-          event.preventDefault();
-          return;
+        const shape = this.shapeStore?.read(shapeId);
+        if (!shape) return;
+        if (this.state.selectedShapeId !== shapeId) {
+          this.state.selectedShapeId = shapeId;
+          this.render();
+          this.notifySelectionChanged();
         }
-        if (optionMapping) {
-          this.disableVertexEditing();
-          if (this.state.selection.size !== 1 || !this.state.selection.has(shapeId)) {
-            this.updateSelection(shapeId);
-          }
-          const shapeSnapshot = cloneShape(this.shapeStore?.read(shapeId));
-          if (shapeSnapshot) {
-            this.emit("mappingrequest", {
-              shapeId,
-              shape: shapeSnapshot,
-              pointer: {
-                clientX: event.clientX,
-                clientY: event.clientY,
-                x: point.x,
-                y: point.y
-              }
-            });
-          }
-          event.preventDefault();
-          return;
-        }
-        this.disableVertexEditing();
-        this.updateSelection(shapeId, { extend, subtract });
-        if (!this.state.selection.size) {
-          return;
-        }
-        this.svg.setPointerCapture(event.pointerId);
-        event.preventDefault();
-        this.startTransformSession({
-          mode: "move",
-          handle: "move",
+        this.startShapeDrag({
+          shapeId,
           pointerId: event.pointerId,
           origin: point,
           originRaw: rawPoint
         });
-        return;
-      }
-      const initialSelection = new Set(this.state.selection);
-      const hadSelection = this.state.selection.size > 0;
-      if (hadSelection) {
-        this.computeSelectionFrame();
-      }
-      const pointerInsideSelection = hadSelection && this.isPointInsideSelection(point);
-      if (pointerInsideSelection && !extend && !subtract) {
-        this.disableVertexEditing();
         event.preventDefault();
-        this.svg.setPointerCapture(event.pointerId);
-        this.startTransformSession({
-          mode: "move",
-          handle: "move",
-          pointerId: event.pointerId,
-          origin: point,
-          originRaw: rawPoint
-        });
-        return;
-      }
-      if (!extend && !subtract && hadSelection) {
-        this.disableVertexEditing();
-        this.state.selection.clear();
-        this.state.selectionFrame = null;
-        this.state.selectionRotation = 0;
+      } else if (this.state.selectedShapeId) {
+        this.state.selectedShapeId = null;
         this.render();
         this.notifySelectionChanged();
       }
-      if (this.state.selection.size) {
-        this.computeSelectionFrame();
-      }
-      this.disableVertexEditing();
-      this.svg.setPointerCapture(event.pointerId);
-      this.startMarqueeSession({
-        pointerId: event.pointerId,
-        origin: point,
-        originRaw: rawPoint,
-        extend,
-        subtract,
-        initialSelection
-      });
-      event.preventDefault();
       return;
     }
 
@@ -585,7 +440,6 @@ class Editor {
     }
 
     if (tool === "eraser") {
-      this.disableVertexEditing();
       this.svg.setPointerCapture(event.pointerId);
       const removed = this.eraseAtPoint(point, { tolerance: ERASER_TOLERANCE });
       this.session = {
@@ -598,7 +452,6 @@ class Editor {
 
     if (DRAWING_TOOLS.has(tool)) {
       event.preventDefault();
-      this.disableVertexEditing();
       this.beginDrawing(tool, point, event.pointerId);
     }
   };
@@ -613,41 +466,47 @@ class Editor {
     };
 
     if (!this.session) return;
-    if (this.session.type === "draw") {
-      event.preventDefault();
-      this.updateDrawing(point);
-    } else if (this.session.type === "transform") {
-      event.preventDefault();
-      this.updateTransform(point, rawPoint, event);
-    } else if (this.session.type === "vertex") {
-      event.preventDefault();
-      this.updateVertexDrag(point);
-    } else if (this.session.type === "marquee") {
-      event.preventDefault();
-      this.updateMarquee(point, rawPoint);
-    } else if (this.session.type === "erase") {
-      event.preventDefault();
-      const erasedId = this.eraseAtPoint(point, { tolerance: ERASER_TOLERANCE, skip: this.session.erased });
-      if (erasedId) {
-        this.session.erased.add(erasedId);
+    switch (this.session.type) {
+      case "draw":
+        event.preventDefault();
+        this.updateDrawing(point);
+        break;
+      case "shape-drag": {
+        event.preventDefault();
+        const dx = (rawPoint?.x ?? point.x) - this.session.originRaw.x;
+        const dy = (rawPoint?.y ?? point.y) - this.session.originRaw.y;
+        this.updateShapeDrag(this.session, dx, dy);
+        break;
       }
+      case "erase": {
+        event.preventDefault();
+        const erasedId = this.eraseAtPoint(point, { tolerance: ERASER_TOLERANCE, skip: this.session.erased });
+        if (erasedId) {
+          this.session.erased.add(erasedId);
+        }
+        break;
+      }
+      default:
+        break;
     }
   };
 
   handlePointerUp = (event) => {
     if (this.session && event.pointerId === this.session.pointerId) {
-      if (this.session.type === "draw") {
-        this.finalizeDrawing(event);
-      } else if (this.session.type === "transform") {
-        this.finishTransform();
-      } else if (this.session.type === "marquee") {
-        this.finishMarqueeSelection();
-      } else if (this.session.type === "vertex") {
-        this.finishVertexDrag();
-      } else if (this.session.type === "erase") {
-        if (!this.state.toolLocked) {
-          this.setTool("select");
-        }
+      switch (this.session.type) {
+        case "draw":
+          this.finalizeDrawing(event);
+          break;
+        case "shape-drag":
+          this.finishShapeDrag();
+          break;
+        case "erase":
+          if (!this.state.toolLocked) {
+            this.setTool("select");
+          }
+          break;
+        default:
+          break;
       }
       this.session = null;
     }
@@ -658,18 +517,20 @@ class Editor {
 
   handlePointerCancel = (event) => {
     if (this.session && event.pointerId === this.session.pointerId) {
-      if (this.session.type === "draw") {
-        this.abortDrawing();
-      } else if (this.session.type === "transform") {
-        this.cancelTransform();
-      } else if (this.session.type === "marquee") {
-        this.clearMarquee();
-      } else if (this.session.type === "vertex") {
-        this.cancelVertexDrag();
-      } else if (this.session.type === "erase") {
-        if (!this.state.toolLocked) {
-          this.setTool("select");
-        }
+      switch (this.session.type) {
+        case "draw":
+          this.abortDrawing();
+          break;
+        case "shape-drag":
+          this.cancelShapeDrag();
+          break;
+        case "erase":
+          if (!this.state.toolLocked) {
+            this.setTool("select");
+          }
+          break;
+        default:
+          break;
       }
       this.session = null;
     }
@@ -677,6 +538,51 @@ class Editor {
       this.svg.releasePointerCapture(event.pointerId);
     }
   };
+
+  startShapeDrag({ shapeId, pointerId, origin, originRaw }) {
+    const shape = this.shapeStore?.read(shapeId);
+    if (!shape) return;
+    const baseShape = cloneShape(shape);
+    this.svg.setPointerCapture(pointerId);
+    this.session = {
+      type: "shape-drag",
+      pointerId,
+      shapeId,
+      origin: { ...origin },
+      originRaw: originRaw ? { ...originRaw } : { ...origin },
+      baseShape
+    };
+  }
+
+  updateShapeDrag(session, dx, dy) {
+    if (!session?.baseShape) return;
+    const base = session.baseShape;
+    const next = cloneShape(base);
+    if (next.type === "rect" || next.type === "ellipse") {
+      next.x = base.x + dx;
+      next.y = base.y + dy;
+    } else if (next.type === "line" || next.type === "path") {
+      next.points = base.points.map((point) => ({
+        x: point.x + dx,
+        y: point.y + dy
+      }));
+    }
+    this.shapeStore?.write(next);
+    this.renderShapes();
+  }
+
+  finishShapeDrag() {
+    if (!this.session || this.session.type !== "shape-drag") return;
+    this.notifyShapesChanged();
+  }
+
+  cancelShapeDrag() {
+    if (!this.session || this.session.type !== "shape-drag") return;
+    if (this.session.baseShape) {
+      this.shapeStore?.write(cloneShape(this.session.baseShape));
+      this.renderShapes();
+    }
+  }
 
   handleKeyDown = (event) => {
     if (event.defaultPrevented) return;
@@ -741,11 +647,8 @@ class Editor {
           this.abortDrawing();
           this.session = null;
           event.preventDefault();
-        } else if (this.state.selection.size) {
-          this.disableVertexEditing();
-          this.state.selection.clear();
-          this.state.selectionFrame = null;
-          this.state.selectionRotation = 0;
+        } else if (this.state.selectedShapeId) {
+          this.state.selectedShapeId = null;
           this.render();
           this.notifySelectionChanged();
           event.preventDefault();
@@ -774,14 +677,12 @@ class Editor {
       lastPoint: { ...point }
     };
     if (!(this.state.toolLocked && DRAWING_TOOLS.has(tool))) {
-      this.state.selection = new Set([shape.id]);
-      this.state.selectionRotation = 0;
+      this.state.selectedShapeId = shape.id;
+      this.notifySelectionChanged();
     } else {
-      this.state.selection = new Set();
-      this.state.selectionFrame = null;
-      this.state.selectionRotation = 0;
+      this.state.selectedShapeId = null;
+      this.notifySelectionChanged();
     }
-    this.renderSelection();
   }
 
   beginLineDrawing(point, pointerId) {
@@ -820,14 +721,12 @@ class Editor {
       continuing
     };
     if (!(this.state.toolLocked && DRAWING_TOOLS.has("line"))) {
-      this.state.selection = new Set([shape.id]);
-      this.state.selectionRotation = 0;
+      this.state.selectedShapeId = shape.id;
+      this.notifySelectionChanged();
     } else {
-      this.state.selection = new Set();
-      this.state.selectionFrame = null;
-      this.state.selectionRotation = 0;
+      this.state.selectedShapeId = null;
+      this.notifySelectionChanged();
     }
-    this.renderSelection();
   }
 
   updateDrawing(point) {
@@ -855,7 +754,6 @@ class Editor {
     this.session.lastPoint = { ...point };
     this.shapeStore?.write(shape);
     this.renderShapes();
-    this.renderSelection();
   }
 
   finalizeDrawing(event) {
@@ -916,14 +814,7 @@ class Editor {
       this.pendingLine = null;
     }
     const shouldAutoSelect = !(this.state.toolLocked && DRAWING_TOOLS.has(tool));
-    if (shouldAutoSelect) {
-      this.state.selection = new Set([shape.id]);
-      this.state.selectionRotation = shape.rotation || 0;
-    } else {
-      this.state.selection = new Set();
-      this.state.selectionFrame = null;
-      this.state.selectionRotation = 0;
-    }
+    this.state.selectedShapeId = shouldAutoSelect ? shape.id : null;
     this.render();
     this.notifyShapesChanged();
     this.notifySelectionChanged();
@@ -945,393 +836,14 @@ class Editor {
 
   removeShape(shapeId) {
     this.shapeStore?.remove(shapeId);
-    this.state.selection.delete(shapeId);
+    if (this.state.selectedShapeId === shapeId) {
+      this.state.selectedShapeId = null;
+      this.notifySelectionChanged();
+    }
     if (this.pendingLine?.shapeId === shapeId) {
       this.pendingLine = null;
     }
-    if (this.vertexEdit?.shapeId === shapeId) {
-      this.disableVertexEditing();
-    }
   }
-
-  startTransformSession({ mode, handle, pointerId, origin, originRaw }) {
-    if (!this.state.selection.size) return;
-    const frame = this.computeSelectionFrame();
-    if (!frame) return;
-    const store = this.shapeStore;
-    const selected = store
-      ? Array.from(this.state.selection)
-          .map((id) => store.read(id))
-          .filter(Boolean)
-      : [];
-    if (!selected.length) return;
-    this.session = {
-      type: "transform",
-      mode,
-      handle,
-      pointerId,
-      origin,
-      originRaw: originRaw || origin,
-      initialFrame: frame,
-      frame,
-      initialSelectionRotation: this.state.selectionRotation,
-      shapes: selected.map((shape) => snapshotShape(shape, frame))
-    };
-  }
-
-  updateTransform(point, rawPoint, pointerEvent) {
-    if (!this.session || this.session.type !== "transform") return;
-    if (!this.state.selection.size) return;
-    const session = this.session;
-    if (session.mode === "move") {
-      const dx = (rawPoint?.x ?? point.x) - session.originRaw.x;
-      const dy = (rawPoint?.y ?? point.y) - session.originRaw.y;
-      this.applyMove(session, dx, dy);
-    } else if (session.mode === "rotate") {
-      const snap = Boolean(pointerEvent?.shiftKey);
-      this.applyRotation(session, rawPoint || point, { snap });
-    } else {
-      const preserveAspect = Boolean(pointerEvent?.shiftKey);
-      this.applyScale(session, rawPoint || point, { preserveAspect });
-    }
-    this.renderShapes();
-    this.renderSelection();
-  }
-
-  finishTransform() {
-    if (!this.session || this.session.type !== "transform") return;
-    this.notifyShapesChanged();
-    this.notifySelectionChanged();
-  }
-
-  cancelTransform() {
-    if (!this.session || this.session.type !== "transform") return;
-    // Restore snapshots
-    this.session.shapes.forEach((snapshot) => restoreShapeSnapshot(this.shapeStore, snapshot));
-    this.state.selectionRotation = this.session.initialSelectionRotation;
-    this.state.selectionFrame = this.session.initialFrame;
-    this.render();
-  }
-
-  applyMove(session, dx, dy) {
-    const frame = {
-      ...session.initialFrame,
-      centerX: session.initialFrame.centerX + dx,
-      centerY: session.initialFrame.centerY + dy
-    };
-    session.frame = frame;
-    this.state.selectionFrame = frame;
-    this.state.selectionRotation = session.initialSelectionRotation;
-    session.shapes.forEach((snapshot) => {
-      const shape = this.shapeStore?.read(snapshot.id);
-      if (!shape) return;
-      applySnapshotTransform(shape, snapshot, {
-        rotation: session.initialSelectionRotation,
-        scaleX: 1,
-        scaleY: 1,
-        frame
-      });
-      this.shapeStore?.write(shape);
-    });
-  }
-
-  applyRotation(session, point, { snap = false } = {}) {
-    const frame = session.initialFrame;
-    const center = { x: frame.centerX, y: frame.centerY };
-    const origin = session.originRaw || session.origin;
-    const startAngle = Math.atan2(origin.y - center.y, origin.x - center.x);
-    const currentAngle = Math.atan2(point.y - center.y, point.x - center.x);
-    let delta = currentAngle - startAngle;
-    if (snap && !Number.isNaN(delta)) {
-      const snap = Math.PI / 12;
-      delta = Math.round(delta / snap) * snap;
-    }
-    const rotation = normalizeAngle(session.initialSelectionRotation + delta);
-    const rotationDelta = normalizeAngle(rotation - session.initialSelectionRotation);
-    this.state.selectionRotation = rotation;
-    const newFrame = { ...frame, rotation };
-    session.frame = newFrame;
-    this.state.selectionFrame = newFrame;
-    session.shapes.forEach((snapshot) => {
-      const shape = this.shapeStore?.read(snapshot.id);
-      if (!shape) return;
-      applySnapshotTransform(shape, snapshot, {
-        rotation,
-        scaleX: 1,
-        scaleY: 1,
-        frame: newFrame
-      });
-      if (shape.type === "rect" || shape.type === "ellipse") {
-        shape.rotation = normalizeAngle(snapshot.rotation + rotationDelta);
-      }
-      this.shapeStore?.write(shape);
-    });
-  }
-
-  applyScale(session, point, { preserveAspect = false } = {}) {
-    const baseFrame = session.initialFrame;
-    const handle = session.handle;
-    if (!baseFrame || !handle || !/[nsew]/.test(handle)) {
-      return;
-    }
-
-    const baseRotation = baseFrame.rotation;
-    const baseWidth = Math.max(MIN_SHAPE_DIMENSION, baseFrame.width || MIN_SHAPE_DIMENSION);
-    const baseHeight = Math.max(MIN_SHAPE_DIMENSION, baseFrame.height || MIN_SHAPE_DIMENSION);
-    const halfWidth = baseWidth / 2;
-    const halfHeight = baseHeight / 2;
-
-    const axisX = handle.includes("e") ? 1 : handle.includes("w") ? -1 : 0;
-    const axisY = handle.includes("s") ? 1 : handle.includes("n") ? -1 : 0;
-    const isCornerHandle = axisX !== 0 && axisY !== 0;
-
-    const anchorLocal = {
-      x: -axisX * halfWidth,
-      y: -axisY * halfHeight
-    };
-
-    const localPointer = toSelectionLocal(point, baseFrame);
-    let pointerLocal = {
-      x: Number.isFinite(localPointer.x)
-        ? localPointer.x
-        : anchorLocal.x + (axisX !== 0 ? axisX * baseWidth : 0),
-      y: Number.isFinite(localPointer.y)
-        ? localPointer.y
-        : anchorLocal.y + (axisY !== 0 ? axisY * baseHeight : 0)
-    };
-
-    if (axisX === 0) {
-      pointerLocal.x = anchorLocal.x;
-    }
-    if (axisY === 0) {
-      pointerLocal.y = anchorLocal.y;
-    }
-
-    const unitSign = (value, fallback) => {
-      if (value < 0) return -1;
-      if (value > 0) return 1;
-      return fallback;
-    };
-
-    if (preserveAspect && isCornerHandle) {
-      const denomX = baseWidth * axisX;
-      const denomY = baseHeight * axisY;
-      const rawScaleX = denomX ? (pointerLocal.x - anchorLocal.x) / denomX : 1;
-      const rawScaleY = denomY ? (pointerLocal.y - anchorLocal.y) / denomY : 1;
-      const minUniformScale = Math.max(
-        MIN_SHAPE_DIMENSION / baseWidth,
-        MIN_SHAPE_DIMENSION / baseHeight
-      );
-      const targetScale = Math.max(
-        Math.abs(rawScaleX),
-        Math.abs(rawScaleY),
-        minUniformScale
-      );
-      const signX = unitSign(rawScaleX, 1);
-      const signY = unitSign(rawScaleY, 1);
-      pointerLocal = {
-        x: anchorLocal.x + axisX * signX * targetScale * baseWidth,
-        y: anchorLocal.y + axisY * signY * targetScale * baseHeight
-      };
-    }
-
-    let deltaX = pointerLocal.x - anchorLocal.x;
-    let deltaY = pointerLocal.y - anchorLocal.y;
-
-    if (axisX !== 0) {
-      const clampSign = unitSign(deltaX, axisX > 0 ? 1 : -1);
-      if (Math.abs(deltaX) < MIN_SHAPE_DIMENSION) {
-        deltaX = clampSign * MIN_SHAPE_DIMENSION;
-        pointerLocal.x = anchorLocal.x + deltaX;
-      }
-    }
-
-    if (axisY !== 0) {
-      const clampSign = unitSign(deltaY, axisY > 0 ? 1 : -1);
-      if (Math.abs(deltaY) < MIN_SHAPE_DIMENSION) {
-        deltaY = clampSign * MIN_SHAPE_DIMENSION;
-        pointerLocal.y = anchorLocal.y + deltaY;
-      }
-    }
-
-    const widthDistance = axisX !== 0 ? Math.abs(deltaX) : baseWidth;
-    const heightDistance = axisY !== 0 ? Math.abs(deltaY) : baseHeight;
-
-    const newCenterLocal = {
-      x: axisX !== 0 ? anchorLocal.x + deltaX / 2 : 0,
-      y: axisY !== 0 ? anchorLocal.y + deltaY / 2 : 0
-    };
-    const newCenter = fromSelectionLocal(newCenterLocal, baseFrame);
-
-    const width = Math.max(MIN_SHAPE_DIMENSION, widthDistance);
-    const height = Math.max(MIN_SHAPE_DIMENSION, heightDistance);
-
-    const newFrame = {
-      centerX: newCenter.x,
-      centerY: newCenter.y,
-      width,
-      height,
-      rotation: baseRotation
-    };
-
-    session.frame = newFrame;
-    this.state.selectionFrame = newFrame;
-    this.state.selectionRotation = baseRotation;
-
-    const scaleX = axisX !== 0 ? deltaX / (baseWidth * axisX) : 1;
-    const scaleY = axisY !== 0 ? deltaY / (baseHeight * axisY) : 1;
-
-    session.shapes.forEach((snapshot) => {
-      const shape = this.shapeStore?.read(snapshot.id);
-      if (!shape) return;
-      applySnapshotTransform(shape, snapshot, {
-        rotation: baseRotation,
-        scaleX,
-        scaleY,
-        frame: newFrame
-      });
-      this.shapeStore?.write(shape);
-    });
-
-    const nextSelectionRotation = this.deriveSelectionRotation();
-    const frameWithRotation = { ...newFrame, rotation: nextSelectionRotation };
-    this.state.selectionRotation = nextSelectionRotation;
-    this.state.selectionFrame = frameWithRotation;
-    session.frame = frameWithRotation;
-  }
-
-  startMarqueeSession({ pointerId, origin, originRaw, extend, subtract, initialSelection }) {
-    this.session = {
-      type: "marquee",
-      pointerId,
-      origin: { ...origin },
-      originRaw: originRaw ? { ...originRaw } : { ...origin },
-      current: { ...origin },
-      currentRaw: originRaw ? { ...originRaw } : { ...origin },
-      extend: Boolean(extend),
-      subtract: Boolean(subtract),
-      initialSelection: initialSelection ? new Set(initialSelection) : new Set(this.state.selection)
-    };
-    this.renderMarquee(this.session);
-    this.renderSelection();
-    this.renderSelection();
-  }
-
-  updateMarquee(point, rawPoint) {
-    if (!this.session || this.session.type !== "marquee") return;
-    this.session.current = { ...point };
-    this.session.currentRaw = rawPoint ? { ...rawPoint } : { ...point };
-    this.renderMarquee(this.session);
-  }
-
-  finishMarqueeSelection() {
-    if (!this.session || this.session.type !== "marquee") {
-      this.clearMarquee();
-      return;
-    }
-    const session = this.session;
-    const rect = {
-      minX: Math.min(session.origin.x, session.current.x),
-      minY: Math.min(session.origin.y, session.current.y),
-      maxX: Math.max(session.origin.x, session.current.x),
-      maxY: Math.max(session.origin.y, session.current.y)
-    };
-    const epsilon = 1e-4;
-    if ((rect.maxX - rect.minX) < epsilon && (rect.maxY - rect.minY) < epsilon) {
-      this.clearMarquee();
-      return;
-    }
-    const hits = this.getShapesInRect(rect);
-    let nextSelection;
-    if (session.subtract) {
-      nextSelection = new Set(session.initialSelection || []);
-      hits.forEach((id) => nextSelection.delete(id));
-    } else if (session.extend) {
-      nextSelection = new Set(session.initialSelection || []);
-      hits.forEach((id) => nextSelection.add(id));
-    } else {
-      nextSelection = new Set(hits);
-    }
-    this.state.selection = nextSelection;
-    this.state.selectionRotation = this.deriveSelectionRotation();
-    // Ensure marquee state no longer suppresses the selection overlay before rendering updates.
-    this.session = null;
-    this.computeSelectionFrame();
-    this.render();
-    this.notifySelectionChanged();
-    this.clearMarquee();
-  }
-
-  clearMarquee() {
-    this.renderMarquee(null);
-    this.renderSelection();
-  }
-
-  renderMarquee(session) {
-    const marquee = this.overlay?.marquee;
-    if (!marquee) return;
-    if (!session) {
-      marquee.classList.add("is-hidden");
-      return;
-    }
-    const viewWidth = this.view.width;
-    const viewHeight = this.view.height;
-    const minX = Math.min(session.origin.x, session.current.x);
-    const minY = Math.min(session.origin.y, session.current.y);
-    const maxX = Math.max(session.origin.x, session.current.x);
-    const maxY = Math.max(session.origin.y, session.current.y);
-    const width = Math.max(0, maxX - minX) * viewWidth;
-    const height = Math.max(0, maxY - minY) * viewHeight;
-    if (width <= 0 || height <= 0) {
-      marquee.classList.add("is-hidden");
-      return;
-    }
-    marquee.classList.remove("is-hidden");
-    marquee.setAttribute("x", minX * viewWidth);
-    marquee.setAttribute("y", minY * viewHeight);
-    marquee.setAttribute("width", width);
-    marquee.setAttribute("height", height);
-  }
-
-  getShapesInRect(rect) {
-    const hits = [];
-    if (!this.shapeStore) return hits;
-    this.shapeStore.order.forEach((shapeId) => {
-      const shape = this.shapeStore.read(shapeId);
-      if (!shape) return;
-      const bounds = getShapeBounds(shape);
-      if (bounds && boundsIntersect(bounds, rect)) {
-        hits.push(shapeId);
-      }
-    });
-    return hits;
-  }
-
-  updateSelection(shapeId, { extend = false, subtract = false } = {}) {
-    this.disableVertexEditing();
-    if (!extend && !subtract) {
-      this.state.selection = new Set([shapeId]);
-    } else if (subtract) {
-      this.state.selection.delete(shapeId);
-    } else if (extend) {
-      this.state.selection.add(shapeId);
-    }
-    const rotation = this.deriveSelectionRotation();
-    this.state.selectionRotation = rotation;
-    this.computeSelectionFrame();
-    this.render();
-    this.notifySelectionChanged();
-  }
-
-  isPointInsideSelection(point) {
-    const frame = this.state.selectionFrame;
-    if (!frame) return false;
-    const local = toSelectionLocal(point, frame);
-    const halfWidth = frame.width / 2;
-    const halfHeight = frame.height / 2;
-    return Math.abs(local.x) <= halfWidth && Math.abs(local.y) <= halfHeight;
-  }
-
 
   notifyShapesChanged() {
     const shapes = this.shapeStore ? this.shapeStore.list().map(cloneShape) : [];
@@ -1339,95 +851,25 @@ class Editor {
   }
 
   notifySelectionChanged() {
-    const frame = this.state.selectionFrame;
-    const selectionIds = Array.from(this.state.selection);
-    const selectedShapes = selectionIds
-      .map((id) => cloneShape(this.shapeStore?.read(id)))
-      .filter(Boolean);
+    const id = this.state.selectedShapeId;
+    const selectedShape = id ? cloneShape(this.shapeStore?.read(id)) : null;
     this.emit("selectionchange", {
-      selection: selectionIds,
-      shapes: selectedShapes,
-      rotation: this.state.selectionRotation,
-      frame: frame
-        ? {
-            centerX: frame.centerX,
-            centerY: frame.centerY,
-            width: frame.width,
-            height: frame.height,
-            rotation: frame.rotation
-          }
-        : null
+      selection: id ? [id] : [],
+      shapes: selectedShape ? [selectedShape] : [],
+      rotation: 0,
+      frame: null
     });
-  }
-
-  deriveSelectionRotation() {
-    const ids = Array.from(this.state.selection);
-    if (!ids.length) return 0;
-    if (ids.length === 1) {
-      const shape = this.shapeStore?.read(ids[0]);
-      return normalizeAngle(shape?.rotation || 0);
-    }
-    return normalizeAngle(this.state.selectionRotation || 0);
-  }
-
-  computeSelectionFrame() {
-    const ids = Array.from(this.state.selection);
-    if (!ids.length) {
-      this.state.selectionFrame = null;
-      return null;
-    }
-    const store = this.shapeStore;
-    const shapes = store ? ids.map((id) => store.read(id)).filter(Boolean) : [];
-    if (!shapes.length) {
-      this.state.selectionFrame = null;
-      return null;
-    }
-    const rotation = normalizeAngle(this.state.selectionRotation || 0);
-    const cos = Math.cos(-rotation);
-    const sin = Math.sin(-rotation);
-    let minX = Infinity;
-    let maxX = -Infinity;
-    let minY = Infinity;
-    let maxY = -Infinity;
-    shapes.forEach((shape) => {
-      const points = getShapePoints(shape);
-      points.forEach((point) => {
-        const rx = point.x * cos - point.y * sin;
-        const ry = point.x * sin + point.y * cos;
-        if (rx < minX) minX = rx;
-        if (rx > maxX) maxX = rx;
-        if (ry < minY) minY = ry;
-        if (ry > maxY) maxY = ry;
-      });
-    });
-    const centerRot = {
-      x: (minX + maxX) / 2,
-      y: (minY + maxY) / 2
-    };
-    const width = Math.max(MIN_SHAPE_DIMENSION, maxX - minX);
-    const height = Math.max(MIN_SHAPE_DIMENSION, maxY - minY);
-    const center = rotateVector(centerRot, rotation);
-    const frame = {
-      centerX: center.x,
-      centerY: center.y,
-      width,
-      height,
-      rotation
-    };
-    this.state.selectionFrame = frame;
-    return frame;
   }
 
   render() {
     this.renderShapes();
-    this.renderSelection();
     this.updateToolbar();
   }
 
   renderShapes() {
     if (!this.shapeStore) return;
     this.shapeStore.setView(this.view);
-    const selection = this.state.selection;
+    const selectedId = this.state.selectedShapeId;
     this.shapeStore.order.forEach((shapeId) => {
       const shape = this.shapeStore.read(shapeId);
       if (!shape) return;
@@ -1439,195 +881,8 @@ class Editor {
       } else {
         this.shapesLayer.appendChild(node);
       }
-      node.classList.toggle("is-selected", selection.has(shapeId));
+      node.classList.toggle("is-selected", selectedId === shapeId);
     });
-  }
-
-
-  renderSelection() {
-    const frame = this.computeSelectionFrame();
-    const overlay = this.overlay;
-    const marqueeActive = this.session && this.session.type === "marquee";
-    if (!overlay) return;
-    const showSelection = Boolean(frame && this.state.selection.size && !marqueeActive);
-    if (!showSelection) {
-      if (overlay.container) {
-        overlay.container.style.display = "none";
-      }
-      if (!marqueeActive) {
-        this.renderMarquee(null);
-      }
-      this.renderVertexHandles(null, false);
-      return;
-    }
-    if (overlay.container) {
-      overlay.container.style.display = "";
-    }
-    if (!marqueeActive) {
-      this.renderMarquee(null);
-    }
-    const viewWidth = this.view.width;
-    const viewHeight = this.view.height;
-    const width = frame.width * viewWidth;
-    const height = frame.height * viewHeight;
-    const cx = frame.centerX * viewWidth;
-    const cy = frame.centerY * viewHeight;
-
-    overlay.container.setAttribute("transform", `translate(${cx}, ${cy}) rotate(${(frame.rotation * 180) / Math.PI})`);
-    overlay.outline.setAttribute("x", -width / 2);
-    overlay.outline.setAttribute("y", -height / 2);
-    overlay.outline.setAttribute("width", width);
-    overlay.outline.setAttribute("height", height);
-
-    const HANDLE_SIZE = 10;
-    const HALF_HANDLE = HANDLE_SIZE / 2;
-    HANDLE_DEFINITIONS.forEach((handle) => {
-      const element = overlay.handles.get(handle.id);
-      if (!element) return;
-      element.setAttribute("x", handle.x * width - HALF_HANDLE);
-      element.setAttribute("y", handle.y * height - HALF_HANDLE);
-      element.setAttribute("width", HANDLE_SIZE);
-      element.setAttribute("height", HANDLE_SIZE);
-    });
-
-    const rotationHandle = overlay.handles.get("rotate");
-    if (rotationHandle) {
-      rotationHandle.setAttribute("cx", 0);
-      rotationHandle.setAttribute("cy", (-height / 2) - ROTATION_HANDLE_OFFSET * viewHeight);
-      rotationHandle.setAttribute("r", 8);
-    }
-    this.renderVertexHandles(frame, true);
-  }
-
-  renderVertexHandles(frame, showSelection) {
-    const group = this.overlay?.vertices;
-    if (!group) return;
-    while (group.firstChild) {
-      group.removeChild(group.firstChild);
-    }
-    if (!showSelection) return;
-    if (!frame) return;
-    if (!this.vertexEdit) return;
-    if (this.state.selection.size !== 1 || !this.state.selection.has(this.vertexEdit.shapeId)) {
-      this.disableVertexEditing();
-      return;
-    }
-    const shape = this.shapeStore?.read(this.vertexEdit.shapeId);
-    if (!shape || !Array.isArray(shape.points)) return;
-    if (shape.type !== "line" && shape.type !== "path") return;
-    const points = shape.points;
-    if (!points.length) return;
-    const viewWidth = this.view.width;
-    const viewHeight = this.view.height;
-    points.forEach((point, index) => {
-      const local = toSelectionLocal(point, frame);
-      const px = local.x * viewWidth;
-      const py = local.y * viewHeight;
-      if (!Number.isFinite(px) || !Number.isFinite(py)) return;
-      const circle = createSvgElement("circle", {
-        class: "editor-selection__vertex",
-        "data-vertex-index": String(index),
-        "data-vertex-shape": shape.id,
-        cx: px,
-        cy: py,
-        r: VERTEX_HANDLE_RADIUS
-      });
-      circle.setAttribute("fill", "rgba(82, 213, 255, 0.8)");
-      circle.setAttribute("stroke", "rgba(12, 143, 184, 0.9)");
-      circle.setAttribute("stroke-width", "1.5");
-      circle.setAttribute("pointer-events", "all");
-      circle.style.cursor = "pointer";
-      if (this.vertexEdit?.activeIndex === index) {
-        circle.classList.add("is-active");
-      }
-      group.appendChild(circle);
-    });
-  }
-
-  enableVertexEditing(shapeId) {
-    const shape = this.shapeStore?.read(shapeId);
-    if (!shape || (shape.type !== "line" && shape.type !== "path")) {
-      this.disableVertexEditing();
-      return;
-    }
-    this.vertexEdit = { shapeId, activeIndex: null };
-    this.renderSelection();
-  }
-
-  disableVertexEditing() {
-    if (!this.vertexEdit) return;
-    this.vertexEdit = null;
-    const group = this.overlay?.vertices;
-    if (group) {
-      while (group.firstChild) {
-        group.removeChild(group.firstChild);
-      }
-    }
-  }
-
-  startVertexDrag({ shapeId, pointerId, vertexIndex }) {
-    const shape = this.shapeStore?.read(shapeId);
-    if (!shape || !Array.isArray(shape.points)) return;
-    if (!this.vertexEdit || this.vertexEdit.shapeId !== shapeId) {
-      this.enableVertexEditing(shapeId);
-    }
-    this.vertexEdit = { shapeId, activeIndex: vertexIndex };
-    this.session = {
-      type: "vertex",
-      pointerId,
-      shapeId,
-      vertexIndex,
-      originalPoints: shape.points.map((point) => ({ x: point.x, y: point.y }))
-    };
-    this.renderSelection();
-  }
-
-  updateVertexDrag(point) {
-    if (!this.session || this.session.type !== "vertex") return;
-    const shape = this.shapeStore?.read(this.session.shapeId);
-    if (!shape || !Array.isArray(shape.points)) return;
-    const index = this.session.vertexIndex;
-    if (index < 0 || index >= shape.points.length) return;
-    const newPoint = {
-      x: clampUnit(point.x),
-      y: clampUnit(point.y)
-    };
-    shape.points[index] = newPoint;
-    if (shape.closed && shape.points.length >= 2) {
-      if (index === 0) {
-        shape.points[shape.points.length - 1] = { ...newPoint };
-      } else if (index === shape.points.length - 1) {
-        shape.points[0] = { ...newPoint };
-      }
-    }
-    this.shapeStore?.write(shape);
-    this.renderSelection();
-  }
-
-  finishVertexDrag() {
-    if (!this.session || this.session.type !== "vertex") return;
-    if (this.vertexEdit && this.vertexEdit.shapeId === this.session.shapeId) {
-      this.vertexEdit.activeIndex = null;
-    }
-    this.render();
-    this.notifyShapesChanged();
-    this.notifySelectionChanged();
-  }
-
-  cancelVertexDrag() {
-    if (!this.session || this.session.type !== "vertex") return;
-    const shape = this.shapeStore?.read(this.session.shapeId);
-    if (shape && Array.isArray(shape.points)) {
-      shape.points.length = 0;
-      this.session.originalPoints.forEach((point) => {
-        shape.points.push({ x: point.x, y: point.y });
-      });
-      this.shapeStore?.write(shape);
-    }
-    if (this.vertexEdit && this.vertexEdit.shapeId === this.session.shapeId) {
-      this.vertexEdit.activeIndex = null;
-    }
-    this.render();
   }
 
   getNormalizedPoint(event, { clamp = true } = {}) {
@@ -1711,72 +966,6 @@ function createShape(tool, point, style) {
     points: [{ x: point.x, y: point.y }],
     style: { ...style }
   };
-}
-
-function snapshotShape(shape, frame) {
-  const center = getShapeCenter(shape);
-  return {
-    id: shape.id,
-    type: shape.type,
-    rotation: shape.rotation || 0,
-    style: { ...(shape.style || {}) },
-    localCenter: toSelectionLocal(center, frame),
-    original: cloneShape(shape),
-    localVertices: getShapePoints(shape).map((point) => toSelectionLocal(point, frame))
-  };
-}
-
-function restoreShapeSnapshot(store, snapshot) {
-  if (!store || !snapshot) return;
-  const restored = cloneShape(snapshot.original);
-  if (!restored) return;
-  store.write(restored);
-}
-
-function applySnapshotTransform(shape, snapshot, transform) {
-  const { rotation: frameRotation, scaleX, scaleY, frame } = transform;
-  const newLocalCenter = {
-    x: snapshot.localCenter.x * scaleX,
-    y: snapshot.localCenter.y * scaleY
-  };
-  const newCenter = fromSelectionLocal(newLocalCenter, frame);
-  if (shape.type === "rect" || shape.type === "ellipse") {
-    const base = snapshot.original;
-    const baseWidth = Math.max(MIN_SHAPE_DIMENSION, base.width);
-    const baseHeight = Math.max(MIN_SHAPE_DIMENSION, base.height);
-    const absScaleX = Math.abs(scaleX);
-    const absScaleY = Math.abs(scaleY);
-    const width = Math.max(baseWidth * absScaleX, MIN_SHAPE_DIMENSION);
-    const height = Math.max(baseHeight * absScaleY, MIN_SHAPE_DIMENSION);
-    shape.x = newCenter.x - width / 2;
-    shape.y = newCenter.y - height / 2;
-    shape.width = width;
-    shape.height = height;
-    const EPSILON = 1e-6;
-    const isScaling = Math.abs(scaleX - 1) > EPSILON || Math.abs(scaleY - 1) > EPSILON;
-    if (isScaling) {
-      const relRotation = snapshot.rotation - frameRotation;
-      const newRelRotation = Math.atan2(scaleY * Math.sin(relRotation), scaleX * Math.cos(relRotation));
-      let nextRotation = normalizeAngle(newRelRotation + frameRotation);
-      const alternateRotation = normalizeAngle(nextRotation + Math.PI);
-      const primaryDelta = Math.abs(normalizeAngle(nextRotation - snapshot.rotation));
-      const alternateDelta = Math.abs(normalizeAngle(alternateRotation - snapshot.rotation));
-      if (alternateDelta < primaryDelta) {
-        nextRotation = alternateRotation;
-      }
-      shape.rotation = nextRotation;
-    } else {
-      shape.rotation = snapshot.rotation;
-    }
-  } else if (shape.type === "line") {
-    const newPoints = snapshot.localVertices.map((vertex) => fromSelectionLocal({ x: vertex.x * scaleX, y: vertex.y * scaleY }, frame));
-    shape.points = newPoints.map((point) => ({ x: point.x, y: point.y }));
-    shape.closed = Boolean(snapshot.original.closed);
-  } else if (shape.type === "path") {
-    const newPoints = snapshot.localVertices.map((vertex) => fromSelectionLocal({ x: vertex.x * scaleX, y: vertex.y * scaleY }, frame));
-    shape.points = newPoints.map((point) => ({ x: point.x, y: point.y }));
-    shape.closed = Boolean(snapshot.original.closed);
-  }
 }
 
 function getShapeCenter(shape) {
@@ -1878,14 +1067,6 @@ function toSelectionLocal(point, frame) {
   return rotateVector(translated, -frame.rotation);
 }
 
-function fromSelectionLocal(point, frame) {
-  const rotated = rotateVector(point, frame.rotation);
-  return {
-    x: frame.centerX + rotated.x,
-    y: frame.centerY + rotated.y
-  };
-}
-
 function distanceBetween(a, b) {
   const dx = (a.x ?? 0) - (b.x ?? 0);
   const dy = (a.y ?? 0) - (b.y ?? 0);
@@ -1896,10 +1077,6 @@ function clampUnit(value) {
   return Math.min(1, Math.max(0, value));
 }
 
-
-function normalizeAngle(angle) {
-  return Math.atan2(Math.sin(angle), Math.cos(angle));
-}
 
 function simplifyPolyline(points, tolerance = 0.002) {
   if (points.length <= 2) return points.slice();
@@ -2347,47 +1524,4 @@ function inferShapeType(node) {
     return node.dataset.shapeType || "path";
   }
   return "rect";
-}
-
-function buildSelectionOverlay() {
-  const root = createSvgElement("g", { class: "editor-selection" });
-  const marquee = createSvgElement("rect", {
-    class: "editor-selection__marquee",
-    x: 0,
-    y: 0,
-    width: 0,
-    height: 0
-  });
-  marquee.classList.add("is-hidden");
-  const container = createSvgElement("g", { class: "editor-selection__container" });
-  const outline = createSvgElement("rect", {
-    class: "editor-selection__outline",
-    x: 0,
-    y: 0,
-    width: 0,
-    height: 0
-  });
-  container.appendChild(outline);
-  const handles = new Map();
-  HANDLE_DEFINITIONS.forEach((handle) => {
-    const square = createSvgElement("rect", {
-      class: "editor-selection__handle",
-      "data-handle": handle.id
-    });
-    square.style.cursor = handle.cursor;
-    handles.set(handle.id, square);
-    container.appendChild(square);
-  });
-  const vertexGroup = createSvgElement("g", { class: "editor-selection__vertices" });
-  container.appendChild(vertexGroup);
-  const rotateHandle = createSvgElement("circle", {
-    class: "editor-selection__handle editor-selection__handle--rotate",
-    "data-handle": "rotate"
-  });
-  rotateHandle.style.cursor = "grab";
-  handles.set("rotate", rotateHandle);
-  container.appendChild(rotateHandle);
-  root.appendChild(marquee);
-  root.appendChild(container);
-  return { root, marquee, container, outline, handles, vertices: vertexGroup };
 }
