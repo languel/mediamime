@@ -74,6 +74,7 @@ All trigger handlers run in event order. Continuous events share the same thrott
   }
   ```
 - Future migrations should ingest any `osc` payload silently and discard it.
+- The live SVG now mirrors the persisted data: every `<g data-shape-id>` carries `data-shape-*` attributes for geometry, style, and interaction metadata. Exporting the SVG gives a faithful score without rebuilding from JSON.
 
 ## 7. Open Items
 

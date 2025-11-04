@@ -23,6 +23,106 @@ const HANDLE_DEFINITIONS = [
   { id: "w", x: -0.5, y: 0, cursor: "ew-resize" }
 ];
 
+class SvgShapeStore {
+  constructor(layer, viewBox) {
+    this.layer = layer;
+    this.view = viewBox;
+    this.order = [];
+    this.nodes = new Map();
+    this.bootstrap();
+  }
+
+  setView(viewBox) {
+    this.view = viewBox;
+  }
+
+  bootstrap() {
+    if (!this.layer) return;
+    const existing = Array.from(this.layer.querySelectorAll("[data-shape-id]"));
+    this.order.length = 0;
+    this.nodes.clear();
+    existing.forEach((node) => {
+      const id = node.dataset.shapeId || createId();
+      node.dataset.shapeId = id;
+      if (!node.dataset.shapeType) {
+        const child = node.firstElementChild;
+        if (child) {
+          const tag = child.tagName.toLowerCase();
+          if (tag === "rect") node.dataset.shapeType = "rect";
+          else if (tag === "ellipse") node.dataset.shapeType = "ellipse";
+          else if (tag === "polygon" || tag === "polyline") node.dataset.shapeType = "line";
+          else if (tag === "path") node.dataset.shapeType = "path";
+        }
+      }
+      this.order.push(id);
+      this.nodes.set(id, node);
+      const shape = parseShapeNode(node, this.view);
+      if (shape) {
+        applyShapeNode(node, shape, this.view);
+      }
+    });
+  }
+
+  getNode(id) {
+    return this.nodes.get(id) || null;
+  }
+
+  ensureOrder() {
+    this.order.forEach((id) => {
+      const node = this.nodes.get(id);
+      if (node && node.parentNode !== this.layer) {
+        this.layer.appendChild(node);
+      } else if (node) {
+        this.layer.appendChild(node);
+      }
+    });
+  }
+
+  list() {
+    return this.order.map((id) => this.read(id)).filter(Boolean);
+  }
+
+  read(id) {
+    const node = this.nodes.get(id);
+    if (!node) return null;
+    return parseShapeNode(node, this.view);
+  }
+
+  write(shape) {
+    if (!shape || !shape.id) return null;
+    let node = this.nodes.get(shape.id);
+    if (!node) {
+      node = buildShapeNode(shape, this.view);
+      this.layer.appendChild(node);
+      this.nodes.set(shape.id, node);
+      if (!this.order.includes(shape.id)) {
+        this.order.push(shape.id);
+      }
+    }
+    applyShapeNode(node, shape, this.view);
+    return parseShapeNode(node, this.view);
+  }
+
+  remove(id) {
+    const node = this.nodes.get(id);
+    if (node && node.parentNode) {
+      node.parentNode.removeChild(node);
+    }
+    this.nodes.delete(id);
+    this.order = this.order.filter((value) => value !== id);
+  }
+
+  clear() {
+    Array.from(this.nodes.values()).forEach((node) => {
+      if (node.parentNode) {
+        node.parentNode.removeChild(node);
+      }
+    });
+    this.nodes.clear();
+    this.order.length = 0;
+  }
+}
+
 export function initEditor({ root, svg, toolbar }) {
   const editor = new Editor(root, svg, toolbar);
   editor.init();
@@ -39,14 +139,11 @@ class Editor {
       mode: "edit",
       tool: "select",
       toolLocked: false,
-      shapes: [],
-      order: [],
       selection: new Set(),
       selectionRotation: 0,
       selectionFrame: null
     };
-    this.shapeIndex = new Map();
-    this.shapeRefs = new Map();
+    this.shapeStore = null;
     this.overlay = null;
     this.session = null;
     this.events = new Map();
@@ -89,7 +186,7 @@ class Editor {
 
   shapeContainsPoint(shapeId, point, tolerance = 0) {
     if (!shapeId || !point) return false;
-    const shape = this.shapeIndex.get(shapeId);
+    const shape = this.shapeStore?.read(shapeId);
     if (!shape) return false;
     return shapeContainsPoint(shape, point, tolerance);
   }
@@ -99,7 +196,7 @@ class Editor {
       getState: () => ({
         tool: this.state.tool,
         toolLocked: this.state.toolLocked,
-        shapes: this.state.shapes.map(cloneShape),
+        shapes: (this.shapeStore ? this.shapeStore.list() : []).map(cloneShape),
         selection: Array.from(this.state.selection)
       }),
       setTool: (tool) => this.setTool(tool),
@@ -107,7 +204,7 @@ class Editor {
       off: (event, handler) => this.off(event, handler),
       normalizePoint: (clientPoint, options) => this.normalizeClientPoint(clientPoint, options),
       shapeContainsPoint: (shapeId, point, tolerance) => this.shapeContainsPoint(shapeId, point, tolerance),
-      getShapeSnapshot: (shapeId) => cloneShape(this.shapeIndex.get(shapeId))
+      getShapeSnapshot: (shapeId) => cloneShape(this.shapeStore?.read(shapeId))
     };
   }
 
@@ -152,6 +249,7 @@ class Editor {
     if (this.overlay.container) {
       this.overlay.container.style.display = "none";
     }
+    this.shapeStore = new SvgShapeStore(this.shapesLayer, this.view);
   }
 
   bindToolbar() {
@@ -290,11 +388,13 @@ class Editor {
   }
 
   findShapeAtPoint(point, { tolerance = ERASER_TOLERANCE, skip = null } = {}) {
-    const order = this.state.order;
+    const store = this.shapeStore;
+    if (!store) return null;
+    const order = store.order;
     for (let i = order.length - 1; i >= 0; i--) {
       const id = order[i];
       if (skip && skip.has(id)) continue;
-      const shape = this.shapeIndex.get(id);
+      const shape = store.read(id);
       if (!shape) continue;
       if (shapeContainsPoint(shape, point, tolerance)) {
         return { id, shape };
@@ -304,13 +404,9 @@ class Editor {
   }
 
   clearShapes() {
-    if (!this.state.shapes.length) return;
+    if (!this.shapeStore || !this.shapeStore.order.length) return;
     this.disableVertexEditing();
-    this.state.shapes = [];
-    this.state.order = [];
-    this.shapeIndex.clear();
-    this.shapeRefs.forEach((node) => node.parentNode?.removeChild(node));
-    this.shapeRefs.clear();
+    this.shapeStore.clear();
     this.state.selection.clear();
     this.state.selectionFrame = null;
     this.state.selectionRotation = 0;
@@ -383,7 +479,7 @@ class Editor {
     const tool = this.state.tool;
 
     if (tool === "select") {
-      const shape = shapeId ? this.shapeIndex.get(shapeId) : null;
+      const shape = shapeId ? this.shapeStore?.read(shapeId) : null;
       const isMetaKey = Boolean(event.metaKey);
       const isCtrlKey = Boolean(event.ctrlKey);
       const optionMapping = Boolean(
@@ -407,7 +503,7 @@ class Editor {
           if (this.state.selection.size !== 1 || !this.state.selection.has(shapeId)) {
             this.updateSelection(shapeId);
           }
-          const shapeSnapshot = cloneShape(this.shapeIndex.get(shapeId));
+          const shapeSnapshot = cloneShape(this.shapeStore?.read(shapeId));
           if (shapeSnapshot) {
             this.emit("mappingrequest", {
               shapeId,
@@ -667,16 +763,15 @@ class Editor {
       return;
     }
     const shape = createShape(tool, point, DEFAULT_STYLE);
-    this.state.shapes.push(shape);
-    this.state.order.push(shape.id);
-    this.shapeIndex.set(shape.id, shape);
+    this.shapeStore?.write(shape);
+    this.renderShapes();
     this.session = {
       type: "draw",
       pointerId,
       tool,
       shape,
-      origin: point,
-      lastPoint: point
+      origin: { ...point },
+      lastPoint: { ...point }
     };
     if (!(this.state.toolLocked && DRAWING_TOOLS.has(tool))) {
       this.state.selection = new Set([shape.id]);
@@ -686,35 +781,42 @@ class Editor {
       this.state.selectionFrame = null;
       this.state.selectionRotation = 0;
     }
-    this.render();
+    this.renderSelection();
   }
 
   beginLineDrawing(point, pointerId) {
-    let shape;
-    let continuing = Boolean(this.pendingLine && this.pendingLine.shape);
+    const store = this.shapeStore;
+    if (!store) return;
+    let continuing = Boolean(this.pendingLine?.shapeId);
+    let shape = null;
     if (continuing) {
-      shape = this.pendingLine.shape;
-      const last = shape.points[shape.points.length - 1];
-      const start = {
-        x: clampUnit(last.x),
-        y: clampUnit(last.y)
-      };
-      shape.points.push({ ...start });
-    } else {
+      const existing = store.read(this.pendingLine.shapeId);
+      if (existing) {
+        shape = cloneShape(existing);
+        const last = shape.points[shape.points.length - 1] || { x: point.x, y: point.y };
+        const start = {
+          x: clampUnit(last.x),
+          y: clampUnit(last.y)
+        };
+        shape.points.push({ ...start });
+      } else {
+        continuing = false;
+      }
+    }
+    if (!continuing || !shape) {
       shape = createShape("line", point, DEFAULT_STYLE);
       shape.points[1] = { x: clampUnit(point.x), y: clampUnit(point.y) };
-      this.state.shapes.push(shape);
-      this.state.order.push(shape.id);
-      this.shapeIndex.set(shape.id, shape);
-      this.pendingLine = null;
     }
+    store.write(shape);
+    this.renderShapes();
+    this.pendingLine = { shapeId: shape.id };
     this.session = {
       type: "draw",
       pointerId,
       tool: "line",
       shape,
-      origin: continuing ? shape.points[shape.points.length - 2] : point,
-      lastPoint: point,
+      origin: continuing ? { ...shape.points[shape.points.length - 2] } : { ...point },
+      lastPoint: { ...point },
       continuing
     };
     if (!(this.state.toolLocked && DRAWING_TOOLS.has("line"))) {
@@ -725,7 +827,7 @@ class Editor {
       this.state.selectionFrame = null;
       this.state.selectionRotation = 0;
     }
-    this.render();
+    this.renderSelection();
   }
 
   updateDrawing(point) {
@@ -748,9 +850,10 @@ class Editor {
       const last = this.session.lastPoint;
       if (distanceBetween(last, point) >= MIN_DRAW_DISTANCE) {
         shape.points.push({ x: clampUnit(point.x), y: clampUnit(point.y) });
-        this.session.lastPoint = point;
       }
     }
+    this.session.lastPoint = { ...point };
+    this.shapeStore?.write(shape);
     this.renderShapes();
     this.renderSelection();
   }
@@ -795,16 +898,17 @@ class Editor {
       }
     }
     if (!keep) {
-      if (this.pendingLine?.shape?.id === shape.id) {
+      if (this.pendingLine?.shapeId === shape.id) {
         this.pendingLine = null;
       }
       this.removeShape(shape.id);
       this.render();
       return;
     }
+    this.shapeStore?.write(shape);
     if (shape.type === "line") {
       if (event?.shiftKey) {
-        this.pendingLine = { shape };
+        this.pendingLine = { shapeId: shape.id };
       } else {
         this.pendingLine = null;
       }
@@ -834,25 +938,15 @@ class Editor {
       this.removeShape(shape.id);
       this.render();
     }
-    if (shape && this.pendingLine?.shape?.id === shape.id) {
+    if (shape && this.pendingLine?.shapeId === shape.id) {
       this.pendingLine = null;
     }
   }
 
   removeShape(shapeId) {
-    const index = this.state.shapes.findIndex((shape) => shape.id === shapeId);
-    if (index !== -1) {
-      this.state.shapes.splice(index, 1);
-    }
-    this.state.order = this.state.order.filter((id) => id !== shapeId);
-    this.shapeIndex.delete(shapeId);
-    const ref = this.shapeRefs.get(shapeId);
-    if (ref?.parentNode) {
-      ref.parentNode.removeChild(ref);
-    }
-    this.shapeRefs.delete(shapeId);
+    this.shapeStore?.remove(shapeId);
     this.state.selection.delete(shapeId);
-    if (this.pendingLine?.shape?.id === shapeId) {
+    if (this.pendingLine?.shapeId === shapeId) {
       this.pendingLine = null;
     }
     if (this.vertexEdit?.shapeId === shapeId) {
@@ -864,7 +958,12 @@ class Editor {
     if (!this.state.selection.size) return;
     const frame = this.computeSelectionFrame();
     if (!frame) return;
-    const selected = Array.from(this.state.selection).map((id) => this.shapeIndex.get(id)).filter(Boolean);
+    const store = this.shapeStore;
+    const selected = store
+      ? Array.from(this.state.selection)
+          .map((id) => store.read(id))
+          .filter(Boolean)
+      : [];
     if (!selected.length) return;
     this.session = {
       type: "transform",
@@ -908,7 +1007,7 @@ class Editor {
   cancelTransform() {
     if (!this.session || this.session.type !== "transform") return;
     // Restore snapshots
-    this.session.shapes.forEach((snapshot) => restoreShapeSnapshot(this.shapeIndex.get(snapshot.id), snapshot));
+    this.session.shapes.forEach((snapshot) => restoreShapeSnapshot(this.shapeStore, snapshot));
     this.state.selectionRotation = this.session.initialSelectionRotation;
     this.state.selectionFrame = this.session.initialFrame;
     this.render();
@@ -924,7 +1023,7 @@ class Editor {
     this.state.selectionFrame = frame;
     this.state.selectionRotation = session.initialSelectionRotation;
     session.shapes.forEach((snapshot) => {
-      const shape = this.shapeIndex.get(snapshot.id);
+      const shape = this.shapeStore?.read(snapshot.id);
       if (!shape) return;
       applySnapshotTransform(shape, snapshot, {
         rotation: session.initialSelectionRotation,
@@ -932,6 +1031,7 @@ class Editor {
         scaleY: 1,
         frame
       });
+      this.shapeStore?.write(shape);
     });
   }
 
@@ -953,7 +1053,7 @@ class Editor {
     session.frame = newFrame;
     this.state.selectionFrame = newFrame;
     session.shapes.forEach((snapshot) => {
-      const shape = this.shapeIndex.get(snapshot.id);
+      const shape = this.shapeStore?.read(snapshot.id);
       if (!shape) return;
       applySnapshotTransform(shape, snapshot, {
         rotation,
@@ -964,12 +1064,13 @@ class Editor {
       if (shape.type === "rect" || shape.type === "ellipse") {
         shape.rotation = normalizeAngle(snapshot.rotation + rotationDelta);
       }
+      this.shapeStore?.write(shape);
     });
   }
 
   applyScale(session, point, { preserveAspect = false } = {}) {
     const baseFrame = session.initialFrame;
-    const rotation = baseFrame.rotation;
+    const baseRotation = baseFrame.rotation;
     const localPointer = toSelectionLocal(point, baseFrame);
 
     const handle = session.handle;
@@ -993,40 +1094,52 @@ class Editor {
     const deltaHandleX = handleLocalStart.x - anchorLocal.x;
     const deltaHandleY = handleLocalStart.y - anchorLocal.y;
 
-    let scaleX = 1;
-    let scaleY = 1;
-
-    if (affectsX && deltaHandleX !== 0) {
-      const numerator = Number.isFinite(localPointer.x) ? localPointer.x - anchorLocal.x : 0;
-      scaleX = numerator / deltaHandleX;
-    }
-    if (affectsY && deltaHandleY !== 0) {
-      const numerator = Number.isFinite(localPointer.y) ? localPointer.y - anchorLocal.y : 0;
-      scaleY = numerator / deltaHandleY;
-    }
+    let scaleX = affectsX && deltaHandleX !== 0
+      ? (Number.isFinite(localPointer.x) ? localPointer.x - anchorLocal.x : 0) / deltaHandleX
+      : 1;
+    let scaleY = affectsY && deltaHandleY !== 0
+      ? (Number.isFinite(localPointer.y) ? localPointer.y - anchorLocal.y : 0) / deltaHandleY
+      : 1;
 
     const minScaleX = MIN_SHAPE_DIMENSION / Math.max(MIN_SHAPE_DIMENSION, baseFrame.width);
     const minScaleY = MIN_SHAPE_DIMENSION / Math.max(MIN_SHAPE_DIMENSION, baseFrame.height);
 
-    if (!affectsX) {
-      scaleX = 1;
-    } else if (!Number.isFinite(scaleX) || scaleX <= 0) {
-      scaleX = minScaleX;
+    if (affectsX) {
+      if (!Number.isFinite(scaleX)) scaleX = 0;
+      const sign = Math.sign(scaleX) || Math.sign(deltaHandleX) || 1;
+      const magnitude = Math.max(Math.abs(scaleX), minScaleX);
+      scaleX = sign * magnitude;
     } else {
-      scaleX = Math.max(scaleX, minScaleX);
+      scaleX = preserveAspect ? scaleX : 1;
     }
 
-    if (!affectsY) {
-      scaleY = 1;
-    } else if (!Number.isFinite(scaleY) || scaleY <= 0) {
-      scaleY = minScaleY;
+    if (affectsY) {
+      if (!Number.isFinite(scaleY)) scaleY = 0;
+      const sign = Math.sign(scaleY) || Math.sign(deltaHandleY) || 1;
+      const magnitude = Math.max(Math.abs(scaleY), minScaleY);
+      scaleY = sign * magnitude;
     } else {
-      scaleY = Math.max(scaleY, minScaleY);
+      scaleY = preserveAspect ? scaleY : 1;
     }
 
     if (preserveAspect) {
-      const uniform = Math.max(scaleX, scaleY);
-      scaleX = scaleY = Math.max(uniform, Math.max(minScaleX, minScaleY));
+      const currentMagX = affectsX ? Math.abs(scaleX) : 0;
+      const currentMagY = affectsY ? Math.abs(scaleY) : 0;
+      const target = Math.max(currentMagX, currentMagY, minScaleX, minScaleY);
+      if (affectsX && affectsY) {
+        scaleX = (Math.sign(scaleX) || 1) * target;
+        scaleY = (Math.sign(scaleY) || 1) * target;
+      } else if (affectsX) {
+        const sign = Math.sign(scaleX) || 1;
+        const uniformSign = Math.sign(scaleY) || sign;
+        scaleX = sign * target;
+        scaleY = uniformSign * target;
+      } else if (affectsY) {
+        const sign = Math.sign(scaleY) || 1;
+        const uniformSign = Math.sign(scaleX) || sign;
+        scaleY = sign * target;
+        scaleX = uniformSign * target;
+      }
     }
 
     const newCenterLocal = {
@@ -1043,26 +1156,33 @@ class Editor {
       centerY: newCenter.y,
       width,
       height,
-      rotation
+      rotation: baseRotation
     };
 
     session.frame = newFrame;
     this.state.selectionFrame = newFrame;
-    this.state.selectionRotation = rotation;
+    this.state.selectionRotation = baseRotation;
 
-    const shapeScaleX = affectsX ? newFrame.width / baseFrame.width : 1;
-    const shapeScaleY = affectsY ? newFrame.height / baseFrame.height : 1;
+    const shapeScaleX = (affectsX || preserveAspect) ? scaleX : 1;
+    const shapeScaleY = (affectsY || preserveAspect) ? scaleY : 1;
 
     session.shapes.forEach((snapshot) => {
-      const shape = this.shapeIndex.get(snapshot.id);
+      const shape = this.shapeStore?.read(snapshot.id);
       if (!shape) return;
       applySnapshotTransform(shape, snapshot, {
-        rotation,
+        rotation: baseRotation,
         scaleX: shapeScaleX,
         scaleY: shapeScaleY,
         frame: newFrame
       });
+      this.shapeStore?.write(shape);
     });
+
+    const nextSelectionRotation = this.deriveSelectionRotation();
+    const frameWithRotation = { ...newFrame, rotation: nextSelectionRotation };
+    this.state.selectionRotation = nextSelectionRotation;
+    this.state.selectionFrame = frameWithRotation;
+    session.frame = frameWithRotation;
   }
 
   startMarqueeSession({ pointerId, origin, originRaw, extend, subtract, initialSelection }) {
@@ -1160,8 +1280,9 @@ class Editor {
 
   getShapesInRect(rect) {
     const hits = [];
-    this.state.order.forEach((shapeId) => {
-      const shape = this.shapeIndex.get(shapeId);
+    if (!this.shapeStore) return hits;
+    this.shapeStore.order.forEach((shapeId) => {
+      const shape = this.shapeStore.read(shapeId);
       if (!shape) return;
       const bounds = getShapeBounds(shape);
       if (bounds && boundsIntersect(bounds, rect)) {
@@ -1198,14 +1319,15 @@ class Editor {
 
 
   notifyShapesChanged() {
-    this.emit("shapeschange", this.state.shapes.map(cloneShape));
+    const shapes = this.shapeStore ? this.shapeStore.list().map(cloneShape) : [];
+    this.emit("shapeschange", shapes);
   }
 
   notifySelectionChanged() {
     const frame = this.state.selectionFrame;
     const selectionIds = Array.from(this.state.selection);
     const selectedShapes = selectionIds
-      .map((id) => cloneShape(this.shapeIndex.get(id)))
+      .map((id) => cloneShape(this.shapeStore?.read(id)))
       .filter(Boolean);
     this.emit("selectionchange", {
       selection: selectionIds,
@@ -1227,7 +1349,7 @@ class Editor {
     const ids = Array.from(this.state.selection);
     if (!ids.length) return 0;
     if (ids.length === 1) {
-      const shape = this.shapeIndex.get(ids[0]);
+      const shape = this.shapeStore?.read(ids[0]);
       return normalizeAngle(shape?.rotation || 0);
     }
     return normalizeAngle(this.state.selectionRotation || 0);
@@ -1239,7 +1361,8 @@ class Editor {
       this.state.selectionFrame = null;
       return null;
     }
-    const shapes = ids.map((id) => this.shapeIndex.get(id)).filter(Boolean);
+    const store = this.shapeStore;
+    const shapes = store ? ids.map((id) => store.read(id)).filter(Boolean) : [];
     if (!shapes.length) {
       this.state.selectionFrame = null;
       return null;
@@ -1287,106 +1410,24 @@ class Editor {
   }
 
   renderShapes() {
-    const viewWidth = this.view.width;
-    const viewHeight = this.view.height;
-    const usedIds = new Set();
-    this.state.order.forEach((shapeId) => {
-      const shape = this.shapeIndex.get(shapeId);
+    if (!this.shapeStore) return;
+    this.shapeStore.setView(this.view);
+    const selection = this.state.selection;
+    this.shapeStore.order.forEach((shapeId) => {
+      const shape = this.shapeStore.read(shapeId);
       if (!shape) return;
-      let node = this.shapeRefs.get(shapeId);
-      if (!node) {
-        node = createSvgElement("g", { "data-shape-id": shapeId, class: "editor-shape" });
+      this.shapeStore.write(shape);
+      const node = this.shapeStore.getNode(shapeId);
+      if (!node) return;
+      if (node.parentNode !== this.shapesLayer) {
         this.shapesLayer.appendChild(node);
-        this.shapeRefs.set(shapeId, node);
+      } else {
+        this.shapesLayer.appendChild(node);
       }
-      this.shapesLayer.appendChild(node);
-      usedIds.add(shapeId);
-      node.classList.toggle("is-selected", this.state.selection.has(shapeId));
-      // Remove existing children
-      while (node.firstChild) {
-        node.removeChild(node.firstChild);
-      }
-      const style = shape.style || DEFAULT_STYLE;
-      if (shape.type === "rect") {
-        const rect = createSvgElement("rect", {
-          x: shape.x * viewWidth,
-          y: shape.y * viewHeight,
-          width: shape.width * viewWidth,
-          height: shape.height * viewHeight,
-          fill: style.fill,
-          stroke: style.stroke,
-          "stroke-width": style.strokeWidth
-        });
-        if (shape.rotation) {
-          const cx = (shape.x + shape.width / 2) * viewWidth;
-          const cy = (shape.y + shape.height / 2) * viewHeight;
-          rect.setAttribute("transform", `rotate(${(shape.rotation * 180) / Math.PI}, ${cx}, ${cy})`);
-        }
-        node.appendChild(rect);
-      } else if (shape.type === "ellipse") {
-        const ellipse = createSvgElement("ellipse", {
-          cx: (shape.x + shape.width / 2) * viewWidth,
-          cy: (shape.y + shape.height / 2) * viewHeight,
-          rx: (shape.width / 2) * viewWidth,
-          ry: (shape.height / 2) * viewHeight,
-          fill: style.fill,
-          stroke: style.stroke,
-          "stroke-width": style.strokeWidth
-        });
-        if (shape.rotation) {
-          const cx = (shape.x + shape.width / 2) * viewWidth;
-          const cy = (shape.y + shape.height / 2) * viewHeight;
-          ellipse.setAttribute("transform", `rotate(${(shape.rotation * 180) / Math.PI}, ${cx}, ${cy})`);
-        }
-        node.appendChild(ellipse);
-      } else if (shape.type === "line") {
-        const scaled = shape.points.map((point) => ({
-          x: clampUnit(point.x) * viewWidth,
-          y: clampUnit(point.y) * viewHeight
-        }));
-        if (shape.closed && scaled.length >= 3) {
-          const polygon = createSvgElement("polygon", {
-            points: scaled.map((point) => `${point.x} ${point.y}`).join(" "),
-            fill: style.fill,
-            stroke: style.stroke,
-            "stroke-width": style.strokeWidth,
-            "stroke-linejoin": "round"
-          });
-          node.appendChild(polygon);
-        } else {
-          const line = createSvgElement("polyline", {
-            points: scaled.map((point) => `${point.x} ${point.y}`).join(" "),
-            fill: "none",
-            stroke: style.stroke,
-            "stroke-width": style.strokeWidth,
-            "stroke-linecap": "round",
-            "stroke-linejoin": "round"
-          });
-          node.appendChild(line);
-        }
-      } else if (shape.type === "path") {
-        const d = pointsToSmoothPathD(shape.points, viewWidth, viewHeight, Boolean(shape.closed));
-        if (!d) return;
-        const pathEl = createSvgElement("path", {
-          d,
-          fill: shape.closed ? style.fill : "none",
-          stroke: style.stroke,
-          "stroke-width": style.strokeWidth,
-          "stroke-linecap": "round",
-          "stroke-linejoin": "round"
-        });
-        node.appendChild(pathEl);
-      }
-    });
-    // Remove dangling nodes
-    Array.from(this.shapeRefs.keys()).forEach((shapeId) => {
-      if (!usedIds.has(shapeId)) {
-        const node = this.shapeRefs.get(shapeId);
-        node?.parentNode?.removeChild(node);
-        this.shapeRefs.delete(shapeId);
-      }
+      node.classList.toggle("is-selected", selection.has(shapeId));
     });
   }
+
 
   renderSelection() {
     const frame = this.computeSelectionFrame();
@@ -1456,7 +1497,7 @@ class Editor {
       this.disableVertexEditing();
       return;
     }
-    const shape = this.shapeIndex.get(this.vertexEdit.shapeId);
+    const shape = this.shapeStore?.read(this.vertexEdit.shapeId);
     if (!shape || !Array.isArray(shape.points)) return;
     if (shape.type !== "line" && shape.type !== "path") return;
     const points = shape.points;
@@ -1489,7 +1530,7 @@ class Editor {
   }
 
   enableVertexEditing(shapeId) {
-    const shape = this.shapeIndex.get(shapeId);
+    const shape = this.shapeStore?.read(shapeId);
     if (!shape || (shape.type !== "line" && shape.type !== "path")) {
       this.disableVertexEditing();
       return;
@@ -1510,7 +1551,7 @@ class Editor {
   }
 
   startVertexDrag({ shapeId, pointerId, vertexIndex }) {
-    const shape = this.shapeIndex.get(shapeId);
+    const shape = this.shapeStore?.read(shapeId);
     if (!shape || !Array.isArray(shape.points)) return;
     if (!this.vertexEdit || this.vertexEdit.shapeId !== shapeId) {
       this.enableVertexEditing(shapeId);
@@ -1528,7 +1569,7 @@ class Editor {
 
   updateVertexDrag(point) {
     if (!this.session || this.session.type !== "vertex") return;
-    const shape = this.shapeIndex.get(this.session.shapeId);
+    const shape = this.shapeStore?.read(this.session.shapeId);
     if (!shape || !Array.isArray(shape.points)) return;
     const index = this.session.vertexIndex;
     if (index < 0 || index >= shape.points.length) return;
@@ -1544,7 +1585,7 @@ class Editor {
         shape.points[0] = { ...newPoint };
       }
     }
-    this.renderShapes();
+    this.shapeStore?.write(shape);
     this.renderSelection();
   }
 
@@ -1560,12 +1601,13 @@ class Editor {
 
   cancelVertexDrag() {
     if (!this.session || this.session.type !== "vertex") return;
-    const shape = this.shapeIndex.get(this.session.shapeId);
+    const shape = this.shapeStore?.read(this.session.shapeId);
     if (shape && Array.isArray(shape.points)) {
       shape.points.length = 0;
       this.session.originalPoints.forEach((point) => {
         shape.points.push({ x: point.x, y: point.y });
       });
+      this.shapeStore?.write(shape);
     }
     if (this.vertexEdit && this.vertexEdit.shapeId === this.session.shapeId) {
       this.vertexEdit.activeIndex = null;
@@ -1669,13 +1711,15 @@ function snapshotShape(shape, frame) {
   };
 }
 
-function restoreShapeSnapshot(shape, snapshot) {
-  if (!shape || !snapshot) return;
-  Object.assign(shape, cloneShape(snapshot.original));
+function restoreShapeSnapshot(store, snapshot) {
+  if (!store || !snapshot) return;
+  const restored = cloneShape(snapshot.original);
+  if (!restored) return;
+  store.write(restored);
 }
 
 function applySnapshotTransform(shape, snapshot, transform) {
-  const { rotation, scaleX, scaleY, frame } = transform;
+  const { rotation: frameRotation, scaleX, scaleY, frame } = transform;
   const newLocalCenter = {
     x: snapshot.localCenter.x * scaleX,
     y: snapshot.localCenter.y * scaleY
@@ -1683,19 +1727,33 @@ function applySnapshotTransform(shape, snapshot, transform) {
   const newCenter = fromSelectionLocal(newLocalCenter, frame);
   if (shape.type === "rect" || shape.type === "ellipse") {
     const base = snapshot.original;
-    const width = Math.max(base.width * scaleX, MIN_SHAPE_DIMENSION);
-    const height = Math.max(base.height * scaleY, MIN_SHAPE_DIMENSION);
+    const baseWidth = Math.max(MIN_SHAPE_DIMENSION, base.width);
+    const baseHeight = Math.max(MIN_SHAPE_DIMENSION, base.height);
+    const absScaleX = Math.abs(scaleX);
+    const absScaleY = Math.abs(scaleY);
+    const width = Math.max(baseWidth * absScaleX, MIN_SHAPE_DIMENSION);
+    const height = Math.max(baseHeight * absScaleY, MIN_SHAPE_DIMENSION);
     shape.x = newCenter.x - width / 2;
     shape.y = newCenter.y - height / 2;
     shape.width = width;
     shape.height = height;
-    shape.rotation = snapshot.rotation;
+    const EPSILON = 1e-6;
+    const isScaling = Math.abs(scaleX - 1) > EPSILON || Math.abs(scaleY - 1) > EPSILON;
+    if (isScaling) {
+      const relRotation = snapshot.rotation - frameRotation;
+      const newRelRotation = Math.atan2(scaleY * Math.sin(relRotation), scaleX * Math.cos(relRotation));
+      shape.rotation = normalizeAngle(newRelRotation + frameRotation);
+    } else {
+      shape.rotation = snapshot.rotation;
+    }
   } else if (shape.type === "line") {
     const newPoints = snapshot.localVertices.map((vertex) => fromSelectionLocal({ x: vertex.x * scaleX, y: vertex.y * scaleY }, frame));
     shape.points = newPoints.map((point) => ({ x: point.x, y: point.y }));
+    shape.closed = Boolean(snapshot.original.closed);
   } else if (shape.type === "path") {
     const newPoints = snapshot.localVertices.map((vertex) => fromSelectionLocal({ x: vertex.x * scaleX, y: vertex.y * scaleY }, frame));
     shape.points = newPoints.map((point) => ({ x: point.x, y: point.y }));
+    shape.closed = Boolean(snapshot.original.closed);
   }
 }
 
@@ -2083,6 +2141,7 @@ function cloneShape(shape) {
     id: shape.id,
     type: shape.type,
     points: shape.points.map((point) => ({ x: point.x, y: point.y })),
+    closed: Boolean(shape.closed),
     style: { ...(shape.style || {}) }
   };
 }
@@ -2092,6 +2151,180 @@ function createId() {
     return crypto.randomUUID();
   }
   return `shape-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function buildShapeNode(shape, view) {
+  const node = createSvgElement("g", { class: "editor-shape", "data-shape-id": shape.id });
+  applyShapeNode(node, shape, view);
+  return node;
+}
+
+function applyShapeNode(node, shape, view) {
+  if (!node || !shape) return;
+  node.dataset.shapeId = shape.id;
+  node.dataset.shapeType = shape.type;
+  const style = shape.style || DEFAULT_STYLE;
+  node.dataset.shapeStroke = style.stroke || DEFAULT_STYLE.stroke;
+  node.dataset.shapeFill = style.fill || DEFAULT_STYLE.fill;
+  node.dataset.shapeStrokeWidth = String(Number(style.strokeWidth ?? DEFAULT_STYLE.strokeWidth) || DEFAULT_STYLE.strokeWidth);
+  node.dataset.shapeRotation = String(Number(shape.rotation || 0));
+
+  while (node.firstChild) {
+    node.removeChild(node.firstChild);
+  }
+
+  const viewWidth = view.width;
+  const viewHeight = view.height;
+
+  const applyStroke = (el) => {
+    el.setAttribute("stroke", style.stroke || DEFAULT_STYLE.stroke);
+    el.setAttribute("stroke-width", String(style.strokeWidth ?? DEFAULT_STYLE.strokeWidth));
+    el.setAttribute("fill", style.fill || DEFAULT_STYLE.fill);
+  };
+
+  if (shape.type === "rect") {
+    const rect = createSvgElement("rect", {});
+    const x = (shape.x || 0) * viewWidth;
+    const y = (shape.y || 0) * viewHeight;
+    const width = Math.max(MIN_SHAPE_DIMENSION * viewWidth, shape.width * viewWidth);
+    const height = Math.max(MIN_SHAPE_DIMENSION * viewHeight, shape.height * viewHeight);
+    rect.setAttribute("x", String(x));
+    rect.setAttribute("y", String(y));
+    rect.setAttribute("width", String(width));
+    rect.setAttribute("height", String(height));
+    if (shape.rotation) {
+      const cx = (shape.x + shape.width / 2) * viewWidth;
+      const cy = (shape.y + shape.height / 2) * viewHeight;
+      rect.setAttribute("transform", `rotate(${(shape.rotation * 180) / Math.PI}, ${cx}, ${cy})`);
+    }
+    applyStroke(rect);
+    node.appendChild(rect);
+    node.dataset.shapeX = String(shape.x || 0);
+    node.dataset.shapeY = String(shape.y || 0);
+    node.dataset.shapeWidth = String(shape.width || 0);
+    node.dataset.shapeHeight = String(shape.height || 0);
+  } else if (shape.type === "ellipse") {
+    const ellipse = createSvgElement("ellipse", {});
+    const cx = (shape.x + shape.width / 2) * viewWidth;
+    const cy = (shape.y + shape.height / 2) * viewHeight;
+    const rx = Math.max(MIN_SHAPE_DIMENSION * viewWidth * 0.5, (shape.width / 2) * viewWidth);
+    const ry = Math.max(MIN_SHAPE_DIMENSION * viewHeight * 0.5, (shape.height / 2) * viewHeight);
+    ellipse.setAttribute("cx", String(cx));
+    ellipse.setAttribute("cy", String(cy));
+    ellipse.setAttribute("rx", String(rx));
+    ellipse.setAttribute("ry", String(ry));
+    if (shape.rotation) {
+      ellipse.setAttribute("transform", `rotate(${(shape.rotation * 180) / Math.PI}, ${cx}, ${cy})`);
+    }
+    applyStroke(ellipse);
+    node.appendChild(ellipse);
+    node.dataset.shapeX = String(shape.x || 0);
+    node.dataset.shapeY = String(shape.y || 0);
+    node.dataset.shapeWidth = String(shape.width || 0);
+    node.dataset.shapeHeight = String(shape.height || 0);
+  } else if (shape.type === "line") {
+    const points = Array.isArray(shape.points) ? shape.points : [];
+    node.dataset.shapePoints = JSON.stringify(points.map((point) => ({ x: point.x, y: point.y })));
+    node.dataset.shapeClosed = shape.closed ? "true" : "false";
+    const refined = smoothPolylinePoints(points, 1, Boolean(shape.closed));
+    const d = pointsToSmoothPathD(refined, viewWidth, viewHeight, Boolean(shape.closed));
+    const pathEl = createSvgElement("path", {
+      d,
+      fill: shape.closed ? (style.fill || DEFAULT_STYLE.fill) : "none",
+      stroke: style.stroke || DEFAULT_STYLE.stroke,
+      "stroke-width": String(style.strokeWidth ?? DEFAULT_STYLE.strokeWidth),
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    });
+    node.appendChild(pathEl);
+  } else if (shape.type === "path") {
+    const points = Array.isArray(shape.points) ? shape.points : [];
+    node.dataset.shapePoints = JSON.stringify(points.map((point) => ({ x: point.x, y: point.y })));
+    node.dataset.shapeClosed = shape.closed ? "true" : "false";
+    const refined = smoothPolylinePoints(points, 1, Boolean(shape.closed));
+    const d = pointsToSmoothPathD(refined, viewWidth, viewHeight, Boolean(shape.closed));
+    const pathEl = createSvgElement("path", {
+      d,
+      fill: shape.closed ? (style.fill || DEFAULT_STYLE.fill) : "none",
+      stroke: style.stroke || DEFAULT_STYLE.stroke,
+      "stroke-width": String(style.strokeWidth ?? DEFAULT_STYLE.strokeWidth),
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    });
+    node.appendChild(pathEl);
+  }
+}
+
+function parseShapeNode(node, view) {
+  if (!node) return null;
+  const type = node.dataset.shapeType || inferShapeType(node);
+  const id = node.dataset.shapeId || createId();
+  const stroke = node.dataset.shapeStroke || DEFAULT_STYLE.stroke;
+  const fill = node.dataset.shapeFill || DEFAULT_STYLE.fill;
+  const strokeWidth = Number.parseFloat(node.dataset.shapeStrokeWidth || `${DEFAULT_STYLE.strokeWidth}`) || DEFAULT_STYLE.strokeWidth;
+  const rotation = Number.parseFloat(node.dataset.shapeRotation || "0") || 0;
+  if (type === "rect" || type === "ellipse") {
+    const x = Number.parseFloat(node.dataset.shapeX || "0");
+    const y = Number.parseFloat(node.dataset.shapeY || "0");
+    const width = Number.parseFloat(node.dataset.shapeWidth || "0");
+    const height = Number.parseFloat(node.dataset.shapeHeight || "0");
+    return {
+      id,
+      type,
+      x,
+      y,
+      width,
+      height,
+      rotation,
+      style: { stroke, fill, strokeWidth }
+    };
+  }
+  if (type === "line" || type === "path") {
+    let points = [];
+    const rawPoints = node.dataset.shapePoints;
+    if (rawPoints) {
+      try {
+        const parsed = JSON.parse(rawPoints);
+        if (Array.isArray(parsed)) {
+          points = parsed.map((point) => ({ x: Number(point.x) || 0, y: Number(point.y) || 0 }));
+        }
+      } catch (error) {
+        console.warn("[mediamime] Failed to parse shape points", error);
+      }
+    }
+    const closed = node.dataset.shapeClosed === "true";
+    return {
+      id,
+      type,
+      points,
+      closed,
+      rotation,
+      style: { stroke, fill, strokeWidth }
+    };
+  }
+  return {
+    id,
+    type: "rect",
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+    rotation,
+    style: { stroke, fill, strokeWidth }
+  };
+}
+
+function inferShapeType(node) {
+  const child = node.firstElementChild;
+  if (!child) return "rect";
+  const tag = child.tagName.toLowerCase();
+  if (tag === "rect") return "rect";
+  if (tag === "ellipse") return "ellipse";
+  if (tag === "polygon" || tag === "polyline") return "line";
+  if (tag === "path") {
+    return node.dataset.shapeType || "path";
+  }
+  return "rect";
 }
 
 function buildSelectionOverlay() {

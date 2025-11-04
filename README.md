@@ -50,6 +50,11 @@ Every shape can host an ordered stack of event cards. Available card types:
 
 Shapes remember their event stack, so copy/duplicate workflows remain quick. The Editor tab exposes all controls inline; the pop-out modal is still available via the keyboard shortcut `Enter` if you prefer a focused view.
 
+## Data Model
+
+- The score lives directly inside the editor SVG. Each shape is a `<g data-shape-id>` element whose `data-shape-*` attributes capture normalised geometry, style, and mapping metadata. Editing sessions read from and write to those nodes, so saving the raw `<svg>` produces a complete, portable score without an additional export step.
+- JSON snapshots remain available for presets, but the DOM itself is now the canonical storage layer.
+
 ## Snapshots
 
 - Use the download icon to export the entire session as a versioned JSON snapshot (shapes, events, overlay state, and MIDI port preference).

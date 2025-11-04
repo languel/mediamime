@@ -39,6 +39,8 @@ Key flows:
 - Value modes: constant, normX, normY, distance (auto-scaled to MIDI 0–127).
 - Let performers rename shapes from the interaction modal; the label appears in the sidebar, snapshot exports, and assignment workflows.
 - Make the Interaction Mapping modal draggable via its top handle so it can relocate without covering the video feed.
+- Persist the score directly inside the SVG DOM. Every shape lives as a `<g data-shape-id>` with `data-shape-*` attributes for geometry, style, and metadata so exporting the `<svg>` yields a complete, portable score.
+- Treat the SVG DOM as the canonical source of truth: transformation sessions read from the DOM, compute new geometry, and write the updates back as native attributes instead of rebuilding nodes from a detached JS model.
 
 ### 4.3 MIDI Routing
 - Global port selector with broadcast option and refresh.
@@ -67,3 +69,8 @@ Key flows:
 - Surface CPU/GPU load and inference timings directly in the Streams tab.
 - Allow per-event port overrides once websocket output lands.
 - Explore templated shapes and quick duplication for choreography-heavy setups.
+
+## 8. Implementation Notes
+
+- The editor keeps a single `SvgShapeStore` that mirrors the score DOM. Selection, transforms, and vertex edits always hydrate from `data-shape-*` attributes, perform calculations in normalised viewBox space, then write updated geometry/style back to the same nodes.
+- Because the live SVG is authoritative, exporting the `<svg>` element produces a complete score document. JSON snapshots still exist for presets, but the raw SVG can now be checked into source control or shared without extra conversion layers.
