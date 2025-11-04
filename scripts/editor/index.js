@@ -14,13 +14,13 @@ const DEFAULT_STYLE = {
 
 const HANDLE_DEFINITIONS = [
   { id: "nw", x: -0.5, y: -0.5, cursor: "nwse-resize" },
-  { id: "n", x: 0, y: -0.5, cursor: "ns-resize" },
   { id: "ne", x: 0.5, y: -0.5, cursor: "nesw-resize" },
-  { id: "e", x: 0.5, y: 0, cursor: "ew-resize" },
   { id: "se", x: 0.5, y: 0.5, cursor: "nwse-resize" },
-  { id: "s", x: 0, y: 0.5, cursor: "ns-resize" },
   { id: "sw", x: -0.5, y: 0.5, cursor: "nesw-resize" },
-  { id: "w", x: -0.5, y: 0, cursor: "ew-resize" }
+  { id: "n", x: 0, y: -0.5, cursor: "ns-resize" },
+  { id: "s", x: 0, y: 0.5, cursor: "ns-resize" },
+  { id: "w", x: -0.5, y: 0, cursor: "ew-resize" },
+  { id: "e", x: 0.5, y: 0, cursor: "ew-resize" }
 ];
 
 class SvgShapeStore {
@@ -1070,86 +1070,101 @@ class Editor {
 
   applyScale(session, point, { preserveAspect = false } = {}) {
     const baseFrame = session.initialFrame;
-    const baseRotation = baseFrame.rotation;
-    const localPointer = toSelectionLocal(point, baseFrame);
-
     const handle = session.handle;
-    const affectsX = /[ew]/.test(handle);
-    const affectsY = /[ns]/.test(handle);
-    const signX = handle.includes("e") ? 1 : handle.includes("w") ? -1 : 0;
-    const signY = handle.includes("s") ? 1 : handle.includes("n") ? -1 : 0;
+    if (!baseFrame || !handle || !/[nsew]/.test(handle)) {
+      return;
+    }
 
-    const baseHalfWidth = baseFrame.width / 2;
-    const baseHalfHeight = baseFrame.height / 2;
+    const baseRotation = baseFrame.rotation;
+    const baseWidth = Math.max(MIN_SHAPE_DIMENSION, baseFrame.width || MIN_SHAPE_DIMENSION);
+    const baseHeight = Math.max(MIN_SHAPE_DIMENSION, baseFrame.height || MIN_SHAPE_DIMENSION);
+    const halfWidth = baseWidth / 2;
+    const halfHeight = baseHeight / 2;
+
+    const axisX = handle.includes("e") ? 1 : handle.includes("w") ? -1 : 0;
+    const axisY = handle.includes("s") ? 1 : handle.includes("n") ? -1 : 0;
+    const isCornerHandle = axisX !== 0 && axisY !== 0;
 
     const anchorLocal = {
-      x: affectsX ? -signX * baseHalfWidth : 0,
-      y: affectsY ? -signY * baseHalfHeight : 0
-    };
-    const handleLocalStart = {
-      x: affectsX ? signX * baseHalfWidth : 0,
-      y: affectsY ? signY * baseHalfHeight : 0
+      x: -axisX * halfWidth,
+      y: -axisY * halfHeight
     };
 
-    const deltaHandleX = handleLocalStart.x - anchorLocal.x;
-    const deltaHandleY = handleLocalStart.y - anchorLocal.y;
+    const localPointer = toSelectionLocal(point, baseFrame);
+    let pointerLocal = {
+      x: Number.isFinite(localPointer.x)
+        ? localPointer.x
+        : anchorLocal.x + (axisX !== 0 ? axisX * baseWidth : 0),
+      y: Number.isFinite(localPointer.y)
+        ? localPointer.y
+        : anchorLocal.y + (axisY !== 0 ? axisY * baseHeight : 0)
+    };
 
-    let scaleX = affectsX && deltaHandleX !== 0
-      ? (Number.isFinite(localPointer.x) ? localPointer.x - anchorLocal.x : 0) / deltaHandleX
-      : 1;
-    let scaleY = affectsY && deltaHandleY !== 0
-      ? (Number.isFinite(localPointer.y) ? localPointer.y - anchorLocal.y : 0) / deltaHandleY
-      : 1;
-
-    const minScaleX = MIN_SHAPE_DIMENSION / Math.max(MIN_SHAPE_DIMENSION, baseFrame.width);
-    const minScaleY = MIN_SHAPE_DIMENSION / Math.max(MIN_SHAPE_DIMENSION, baseFrame.height);
-
-    if (affectsX) {
-      if (!Number.isFinite(scaleX)) scaleX = 0;
-      const sign = Math.sign(scaleX) || Math.sign(deltaHandleX) || 1;
-      const magnitude = Math.max(Math.abs(scaleX), minScaleX);
-      scaleX = sign * magnitude;
-    } else {
-      scaleX = preserveAspect ? scaleX : 1;
+    if (axisX === 0) {
+      pointerLocal.x = anchorLocal.x;
+    }
+    if (axisY === 0) {
+      pointerLocal.y = anchorLocal.y;
     }
 
-    if (affectsY) {
-      if (!Number.isFinite(scaleY)) scaleY = 0;
-      const sign = Math.sign(scaleY) || Math.sign(deltaHandleY) || 1;
-      const magnitude = Math.max(Math.abs(scaleY), minScaleY);
-      scaleY = sign * magnitude;
-    } else {
-      scaleY = preserveAspect ? scaleY : 1;
+    const unitSign = (value, fallback) => {
+      if (value < 0) return -1;
+      if (value > 0) return 1;
+      return fallback;
+    };
+
+    if (preserveAspect && isCornerHandle) {
+      const denomX = baseWidth * axisX;
+      const denomY = baseHeight * axisY;
+      const rawScaleX = denomX ? (pointerLocal.x - anchorLocal.x) / denomX : 1;
+      const rawScaleY = denomY ? (pointerLocal.y - anchorLocal.y) / denomY : 1;
+      const minUniformScale = Math.max(
+        MIN_SHAPE_DIMENSION / baseWidth,
+        MIN_SHAPE_DIMENSION / baseHeight
+      );
+      const targetScale = Math.max(
+        Math.abs(rawScaleX),
+        Math.abs(rawScaleY),
+        minUniformScale
+      );
+      const signX = unitSign(rawScaleX, 1);
+      const signY = unitSign(rawScaleY, 1);
+      pointerLocal = {
+        x: anchorLocal.x + axisX * signX * targetScale * baseWidth,
+        y: anchorLocal.y + axisY * signY * targetScale * baseHeight
+      };
     }
 
-    if (preserveAspect) {
-      const currentMagX = affectsX ? Math.abs(scaleX) : 0;
-      const currentMagY = affectsY ? Math.abs(scaleY) : 0;
-      const target = Math.max(currentMagX, currentMagY, minScaleX, minScaleY);
-      if (affectsX && affectsY) {
-        scaleX = (Math.sign(scaleX) || 1) * target;
-        scaleY = (Math.sign(scaleY) || 1) * target;
-      } else if (affectsX) {
-        const sign = Math.sign(scaleX) || 1;
-        const uniformSign = Math.sign(scaleY) || sign;
-        scaleX = sign * target;
-        scaleY = uniformSign * target;
-      } else if (affectsY) {
-        const sign = Math.sign(scaleY) || 1;
-        const uniformSign = Math.sign(scaleX) || sign;
-        scaleY = sign * target;
-        scaleX = uniformSign * target;
+    let deltaX = pointerLocal.x - anchorLocal.x;
+    let deltaY = pointerLocal.y - anchorLocal.y;
+
+    if (axisX !== 0) {
+      const clampSign = unitSign(deltaX, axisX > 0 ? 1 : -1);
+      if (Math.abs(deltaX) < MIN_SHAPE_DIMENSION) {
+        deltaX = clampSign * MIN_SHAPE_DIMENSION;
+        pointerLocal.x = anchorLocal.x + deltaX;
       }
     }
 
-    const newCenterLocal = {
-      x: anchorLocal.x * (1 - scaleX),
-      y: anchorLocal.y * (1 - scaleY)
-    };
+    if (axisY !== 0) {
+      const clampSign = unitSign(deltaY, axisY > 0 ? 1 : -1);
+      if (Math.abs(deltaY) < MIN_SHAPE_DIMENSION) {
+        deltaY = clampSign * MIN_SHAPE_DIMENSION;
+        pointerLocal.y = anchorLocal.y + deltaY;
+      }
+    }
 
+    const widthDistance = axisX !== 0 ? Math.abs(deltaX) : baseWidth;
+    const heightDistance = axisY !== 0 ? Math.abs(deltaY) : baseHeight;
+
+    const newCenterLocal = {
+      x: axisX !== 0 ? anchorLocal.x + deltaX / 2 : 0,
+      y: axisY !== 0 ? anchorLocal.y + deltaY / 2 : 0
+    };
     const newCenter = fromSelectionLocal(newCenterLocal, baseFrame);
-    const width = Math.max(MIN_SHAPE_DIMENSION, Math.abs(baseFrame.width * scaleX));
-    const height = Math.max(MIN_SHAPE_DIMENSION, Math.abs(baseFrame.height * scaleY));
+
+    const width = Math.max(MIN_SHAPE_DIMENSION, widthDistance);
+    const height = Math.max(MIN_SHAPE_DIMENSION, heightDistance);
 
     const newFrame = {
       centerX: newCenter.x,
@@ -1163,16 +1178,16 @@ class Editor {
     this.state.selectionFrame = newFrame;
     this.state.selectionRotation = baseRotation;
 
-    const shapeScaleX = (affectsX || preserveAspect) ? scaleX : 1;
-    const shapeScaleY = (affectsY || preserveAspect) ? scaleY : 1;
+    const scaleX = axisX !== 0 ? deltaX / (baseWidth * axisX) : 1;
+    const scaleY = axisY !== 0 ? deltaY / (baseHeight * axisY) : 1;
 
     session.shapes.forEach((snapshot) => {
       const shape = this.shapeStore?.read(snapshot.id);
       if (!shape) return;
       applySnapshotTransform(shape, snapshot, {
         rotation: baseRotation,
-        scaleX: shapeScaleX,
-        scaleY: shapeScaleY,
+        scaleX,
+        scaleY,
         frame: newFrame
       });
       this.shapeStore?.write(shape);
@@ -1742,7 +1757,14 @@ function applySnapshotTransform(shape, snapshot, transform) {
     if (isScaling) {
       const relRotation = snapshot.rotation - frameRotation;
       const newRelRotation = Math.atan2(scaleY * Math.sin(relRotation), scaleX * Math.cos(relRotation));
-      shape.rotation = normalizeAngle(newRelRotation + frameRotation);
+      let nextRotation = normalizeAngle(newRelRotation + frameRotation);
+      const alternateRotation = normalizeAngle(nextRotation + Math.PI);
+      const primaryDelta = Math.abs(normalizeAngle(nextRotation - snapshot.rotation));
+      const alternateDelta = Math.abs(normalizeAngle(alternateRotation - snapshot.rotation));
+      if (alternateDelta < primaryDelta) {
+        nextRotation = alternateRotation;
+      }
+      shape.rotation = nextRotation;
     } else {
       shape.rotation = snapshot.rotation;
     }
