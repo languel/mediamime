@@ -619,7 +619,14 @@ const renderEventList = (listEl, events = []) => {
 
 const HEX_COLOR_PATTERN = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i;
 const DEFAULT_SHAPE_COLOR = "#ffffff";
+const DEFAULT_SHAPE_OPACITY = 0.16;
+const DEFAULT_SHAPE_OPACITY_SLIDER = Math.round(DEFAULT_SHAPE_OPACITY * 100);
 const SHAPE_FILL_ALPHA = 0.16;
+
+const clampOpacity = (value) => {
+  const numeric = Number.isFinite(value) ? value : Number.parseFloat(`${value}`) || 0;
+  return clampRange(numeric, 0, 1);
+};
 
 const normalizeHexColor = (value, fallback = DEFAULT_SHAPE_COLOR) => {
   if (typeof value !== "string") return fallback;
@@ -659,14 +666,34 @@ const normalizeHexColor = (value, fallback = DEFAULT_SHAPE_COLOR) => {
   return fallback;
 };
 
+const hexToRgb = (hex) => {
+  const normalized = normalizeHexColor(hex);
+  return {
+    r: Number.parseInt(normalized.slice(1, 3), 16) || 255,
+    g: Number.parseInt(normalized.slice(3, 5), 16) || 255,
+    b: Number.parseInt(normalized.slice(5, 7), 16) || 255
+  };
+};
+
 const hexToRgba = (hex, alpha = SHAPE_FILL_ALPHA) => {
   const normalized = normalizeHexColor(hex);
-  const r = Number.parseInt(normalized.slice(1, 3), 16) || 255;
-  const g = Number.parseInt(normalized.slice(3, 5), 16) || 255;
-  const b = Number.parseInt(normalized.slice(5, 7), 16) || 255;
-  const clampedAlpha = Math.min(Math.max(Number(alpha) || SHAPE_FILL_ALPHA, 0), 1);
+  const { r, g, b } = hexToRgb(normalized);
+  const clampedAlpha = clampOpacity(Number(alpha) || SHAPE_FILL_ALPHA);
   const roundedAlpha = Math.round(clampedAlpha * 1000) / 1000;
   return `rgba(${r}, ${g}, ${b}, ${roundedAlpha})`;
+};
+
+const setSliderGradient = (slider, color) => {
+  if (!slider) return;
+  const { r, g, b } = hexToRgb(color);
+  slider.style.background = `linear-gradient(90deg, rgba(${r}, ${g}, ${b}, 0) 0%, rgba(${r}, ${g}, ${b}, 1) 100%)`;
+};
+
+const updateOpacityChip = (panel, color, opacity) => {
+  if (!panel) return;
+  const chip = panel.querySelector(".opacity-chip");
+  if (!chip) return;
+  chip.style.setProperty("--chip-color", hexToRgba(color, opacity));
 };
 
 const getShapeColor = (shape, fallback = DEFAULT_SHAPE_COLOR) => {
@@ -681,15 +708,40 @@ const getShapeColor = (shape, fallback = DEFAULT_SHAPE_COLOR) => {
   return fallback;
 };
 
-const applyShapeColor = (shape, color) => {
-  if (!shape) return DEFAULT_SHAPE_COLOR;
-  const normalized = normalizeHexColor(color);
+const getShapeOpacity = (shape, fallback = DEFAULT_SHAPE_OPACITY) => {
+  if (!shape || typeof shape !== "object") return fallback;
+  const style = shape.style || {};
+  if (Number.isFinite(style.fillAlpha)) {
+    return clampOpacity(style.fillAlpha);
+  }
+  if (typeof style.fill === "string") {
+    const match = style.fill.match(/^rgba?\(([^)]+)\)$/i);
+    if (match) {
+      const parts = match[1].split(",").map((part) => part.trim());
+      if (parts.length === 4) {
+        const alpha = Number.parseFloat(parts[3]);
+        if (Number.isFinite(alpha)) {
+          return clampOpacity(alpha);
+        }
+      } else if (parts.length === 3) {
+        return 1;
+      }
+    }
+  }
+  return fallback;
+};
+
+const applyShapeColor = (shape, color, opacity = DEFAULT_SHAPE_OPACITY) => {
+  if (!shape) return { color: DEFAULT_SHAPE_COLOR, opacity: DEFAULT_SHAPE_OPACITY };
+  const normalizedColor = normalizeHexColor(color);
+  const normalizedOpacity = clampOpacity(opacity);
   if (!shape.style || typeof shape.style !== "object") {
     shape.style = {};
   }
-  shape.style.stroke = normalized;
-  shape.style.fill = hexToRgba(normalized, SHAPE_FILL_ALPHA);
-  return normalized;
+  shape.style.stroke = normalizedColor;
+  shape.style.fillAlpha = normalizedOpacity;
+  shape.style.fill = hexToRgba(normalizedColor, normalizedOpacity);
+  return { color: normalizedColor, opacity: normalizedOpacity };
 };
 
 export function initMapping({ editor }) {
@@ -796,101 +848,6 @@ export function initMapping({ editor }) {
   };
 
   loadEditorConfig();
-
-  if (editorShapeColorInput) {
-    editorShapeColorInput.value = DEFAULT_SHAPE_COLOR;
-    editorShapeColorInput.disabled = true;
-  }
-  if (editorColorChip) {
-    editorColorChip.disabled = true;
-    editorColorChip.style.setProperty("--chip-color", DEFAULT_SHAPE_COLOR);
-  }
-  if (editorShapeOpacityInput) {
-    editorShapeOpacityInput.value = `${DEFAULT_SHAPE_OPACITY_SLIDER}`;
-    editorShapeOpacityInput.disabled = true;
-  }
-  if (editorShapeOpacityValue) {
-    editorShapeOpacityValue.textContent = `${DEFAULT_SHAPE_OPACITY_SLIDER}%`;
-  }
-  if (assignmentShapeColorInput) {
-    assignmentShapeColorInput.value = DEFAULT_SHAPE_COLOR;
-    assignmentShapeColorInput.disabled = true;
-  }
-  if (assignmentColorChip) {
-    assignmentColorChip.disabled = true;
-    assignmentColorChip.style.setProperty("--chip-color", DEFAULT_SHAPE_COLOR);
-  }
-  if (assignmentShapeOpacityInput) {
-    assignmentShapeOpacityInput.value = `${DEFAULT_SHAPE_OPACITY_SLIDER}`;
-    assignmentShapeOpacityInput.disabled = true;
-  }
-  if (assignmentShapeOpacityValue) {
-    assignmentShapeOpacityValue.textContent = `${DEFAULT_SHAPE_OPACITY_SLIDER}%`;
-  }
-
-registerColorPopover(editorColorChip, editorColorPanel);
-registerColorPopover(assignmentColorChip, assignmentColorPanel);
-
-  const sliderValueFromOpacity = (alpha) => Math.round(clampOpacity(alpha) * 100);
-
-  updateColorDisplays(DEFAULT_SHAPE_COLOR);
-  updateOpacityDisplays(DEFAULT_SHAPE_OPACITY);
-
-  function updateEditorColorDisplay(color) {
-    const normalized = normalizeHexColor(color, DEFAULT_SHAPE_COLOR);
-    if (editorShapeColorInput && editorShapeColorInput.value !== normalized) {
-      editorShapeColorInput.value = normalized;
-    }
-    if (editorColorChip) {
-      editorColorChip.style.setProperty("--chip-color", normalized);
-    }
-    if (editorDetailForm) {
-      editorDetailForm.style.setProperty("--shape-accent-color", normalized);
-    }
-  }
-
-  function updateAssignmentColorDisplay(color) {
-    const normalized = normalizeHexColor(color, DEFAULT_SHAPE_COLOR);
-    if (assignmentShapeColorInput && assignmentShapeColorInput.value !== normalized) {
-      assignmentShapeColorInput.value = normalized;
-    }
-    if (assignmentColorChip) {
-      assignmentColorChip.style.setProperty("--chip-color", normalized);
-    }
-    if (assignmentBody) {
-      assignmentBody.style.setProperty("--shape-accent-color", normalized);
-    }
-  }
-
-  function updateColorDisplays(color) {
-    updateEditorColorDisplay(color);
-    updateAssignmentColorDisplay(color);
-  }
-
-  function updateEditorOpacityDisplay(opacity) {
-    const sliderValue = sliderValueFromOpacity(opacity);
-    if (editorShapeOpacityInput && editorShapeOpacityInput.value !== `${sliderValue}`) {
-      editorShapeOpacityInput.value = `${sliderValue}`;
-    }
-    if (editorShapeOpacityValue) {
-      editorShapeOpacityValue.textContent = `${sliderValue}%`;
-    }
-  }
-
-  function updateAssignmentOpacityDisplay(opacity) {
-    const sliderValue = sliderValueFromOpacity(opacity);
-    if (assignmentShapeOpacityInput && assignmentShapeOpacityInput.value !== `${sliderValue}`) {
-      assignmentShapeOpacityInput.value = `${sliderValue}`;
-    }
-    if (assignmentShapeOpacityValue) {
-      assignmentShapeOpacityValue.textContent = `${sliderValue}%`;
-    }
-  }
-
-  function updateOpacityDisplays(opacity) {
-    updateEditorOpacityDisplay(opacity);
-    updateAssignmentOpacityDisplay(opacity);
-  }
 
   const midiState = {
     supported: typeof navigator !== "undefined" && typeof navigator.requestMIDIAccess === "function",
@@ -1180,7 +1137,7 @@ registerColorPopover(assignmentColorChip, assignmentColorPanel);
   };
 
   const colorPopovers = [];
-  const registerColorPopover = (toggle, panel) => {
+  function registerColorPopover(toggle, panel) {
     if (!toggle || !panel) return null;
     const entry = {
       toggle,
@@ -1219,7 +1176,7 @@ registerColorPopover(assignmentColorChip, assignmentColorPanel);
     addListener(toggle, "click", handleToggle);
     colorPopovers.push(entry);
     return entry;
-  };
+  }
 
   const closeColorPopovers = () => {
     colorPopovers.forEach((entry) => entry.close());
@@ -1242,6 +1199,107 @@ registerColorPopover(assignmentColorChip, assignmentColorPanel);
 
   addListener(document, "pointerdown", handleGlobalPointerDown);
   addListener(document, "keydown", handleGlobalKeyDown);
+
+  const sliderValueFromOpacity = (alpha) => Math.round(clampOpacity(alpha) * 100);
+
+  function updateEditorColorDisplay(color, opacity = state.draftOpacity ?? DEFAULT_SHAPE_OPACITY) {
+    const normalized = normalizeHexColor(color, DEFAULT_SHAPE_COLOR);
+    if (editorShapeColorInput && editorShapeColorInput.value !== normalized) {
+      editorShapeColorInput.value = normalized;
+    }
+    if (editorColorChip) {
+      editorColorChip.style.setProperty("--chip-color", normalized);
+    }
+    if (editorDetailForm) {
+      editorDetailForm.style.setProperty("--shape-accent-color", normalized);
+    }
+    setSliderGradient(editorShapeOpacityInput, normalized);
+    updateOpacityChip(editorColorPanel, normalized, opacity);
+  }
+
+  function updateAssignmentColorDisplay(color, opacity = state.draftOpacity ?? DEFAULT_SHAPE_OPACITY) {
+    const normalized = normalizeHexColor(color, DEFAULT_SHAPE_COLOR);
+    if (assignmentShapeColorInput && assignmentShapeColorInput.value !== normalized) {
+      assignmentShapeColorInput.value = normalized;
+    }
+    if (assignmentColorChip) {
+      assignmentColorChip.style.setProperty("--chip-color", normalized);
+    }
+    if (assignmentBody) {
+      assignmentBody.style.setProperty("--shape-accent-color", normalized);
+    }
+    setSliderGradient(assignmentShapeOpacityInput, normalized);
+    updateOpacityChip(assignmentColorPanel, normalized, opacity);
+  }
+
+  function updateColorDisplays(color, opacity = state.draftOpacity ?? DEFAULT_SHAPE_OPACITY) {
+    updateEditorColorDisplay(color, opacity);
+    updateAssignmentColorDisplay(color, opacity);
+  }
+
+  function updateEditorOpacityDisplay(opacity, color = (typeof state !== "undefined" && state?.draftColor) || DEFAULT_SHAPE_COLOR) {
+    const sliderValue = sliderValueFromOpacity(opacity);
+    if (editorShapeOpacityInput && editorShapeOpacityInput.value !== `${sliderValue}`) {
+      editorShapeOpacityInput.value = `${sliderValue}`;
+    }
+    if (editorShapeOpacityValue) {
+      editorShapeOpacityValue.textContent = `${sliderValue}%`;
+    }
+    updateOpacityChip(editorColorPanel, color, opacity);
+  }
+
+  function updateAssignmentOpacityDisplay(opacity, color = (typeof state !== "undefined" && state?.draftColor) || DEFAULT_SHAPE_COLOR) {
+    const sliderValue = sliderValueFromOpacity(opacity);
+    if (assignmentShapeOpacityInput && assignmentShapeOpacityInput.value !== `${sliderValue}`) {
+      assignmentShapeOpacityInput.value = `${sliderValue}`;
+    }
+    if (assignmentShapeOpacityValue) {
+      assignmentShapeOpacityValue.textContent = `${sliderValue}%`;
+    }
+    updateOpacityChip(assignmentColorPanel, color, opacity);
+  }
+
+  function updateOpacityDisplays(opacity) {
+    const color = (typeof state !== "undefined" && state?.draftColor) || DEFAULT_SHAPE_COLOR;
+    updateEditorOpacityDisplay(opacity, color);
+    updateAssignmentOpacityDisplay(opacity, color);
+  }
+
+  if (editorShapeColorInput) {
+    editorShapeColorInput.value = DEFAULT_SHAPE_COLOR;
+    editorShapeColorInput.disabled = true;
+  }
+  if (editorColorChip) {
+    editorColorChip.disabled = true;
+    editorColorChip.style.setProperty("--chip-color", DEFAULT_SHAPE_COLOR);
+  }
+  if (editorShapeOpacityInput) {
+    editorShapeOpacityInput.value = `${DEFAULT_SHAPE_OPACITY_SLIDER}`;
+    editorShapeOpacityInput.disabled = true;
+  }
+  if (editorShapeOpacityValue) {
+    editorShapeOpacityValue.textContent = `${DEFAULT_SHAPE_OPACITY_SLIDER}%`;
+  }
+  if (assignmentShapeColorInput) {
+    assignmentShapeColorInput.value = DEFAULT_SHAPE_COLOR;
+    assignmentShapeColorInput.disabled = true;
+  }
+  if (assignmentColorChip) {
+    assignmentColorChip.disabled = true;
+    assignmentColorChip.style.setProperty("--chip-color", DEFAULT_SHAPE_COLOR);
+  }
+  if (assignmentShapeOpacityInput) {
+    assignmentShapeOpacityInput.value = `${DEFAULT_SHAPE_OPACITY_SLIDER}`;
+    assignmentShapeOpacityInput.disabled = true;
+  }
+  if (assignmentShapeOpacityValue) {
+    assignmentShapeOpacityValue.textContent = `${DEFAULT_SHAPE_OPACITY_SLIDER}%`;
+  }
+
+  registerColorPopover(editorColorChip, editorColorPanel);
+  registerColorPopover(assignmentColorChip, assignmentColorPanel);
+
+  updateColorDisplays(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY);
 
   const state = {
     activeShapeId: null,
@@ -1319,9 +1377,11 @@ registerColorPopover(assignmentColorChip, assignmentColorPanel);
       editorShapeOpacityValue.textContent = `${DEFAULT_SHAPE_OPACITY_SLIDER}%`;
     }
     if (!hasShape) {
+      state.draftColor = DEFAULT_SHAPE_COLOR;
+      state.draftOpacity = DEFAULT_SHAPE_OPACITY;
       updateOpacityDisplays(DEFAULT_SHAPE_OPACITY);
       closeColorPopovers();
-      updateColorDisplays(DEFAULT_SHAPE_COLOR);
+      updateColorDisplays(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY);
     }
   };
 
@@ -1451,6 +1511,7 @@ registerColorPopover(assignmentColorChip, assignmentColorPanel);
         editorDeleteShapeButton.disabled = true;
       }
       state.draftColor = DEFAULT_SHAPE_COLOR;
+      state.draftOpacity = DEFAULT_SHAPE_OPACITY;
       if (editorShapeColorInput) {
         editorShapeColorInput.disabled = true;
         editorShapeColorInput.value = DEFAULT_SHAPE_COLOR;
@@ -1458,6 +1519,8 @@ registerColorPopover(assignmentColorChip, assignmentColorPanel);
       if (assignmentShapeColorInput) {
         assignmentShapeColorInput.value = DEFAULT_SHAPE_COLOR;
       }
+      updateColorDisplays(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY);
+      updateOpacityDisplays(DEFAULT_SHAPE_OPACITY);
       applyMidiSelections();
       return;
     }
@@ -1479,7 +1542,9 @@ registerColorPopover(assignmentColorChip, assignmentColorPanel);
       editorDeleteShapeButton.disabled = false;
     }
     const color = getShapeColor(shape, DEFAULT_SHAPE_COLOR);
+    const opacity = getShapeOpacity(shape, DEFAULT_SHAPE_OPACITY);
     state.draftColor = color;
+    state.draftOpacity = opacity;
     if (editorShapeColorInput) {
       editorShapeColorInput.disabled = false;
       editorShapeColorInput.value = color;
@@ -1487,6 +1552,8 @@ registerColorPopover(assignmentColorChip, assignmentColorPanel);
     if (assignmentShapeColorInput) {
       assignmentShapeColorInput.value = color;
     }
+    updateColorDisplays(color, opacity);
+    updateOpacityDisplays(opacity);
     renderEventList(editorEventList, interaction.events);
     isSyncingEditorForm = false;
     applyMidiSelections();
@@ -1553,6 +1620,10 @@ registerColorPopover(assignmentColorChip, assignmentColorPanel);
       || (state.activeShapeId && shapesById.has(state.activeShapeId)
         ? getShapeOpacity(shapesById.get(state.activeShapeId), DEFAULT_SHAPE_OPACITY)
         : DEFAULT_SHAPE_OPACITY);
+    const normalizedColor = normalizeHexColor(color, DEFAULT_SHAPE_COLOR);
+    const normalizedOpacity = clampOpacity(opacity);
+    state.draftColor = normalizedColor;
+    state.draftOpacity = normalizedOpacity;
     if (assignmentShapeColorInput) {
       assignmentShapeColorInput.disabled = false;
     }
@@ -1562,8 +1633,8 @@ registerColorPopover(assignmentColorChip, assignmentColorPanel);
     if (assignmentShapeOpacityInput) {
       assignmentShapeOpacityInput.disabled = false;
     }
-    updateColorDisplays(color);
-    updateOpacityDisplays(opacity);
+    updateColorDisplays(normalizedColor, normalizedOpacity);
+    updateOpacityDisplays(normalizedOpacity);
   };
 
   const closeModal = () => {
@@ -1907,7 +1978,7 @@ registerColorPopover(assignmentColorChip, assignmentColorPanel);
     const normalizedOpacity = clampOpacity(opacity ?? state.draftOpacity ?? DEFAULT_SHAPE_OPACITY);
     state.draftColor = normalizedColor;
     state.draftOpacity = normalizedOpacity;
-    updateColorDisplays(normalizedColor);
+    updateColorDisplays(normalizedColor, normalizedOpacity);
     updateOpacityDisplays(normalizedOpacity);
     if (!state.activeShapeId || typeof editor.updateShape !== "function") {
       return;
@@ -2125,6 +2196,9 @@ registerColorPopover(assignmentColorChip, assignmentColorPanel);
       }
       shape.interaction = mergeInteraction(shape.interaction);
       const interaction = shape.interaction;
+      const resolvedMidiPort = interaction.midiPort && interaction.midiPort.trim()
+        ? interaction.midiPort.trim()
+        : getDefaultMidiPort();
       const events = interaction.events.filter((event) => event && event.type && event.type !== 'none');
       const runtime = ensureRuntimeShape(shapeId);
       runtime.eventState = runtime.eventState instanceof Map ? runtime.eventState : new Map();
@@ -2183,9 +2257,17 @@ registerColorPopover(assignmentColorChip, assignmentColorPanel);
             const channel = normalizedEvent.channel ?? 1;
             const note = normalizedEvent.note ?? 60;
             const velocity = resolveValueFromMode(normalizedEvent.velocityMode, metrics, normalizedEvent.velocityValue ?? 96, { midi: true });
-            eventState.meta = { type: 'midiNote', channel, note };
-            const sendOn = () => sendMidiNote(channel, note, velocity, 'on', editorConfig.midiPort);
-            const sendOff = () => sendMidiNote(channel, note, 0, 'off', editorConfig.midiPort);
+            const portForEvent = resolvedMidiPort;
+            const sendOn = () => {
+              const port = portForEvent;
+              eventState.meta = { type: 'midiNote', channel, note, port };
+              sendMidiNote(channel, note, velocity, 'on', port);
+            };
+            const sendOff = () => {
+              const port = eventState.meta?.port || portForEvent;
+              eventState.meta = { type: 'midiNote', channel, note, port };
+              sendMidiNote(channel, note, 0, 'off', port);
+            };
             if (trigger === 'enterExit') {
               if (justEntered) {
                 sendOn();
@@ -2233,8 +2315,17 @@ registerColorPopover(assignmentColorChip, assignmentColorPanel);
             const channel = normalizedEvent.channel ?? 1;
             const ccNumber = normalizedEvent.cc ?? 1;
             const value = resolveValueFromMode(normalizedEvent.ccValueMode, metrics, normalizedEvent.ccValue ?? 100, { midi: true });
-            const sendValue = (val) => sendMidiCc(channel, ccNumber, val, editorConfig.midiPort);
-            eventState.meta = { type: 'midiCc', channel, cc: ccNumber };
+            const portForEvent = resolvedMidiPort;
+            const sendValue = (val) => {
+              const port = portForEvent;
+              eventState.meta = { type: 'midiCc', channel, cc: ccNumber, port };
+              sendMidiCc(channel, ccNumber, val, port);
+            };
+            const sendZero = () => {
+              const port = eventState.meta?.port || portForEvent;
+              eventState.meta = { type: 'midiCc', channel, cc: ccNumber, port };
+              sendMidiCc(channel, ccNumber, 0, port);
+            };
             if (trigger === 'enterExit') {
               if (justEntered) {
                 sendValue(value);
@@ -2242,7 +2333,7 @@ registerColorPopover(assignmentColorChip, assignmentColorPanel);
                 shapeActive = true;
               }
               if (justExited) {
-                sendValue(0);
+                sendZero();
                 eventState.lastTriggerAt = now;
                 shapeActive = true;
               }
@@ -2255,7 +2346,7 @@ registerColorPopover(assignmentColorChip, assignmentColorPanel);
               break;
             }
             if (trigger === 'exit' && justExited) {
-              sendValue(0);
+              sendZero();
               eventState.lastTriggerAt = now;
               shapeActive = true;
               break;
@@ -2280,11 +2371,14 @@ registerColorPopover(assignmentColorChip, assignmentColorPanel);
         if (!stillPresent) {
           if (eventState.meta?.type === 'midiNote' && eventState.noteOn) {
             const meta = eventState.meta;
-            sendMidiNote(meta.channel ?? 1, meta.note ?? 60, 0, 'off', editorConfig.midiPort);
+            const port = meta?.port || resolvedMidiPort || getDefaultMidiPort();
+            sendMidiNote(meta.channel ?? 1, meta.note ?? 60, 0, 'off', port);
+            eventState.noteOn = false;
           }
           if (eventState.meta?.type === 'midiCc') {
             const meta = eventState.meta;
-            sendMidiCc(meta.channel ?? 1, meta.cc ?? 1, 0, editorConfig.midiPort);
+            const port = meta?.port || resolvedMidiPort || getDefaultMidiPort();
+            sendMidiCc(meta.channel ?? 1, meta.cc ?? 1, 0, port);
           }
           nowEventStates.delete(eventId);
           return;

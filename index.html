@@ -284,11 +284,13 @@
                           <button type="button" class="color-chip" data-color-toggle="editor" aria-haspopup="true" aria-expanded="false" aria-label="Pick shape color"></button>
                           <div class="color-picker-panel" data-color-panel="editor" hidden>
                             <input id="editor-shape-color" type="color" class="color-input" value="#ffffff" aria-label="Shape color">
-                            <label class="color-opacity-control" for="editor-shape-opacity">
-                              <span>Opacity</span>
-                              <input id="editor-shape-opacity" class="opacity-slider" type="range" min="0" max="100" step="1" value="16" aria-label="Shape opacity">
-                              <output id="editor-shape-opacity-value" class="slider-value" for="editor-shape-opacity">16%</output>
-                            </label>
+                            <div class="color-opacity-control">
+                              <span class="opacity-chip" aria-hidden="true"></span>
+                              <div class="opacity-slider-group">
+                                <input id="editor-shape-opacity" class="opacity-slider" type="range" min="0" max="100" step="1" value="16" aria-label="Shape opacity">
+                                <output id="editor-shape-opacity-value" class="slider-value" for="editor-shape-opacity">16%</output>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -375,11 +377,13 @@
             <button type="button" class="color-chip" data-color-toggle="assignment" aria-haspopup="true" aria-expanded="false" aria-label="Pick shape color"></button>
             <div class="color-picker-panel" data-color-panel="assignment" hidden>
               <input id="assignment-shape-color" type="color" class="color-input" value="#ffffff" aria-label="Shape color">
-              <label class="color-opacity-control" for="assignment-shape-opacity">
-                <span>Opacity</span>
-                <input id="assignment-shape-opacity" class="opacity-slider" type="range" min="0" max="100" step="1" value="16" aria-label="Shape opacity">
-                <output id="assignment-shape-opacity-value" class="slider-value" for="assignment-shape-opacity">16%</output>
-              </label>
+              <div class="color-opacity-control">
+                <span class="opacity-chip" aria-hidden="true"></span>
+                <div class="opacity-slider-group">
+                  <input id="assignment-shape-opacity" class="opacity-slider" type="range" min="0" max="100" step="1" value="16" aria-label="Shape opacity">
+                  <output id="assignment-shape-opacity-value" class="slider-value" for="assignment-shape-opacity">16%</output>
+                </div>
+              </div>
             </div>
           </div>
         </div>
