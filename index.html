@@ -260,10 +260,20 @@
             <div class="panel-section is-active" data-panel-section="editor" id="panel-editor" role="tabpanel" aria-label="Score editor">
               <input id="snapshot-import-input" type="file" accept="application/json" hidden>
               <div class="editor-panel">
+                <div class="editor-panel-header">
+                  <span
+                    class="editor-panel-tip"
+                    role="note"
+                    tabindex="0"
+                    aria-label="Draw a shape to begin. Select it to edit MIDI mappings."
+                    data-tip="Draw a shape to begin. Select it to edit MIDI mappings.">
+                    <span class="material-icons-outlined" aria-hidden="true">info</span>
+                  </span>
+                </div>
                 <div class="editor-shape-list" id="editor-shape-list" role="listbox" aria-label="Score elements"></div>
                 <div class="editor-detail" id="editor-detail">
                   <div class="editor-detail-empty" id="editor-detail-empty">
-                    Draw a shape to begin. Select it to edit MIDI mappings.
+                    No shape selected.
                   </div>
                   <form id="editor-detail-form" class="editor-detail-form assignment-body" autocomplete="off">
                     <div class="assignment-row">

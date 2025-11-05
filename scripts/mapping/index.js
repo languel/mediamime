@@ -1093,7 +1093,7 @@ export function initMapping({ editor }) {
   const renderShapeList = () => {
     if (!editorShapeList) return;
     if (!shapeOrder.length) {
-      editorShapeList.innerHTML = `<div class="editor-detail-empty">No shapes yet. Draw on the canvas to add one.</div>`;
+      editorShapeList.innerHTML = `<div class="editor-detail-empty">No shapes yet.</div>`;
       editorShapeList.removeAttribute("aria-activedescendant");
       return;
     }
