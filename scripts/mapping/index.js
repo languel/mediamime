@@ -631,8 +631,6 @@ export function initMapping({ editor }) {
   const addEventButton = document.getElementById("assignment-add-event");
   const eventList = document.getElementById("assignment-event-list");
   const closeButton = document.getElementById("assignment-modal-close");
-  const cancelButton = document.getElementById("assignment-modal-cancel");
-  const applyButton = document.getElementById("assignment-modal-apply");
   const openButton = document.getElementById("editor-open-modal");
   const assignmentHandle = modal.querySelector("[data-assignment-handle]");
   const svg = document.getElementById("gesture-svg");
@@ -660,6 +658,31 @@ export function initMapping({ editor }) {
     midiPort: "broadcast"
   };
   const editorConfig = { ...DEFAULT_EDITOR_CONFIG };
+
+  const ASSIGNMENT_LAYOUT_KEY = "mediamime:assignment-modal";
+
+  const loadAssignmentLayout = () => {
+    if (typeof localStorage === "undefined") return {};
+    try {
+      const raw = localStorage.getItem(ASSIGNMENT_LAYOUT_KEY);
+      if (!raw) return {};
+      const stored = JSON.parse(raw);
+      return stored && typeof stored === "object" ? stored : {};
+    } catch (error) {
+      console.warn("[mediamime] Failed to load assignment layout", error);
+      return {};
+    }
+  };
+
+  const saveAssignmentLayout = (layout) => {
+    assignmentLayout = layout || {};
+    if (typeof localStorage === "undefined") return;
+    try {
+      localStorage.setItem(ASSIGNMENT_LAYOUT_KEY, JSON.stringify(assignmentLayout));
+    } catch (error) {
+      console.warn("[mediamime] Failed to persist assignment layout", error);
+    }
+  };
 
   const loadEditorConfig = () => {
     if (typeof localStorage === "undefined") return;
@@ -713,6 +736,30 @@ export function initMapping({ editor }) {
     holistic: null
   };
 
+  const applyAssignmentLayout = () => {
+    if (!modal) return;
+    const width = modal.offsetWidth || 360;
+    const height = modal.offsetHeight || 420;
+    if (Number.isFinite(assignmentLayout.left) && Number.isFinite(assignmentLayout.top)) {
+      const maxLeft = Math.max(12, window.innerWidth - width - 12);
+      const maxTop = Math.max(12, window.innerHeight - height - 12);
+      const left = clampRange(assignmentLayout.left, 12, maxLeft);
+      const top = clampRange(assignmentLayout.top, 12, maxTop);
+      modal.style.transform = "none";
+      modal.style.left = `${left}px`;
+      modal.style.top = `${top}px`;
+      modal.style.right = "auto";
+      modal.style.bottom = "auto";
+    } else {
+      modal.style.transform = "translate(-50%, -50%)";
+      modal.style.left = "";
+      modal.style.top = "";
+      modal.style.right = "";
+      modal.style.bottom = "";
+    }
+  };
+
+  let assignmentLayout = loadAssignmentLayout();
   let dragContext = null;
 
   const ensureRuntimeShape = (shapeId) => {
@@ -725,7 +772,8 @@ export function initMapping({ editor }) {
         lastContinuousAt: 0,
         noteOn: false,
         eventState: new Map(),
-        lastMetrics: { normX: 0, normY: 0, distance: 0 }
+        lastMetrics: { normX: 0, normY: 0, distance: 0 },
+        active: false
       });
     }
     return runtimeState.get(shapeId);
@@ -738,7 +786,7 @@ export function initMapping({ editor }) {
 
   const isShapeActive = (shapeId) => {
     const runtime = runtimeState.get(shapeId);
-    return Boolean(runtime?.inside || runtime?.hoverInside);
+    return Boolean(runtime?.active);
   };
 
   const applyShapeHighlight = (shapeId) => {
@@ -921,7 +969,7 @@ export function initMapping({ editor }) {
     const fallbackName = getShapeDisplayName(shape, index >= 0 ? index : 0);
     const rawName = typeof shape.name === "string" ? shape.name.trim() : "";
     state.draftName = rawName || fallbackName;
-    state.draftInteraction = mergeInteraction(shape.interaction);
+    state.draftInteraction = { ...mergeInteraction(shape.interaction), name: state.draftName };
   };
 
   const updateOpenButtonState = () => {
@@ -1051,11 +1099,31 @@ export function initMapping({ editor }) {
     if (!state.activeShapeId || typeof editor.updateShape !== "function") return;
     editor.updateShape(state.activeShapeId, (shape) => {
       const interaction = mergeInteraction(shape.interaction);
-      mutator(interaction);
+      mutator(interaction, shape);
       shape.interaction = interaction;
       return shape;
     });
     evaluateShapeInteractions();
+  };
+
+  const commitDraftInteraction = () => {
+    if (!state.draftInteraction) return;
+    const draft = { ...mergeInteraction(state.draftInteraction), name: state.draftName };
+    state.draftInteraction = draft;
+    updateSelectedInteraction((interaction, shape) => {
+      interaction.stream = draft.stream;
+      interaction.landmark = draft.landmark;
+      interaction.events = draft.events.map(normalizeEvent);
+      if (typeof draft.name === "string") {
+        const trimmed = draft.name.trim();
+        if (trimmed) {
+          interaction.name = trimmed;
+          if (shape) shape.name = trimmed;
+        } else {
+          delete interaction.name;
+        }
+      }
+    });
   };
 
   const syncModal = () => {
@@ -1092,11 +1160,6 @@ export function initMapping({ editor }) {
       modal.releasePointerCapture(dragContext.pointerId);
     }
     dragContext = null;
-    modal.style.transform = "";
-    modal.style.left = "";
-    modal.style.top = "";
-    modal.style.right = "";
-    modal.style.bottom = "";
   };
 
   const openModalForShape = (shapeId, { focus = true } = {}) => {
@@ -1111,13 +1174,9 @@ export function initMapping({ editor }) {
       backdrop.classList.add("is-visible");
       backdrop.setAttribute("aria-hidden", "false");
     }
-    modal.style.transform = "";
-    modal.style.left = "";
-    modal.style.top = "";
-    modal.style.right = "";
-    modal.style.bottom = "";
     modal.classList.add("is-visible");
     modal.setAttribute("aria-hidden", "false");
+    applyAssignmentLayout();
     syncModal();
     if (focus && shapeNameInput) {
       setTimeout(() => {
@@ -1244,11 +1303,12 @@ export function initMapping({ editor }) {
 
   const handleAssignmentAddEvent = () => {
     if (!state.draftInteraction) {
-      state.draftInteraction = mergeInteraction(null);
+      state.draftInteraction = { ...createDefaultInteraction(), name: state.draftName };
     }
     state.draftInteraction.events = [...state.draftInteraction.events, createDefaultEvent("midiNote")];
+    state.draftInteraction = { ...mergeInteraction(state.draftInteraction), name: state.draftName };
+    commitDraftInteraction();
     syncModal();
-    evaluateShapeInteractions();
   };
 
   const handleAssignmentRemoveEvent = (eventId) => {
@@ -1257,8 +1317,9 @@ export function initMapping({ editor }) {
     if (!state.draftInteraction.events.length) {
       state.draftInteraction.events = [createDefaultEvent("midiNote")];
     }
+    state.draftInteraction = { ...mergeInteraction(state.draftInteraction), name: state.draftName };
+    commitDraftInteraction();
     syncModal();
-    evaluateShapeInteractions();
   };
 
   const handleAssignmentEventFieldChange = (eventId, field, value) => {
@@ -1304,8 +1365,9 @@ export function initMapping({ editor }) {
         break;
     }
     state.draftInteraction.events[index] = normalizeEvent(next);
+    state.draftInteraction = { ...mergeInteraction(state.draftInteraction), name: state.draftName };
+    commitDraftInteraction();
     syncModal();
-    evaluateShapeInteractions();
   };
 
   const handleAssignmentEventListClick = (event) => {
@@ -1334,37 +1396,58 @@ export function initMapping({ editor }) {
 
   const handleAssignmentShapeNameInput = (event) => {
     if (state.isSyncing) return;
-    state.draftName = event.target?.value ?? "";
+    const value = event.target?.value ?? "";
+    state.draftName = value;
+    if (state.draftInteraction) {
+      state.draftInteraction.name = value.trim();
+    }
+    updateSelectedInteraction((interaction, shape) => {
+      const trimmed = value.trim();
+      interaction.name = trimmed;
+      if (shape) {
+        shape.name = trimmed;
+      }
+    });
   };
 
-  const handleAssignmentShapeNameChange = (event) => {
-    const normalized = (event.target?.value ?? "").trim();
+  const normalizeAssignmentName = () => {
+    const normalized = (shapeNameInput?.value ?? "").trim();
     if (shapeNameInput) {
       shapeNameInput.value = normalized;
     }
     state.draftName = normalized;
+    if (state.draftInteraction) {
+      state.draftInteraction.name = normalized;
+    }
+    updateSelectedInteraction((interaction, shape) => {
+      interaction.name = normalized;
+      if (shape) {
+        shape.name = normalized;
+      }
+    });
   };
 
   const handleAssignmentStreamChange = () => {
     if (state.isSyncing) return;
     const streamId = streamSelect?.value || "pose";
     if (!state.draftInteraction) {
-      state.draftInteraction = mergeInteraction({ stream: streamId });
+      state.draftInteraction = { ...mergeInteraction({ stream: streamId }), name: state.draftName };
     } else {
       const merged = mergeInteraction({ ...state.draftInteraction, stream: streamId });
       state.draftInteraction.stream = merged.stream;
       state.draftInteraction.landmark = merged.landmark;
       state.draftInteraction.events = merged.events;
     }
+    state.draftInteraction = { ...mergeInteraction(state.draftInteraction), name: state.draftName };
+    commitDraftInteraction();
     syncModal();
-    evaluateShapeInteractions();
   };
 
   const handleAssignmentLandmarkChange = () => {
     if (state.isSyncing || !state.draftInteraction) return;
     const landmark = landmarkSelect?.value || "";
     state.draftInteraction.landmark = landmark;
-    evaluateShapeInteractions();
+    commitDraftInteraction();
   };
 
   const handleEditorStreamChange = () => {
@@ -1510,9 +1593,11 @@ export function initMapping({ editor }) {
       runtime.eventState = runtime.eventState instanceof Map ? runtime.eventState : new Map();
       const previousInside = runtime.inside;
       const previousHover = runtime.hoverInside;
+      const previousActive = runtime.active || false;
       let inside = false;
       let hoverInside = false;
       let metrics = runtime.lastMetrics || { ...DEFAULT_METRICS };
+      let shapeActive = false;
 
       const streamId = interaction.stream || 'pose';
       const landmarkKey = interaction.landmark || 'position';
@@ -1546,32 +1631,30 @@ export function initMapping({ editor }) {
       const justEntered = inside && !previousInside;
       const justExited = !inside && previousInside;
 
-      runtime.inside = inside;
-      runtime.hoverInside = hoverInside;
-      runtime.lastMetrics = metrics;
-
       const nowEventStates = runtime.eventState;
 
       events.forEach((event) => {
-      const normalizedEvent = normalizeEvent(event);
-      let eventState = nowEventStates.get(normalizedEvent.id);
-      if (!eventState) {
-        eventState = { noteOn: false, lastContinuousAt: 0, meta: null };
-        nowEventStates.set(normalizedEvent.id, eventState);
-      }
-      const trigger = normalizedEvent.trigger || 'enter';
-      switch (normalizedEvent.type) {
-        case 'midiNote': {
-          const channel = normalizedEvent.channel ?? 1;
-          const note = normalizedEvent.note ?? 60;
-          const velocity = resolveValueFromMode(normalizedEvent.velocityMode, metrics, normalizedEvent.velocityValue ?? 96, { midi: true });
-          eventState.meta = { type: 'midiNote', channel, note };
+        const normalizedEvent = normalizeEvent(event);
+        let eventState = nowEventStates.get(normalizedEvent.id);
+        if (!eventState) {
+          eventState = { noteOn: false, lastContinuousAt: 0, lastTriggerAt: 0, meta: null };
+          nowEventStates.set(normalizedEvent.id, eventState);
+        }
+        const trigger = normalizedEvent.trigger || 'enter';
+        switch (normalizedEvent.type) {
+          case 'midiNote': {
+            const channel = normalizedEvent.channel ?? 1;
+            const note = normalizedEvent.note ?? 60;
+            const velocity = resolveValueFromMode(normalizedEvent.velocityMode, metrics, normalizedEvent.velocityValue ?? 96, { midi: true });
+            eventState.meta = { type: 'midiNote', channel, note };
             const sendOn = () => sendMidiNote(channel, note, velocity, 'on', editorConfig.midiPort);
             const sendOff = () => sendMidiNote(channel, note, 0, 'off', editorConfig.midiPort);
             if (trigger === 'enterExit') {
               if (justEntered) {
                 sendOn();
                 eventState.noteOn = true;
+                eventState.lastTriggerAt = now;
+                shapeActive = true;
               }
               if (justExited && eventState.noteOn) {
                 sendOff();
@@ -1582,6 +1665,8 @@ export function initMapping({ editor }) {
             if (trigger === 'enter' && justEntered) {
               sendOn();
               eventState.noteOn = true;
+              eventState.lastTriggerAt = now;
+              shapeActive = true;
               break;
             }
             if (trigger === 'exit' && justExited) {
@@ -1594,11 +1679,16 @@ export function initMapping({ editor }) {
                 eventState.lastContinuousAt = now;
                 sendOn();
                 eventState.noteOn = true;
+                eventState.lastTriggerAt = now;
+                shapeActive = true;
               }
             }
             if (justExited && eventState.noteOn) {
               sendOff();
               eventState.noteOn = false;
+            }
+            if (eventState.noteOn) {
+              shapeActive = true;
             }
             break;
           }
@@ -1609,22 +1699,36 @@ export function initMapping({ editor }) {
             const sendValue = (val) => sendMidiCc(channel, ccNumber, val, editorConfig.midiPort);
             eventState.meta = { type: 'midiCc', channel, cc: ccNumber };
             if (trigger === 'enterExit') {
-              if (justEntered) sendValue(value);
-              if (justExited) sendValue(0);
+              if (justEntered) {
+                sendValue(value);
+                eventState.lastTriggerAt = now;
+                shapeActive = true;
+              }
+              if (justExited) {
+                sendValue(0);
+                eventState.lastTriggerAt = now;
+                shapeActive = true;
+              }
               break;
             }
             if (trigger === 'enter' && justEntered) {
               sendValue(value);
+              eventState.lastTriggerAt = now;
+              shapeActive = true;
               break;
             }
             if (trigger === 'exit' && justExited) {
               sendValue(0);
+              eventState.lastTriggerAt = now;
+              shapeActive = true;
               break;
             }
             if (trigger === 'inside' && inside) {
               if (now - (eventState.lastContinuousAt || 0) >= CONTINUOUS_TRIGGER_INTERVAL_MS) {
                 eventState.lastContinuousAt = now;
                 sendValue(value);
+                eventState.lastTriggerAt = now;
+                shapeActive = true;
               }
             }
             break;
@@ -1646,6 +1750,13 @@ export function initMapping({ editor }) {
             sendMidiCc(meta.channel ?? 1, meta.cc ?? 1, 0, editorConfig.midiPort);
           }
           nowEventStates.delete(eventId);
+          return;
+        }
+        if (eventState.meta?.type === 'midiNote' && eventState.noteOn) {
+          shapeActive = true;
+        }
+        if (eventState.lastTriggerAt && now - eventState.lastTriggerAt < 180) {
+          shapeActive = true;
         }
       });
 
@@ -1659,7 +1770,12 @@ export function initMapping({ editor }) {
         });
       }
 
-      if (previousInside !== inside || previousHover !== hoverInside) {
+      runtime.inside = inside;
+      runtime.hoverInside = hoverInside;
+      runtime.lastMetrics = metrics;
+      runtime.active = shapeActive;
+
+      if (previousActive !== runtime.active) {
         applyShapeHighlight(shapeId);
       }
     });
@@ -1886,6 +2002,11 @@ export function initMapping({ editor }) {
     if (modal.hasPointerCapture(event.pointerId)) {
       modal.releasePointerCapture(event.pointerId);
     }
+    const left = Number.parseFloat(modal.style.left);
+    const top = Number.parseFloat(modal.style.top);
+    if (Number.isFinite(left) && Number.isFinite(top)) {
+      saveAssignmentLayout({ left, top });
+    }
     dragContext = null;
     modal.classList.remove("is-dragging");
   };
@@ -1903,7 +2024,7 @@ export function initMapping({ editor }) {
   addListener(eventList, "change", handleAssignmentEventListInput);
   addListener(eventList, "input", handleAssignmentEventListInput);
   addListener(shapeNameInput, "input", handleAssignmentShapeNameInput);
-  addListener(shapeNameInput, "change", handleAssignmentShapeNameChange);
+  addListener(shapeNameInput, "change", normalizeAssignmentName);
   addListener(streamSelect, "change", handleAssignmentStreamChange);
   addListener(landmarkSelect, "change", handleAssignmentLandmarkChange);
   addListener(assignmentMidiPortSelect, "change", handleAssignmentMidiPortChange);
@@ -1916,8 +2037,7 @@ export function initMapping({ editor }) {
   addListener(modal, "pointercancel", endModalDrag);
 
   addListener(closeButton, "click", closeModal);
-  addListener(cancelButton, "click", closeModal);
-  addListener(applyButton, "click", applyModal);
+  addListener(shapeNameInput, "blur", normalizeAssignmentName);
   addListener(backdrop, "click", closeModal);
   addListener(modal, "keydown", handleKeyDown);
   addListener(document, "keydown", handleKeyDown, true);
