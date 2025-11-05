@@ -6,7 +6,7 @@ const ERASER_TOLERANCE = 0.02;
 const FREEHAND_SIMPLIFY_TOLERANCE = 0.0015;
 const DEFAULT_STYLE = {
   stroke: "#ffffff",
-  fill: "rgba(255, 255, 255, 0.5)",
+  fill: "rgba(255, 255, 255, 0.25)",
   strokeWidth: 2
 };
 

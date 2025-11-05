@@ -622,7 +622,8 @@ const renderEventList = (listEl, events = []) => {
 const HEX_COLOR_PATTERN = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i;
 const DEFAULT_SHAPE_COLOR = "#ffffff";
 const DEFAULT_SHAPE_OPACITY = 0.5;
-const SHAPE_FILL_ALPHA = 0.5;
+const FILL_ALPHA_RATIO = 0.5;
+const SHAPE_FILL_ALPHA = DEFAULT_SHAPE_OPACITY * FILL_ALPHA_RATIO;
 
 const clampOpacity = (value) => {
   const numeric = Number.isFinite(value) ? value : Number.parseFloat(`${value}`) || 0;
@@ -696,11 +697,19 @@ const getShapeColor = (shape, fallback = DEFAULT_SHAPE_COLOR) => {
   return fallback;
 };
 
+const computeFillAlpha = (value) => {
+  const ratio = clampOpacity(value);
+  return clampOpacity(ratio * FILL_ALPHA_RATIO);
+};
+
 const getShapeOpacity = (shape, fallback = DEFAULT_SHAPE_OPACITY) => {
   if (!shape || typeof shape !== "object") return fallback;
   const style = shape.style || {};
+  if (Number.isFinite(style.fillStrength)) {
+    return clampOpacity(style.fillStrength);
+  }
   if (Number.isFinite(style.fillAlpha)) {
-    return clampOpacity(style.fillAlpha);
+    return clampOpacity(style.fillAlpha / FILL_ALPHA_RATIO);
   }
   if (typeof style.fill === "string") {
     const match = style.fill.match(/^rgba?\(([^)]+)\)$/i);
@@ -709,7 +718,7 @@ const getShapeOpacity = (shape, fallback = DEFAULT_SHAPE_OPACITY) => {
       if (parts.length === 4) {
         const alpha = Number.parseFloat(parts[3]);
         if (Number.isFinite(alpha)) {
-          return clampOpacity(alpha);
+          return clampOpacity(alpha / FILL_ALPHA_RATIO);
         }
       } else if (parts.length === 3) {
         return 1;
@@ -723,12 +732,14 @@ const applyShapeColor = (shape, color, opacity = DEFAULT_SHAPE_OPACITY) => {
   if (!shape) return { color: DEFAULT_SHAPE_COLOR, opacity: DEFAULT_SHAPE_OPACITY };
   const normalizedColor = normalizeHexColor(color);
   const normalizedOpacity = clampOpacity(opacity);
+  const fillAlpha = computeFillAlpha(normalizedOpacity);
   if (!shape.style || typeof shape.style !== "object") {
     shape.style = {};
   }
   shape.style.stroke = normalizedColor;
-  shape.style.fillAlpha = normalizedOpacity;
-  shape.style.fill = hexToRgba(normalizedColor, normalizedOpacity);
+  shape.style.fillStrength = normalizedOpacity;
+  shape.style.fillAlpha = fillAlpha;
+  shape.style.fill = hexToRgba(normalizedColor, fillAlpha);
   return { color: normalizedColor, opacity: normalizedOpacity };
 };
 
@@ -1265,8 +1276,9 @@ export function initMapping({ editor }) {
   function updateEditorColorDisplay(color, opacity = (typeof state !== "undefined" && state?.draftOpacity) ?? DEFAULT_SHAPE_OPACITY) {
     const normalizedColor = normalizeHexColor(color, DEFAULT_SHAPE_COLOR);
     const normalizedOpacity = clampOpacity(opacity);
+    const fillAlpha = computeFillAlpha(normalizedOpacity);
     if (editorColorChip) {
-      editorColorChip.style.setProperty("--chip-color", hexToRgba(normalizedColor, normalizedOpacity));
+      editorColorChip.style.setProperty("--chip-color", normalizedColor);
     }
     if (editorDetailForm) {
       editorDetailForm.style.setProperty("--shape-accent-color", normalizedColor);
@@ -1274,19 +1286,26 @@ export function initMapping({ editor }) {
     if (editorColorPicker) {
       editorColorPicker.setColor(normalizedColor, normalizedOpacity, { emit: false, source: "program" });
     }
+    if (editorPickerRoot) {
+      editorPickerRoot.style.setProperty("--rgba-color", hexToRgba(normalizedColor, fillAlpha));
+    }
   }
 
   function updateAssignmentColorDisplay(color, opacity = (typeof state !== "undefined" && state?.draftOpacity) ?? DEFAULT_SHAPE_OPACITY) {
     const normalizedColor = normalizeHexColor(color, DEFAULT_SHAPE_COLOR);
     const normalizedOpacity = clampOpacity(opacity);
+    const fillAlpha = computeFillAlpha(normalizedOpacity);
     if (assignmentColorChip) {
-      assignmentColorChip.style.setProperty("--chip-color", hexToRgba(normalizedColor, normalizedOpacity));
+      assignmentColorChip.style.setProperty("--chip-color", normalizedColor);
     }
     if (assignmentBody) {
       assignmentBody.style.setProperty("--shape-accent-color", normalizedColor);
     }
     if (assignmentColorPicker) {
       assignmentColorPicker.setColor(normalizedColor, normalizedOpacity, { emit: false, source: "program" });
+    }
+    if (assignmentPickerRoot) {
+      assignmentPickerRoot.style.setProperty("--rgba-color", hexToRgba(normalizedColor, fillAlpha));
     }
   }
 
@@ -1297,11 +1316,11 @@ export function initMapping({ editor }) {
 
   if (editorColorChip) {
     editorColorChip.disabled = true;
-    editorColorChip.style.setProperty("--chip-color", hexToRgba(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY));
+    editorColorChip.style.setProperty("--chip-color", DEFAULT_SHAPE_COLOR);
   }
   if (assignmentColorChip) {
     assignmentColorChip.disabled = true;
-    assignmentColorChip.style.setProperty("--chip-color", hexToRgba(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY));
+    assignmentColorChip.style.setProperty("--chip-color", DEFAULT_SHAPE_COLOR);
   }
 
   editorColorPicker = createRgbaPicker({
@@ -1328,9 +1347,15 @@ export function initMapping({ editor }) {
     editorColorPicker.setColor(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY, { emit: false, source: "program" });
     editorColorPicker.setDisabled(true);
   }
+  if (editorPickerRoot) {
+    editorPickerRoot.style.setProperty("--rgba-color", hexToRgba(DEFAULT_SHAPE_COLOR, computeFillAlpha(DEFAULT_SHAPE_OPACITY)));
+  }
   if (assignmentColorPicker) {
     assignmentColorPicker.setColor(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY, { emit: false, source: "program" });
     assignmentColorPicker.setDisabled(true);
+  }
+  if (assignmentPickerRoot) {
+    assignmentPickerRoot.style.setProperty("--rgba-color", hexToRgba(DEFAULT_SHAPE_COLOR, computeFillAlpha(DEFAULT_SHAPE_OPACITY)));
   }
 
   registerColorPopover(editorColorChip, editorColorPanel);
@@ -1395,7 +1420,7 @@ export function initMapping({ editor }) {
     if (editorColorChip) {
       editorColorChip.disabled = !hasShape;
       if (!hasShape) {
-        editorColorChip.style.setProperty("--chip-color", hexToRgba(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY));
+        editorColorChip.style.setProperty("--chip-color", DEFAULT_SHAPE_COLOR);
       }
     }
     if (editorColorPicker) {
@@ -1403,6 +1428,9 @@ export function initMapping({ editor }) {
       if (!hasShape) {
         editorColorPicker.setColor(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY, { emit: false, source: "program" });
       }
+    }
+    if (!hasShape && editorPickerRoot) {
+      editorPickerRoot.style.setProperty("--rgba-color", hexToRgba(DEFAULT_SHAPE_COLOR, computeFillAlpha(DEFAULT_SHAPE_OPACITY)));
     }
     if (!hasShape) {
       state.draftColor = DEFAULT_SHAPE_COLOR;
@@ -1470,8 +1498,9 @@ export function initMapping({ editor }) {
         const meta = buildShapeMeta(shape);
         const color = getShapeColor(shape, DEFAULT_SHAPE_COLOR);
         const opacity = getShapeOpacity(shape, DEFAULT_SHAPE_OPACITY);
-        const backgroundColor = hexToRgba(color, Math.min(opacity + 0.08, 0.45));
-        const borderColor = hexToRgba(color, Math.min(opacity + 0.25, 0.9));
+        const fillAlpha = computeFillAlpha(opacity);
+        const backgroundColor = hexToRgba(color, Math.min(fillAlpha + 0.08, 0.45));
+        const borderColor = hexToRgba(color, Math.min(fillAlpha + 0.25, 0.9));
         const isActive = id === state.activeShapeId;
         const runtime = runtimeState.get(id);
         const isRunning = Boolean(runtime?.inside || runtime?.hoverInside);
@@ -1678,11 +1707,14 @@ export function initMapping({ editor }) {
     dragContext = null;
     if (assignmentColorChip) {
       assignmentColorChip.disabled = true;
-      assignmentColorChip.style.setProperty("--chip-color", hexToRgba(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY));
+      assignmentColorChip.style.setProperty("--chip-color", DEFAULT_SHAPE_COLOR);
     }
     if (assignmentColorPicker) {
       assignmentColorPicker.setDisabled(true);
       assignmentColorPicker.setColor(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY, { emit: false, source: "program" });
+    }
+    if (assignmentPickerRoot) {
+      assignmentPickerRoot.style.setProperty("--rgba-color", hexToRgba(DEFAULT_SHAPE_COLOR, computeFillAlpha(DEFAULT_SHAPE_OPACITY)));
     }
     updateAssignmentColorDisplay(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY);
     closeColorPopovers();
