@@ -1486,7 +1486,7 @@ export function initMapping({ editor }) {
   const renderShapeList = () => {
     if (!editorShapeList) return;
     if (!shapeOrder.length) {
-      editorShapeList.innerHTML = `<div class="editor-detail-empty">No shapes yet.</div>`;
+      editorShapeList.innerHTML = `<div class="editor-detail-empty">.</div>`;
       editorShapeList.removeAttribute("aria-activedescendant");
       return;
     }
