@@ -258,27 +258,6 @@
         </div>
         <div class="panel-content">
             <div class="panel-section is-active" data-panel-section="editor" id="panel-editor" role="tabpanel" aria-label="Score editor">
-              <div class="panel-routing" aria-label="Global routing settings">
-                <div class="panel-routing-row">
-                  <label for="editor-midi-port">MIDI Port</label>
-                  <div class="input-with-button">
-                    <select id="editor-midi-port">
-                      <option value="broadcast">All Outputs</option>
-                    </select>
-                    <button id="editor-midi-port-refresh" type="button" class="icon-button" title="Refresh MIDI ports" aria-label="Refresh MIDI ports">
-                      <span class="material-icons-outlined" aria-hidden="true">refresh</span>
-                    </button>
-                  </div>
-                </div>
-                <div class="panel-routing-actions">
-                  <button id="snapshot-export" type="button" class="icon-button" title="Export snapshot" aria-label="Export snapshot">
-                    <span class="material-icons-outlined" aria-hidden="true">download</span>
-                  </button>
-                  <button id="snapshot-import" type="button" class="icon-button" title="Import snapshot" aria-label="Import snapshot">
-                    <span class="material-icons-outlined" aria-hidden="true">upload</span>
-                  </button>
-                </div>
-              </div>
               <input id="snapshot-import-input" type="file" accept="application/json" hidden>
               <div class="editor-panel">
                 <div class="editor-shape-list" id="editor-shape-list" role="listbox" aria-label="Score elements"></div>
@@ -286,35 +265,44 @@
                   <div class="editor-detail-empty" id="editor-detail-empty">
                     Draw a shape to begin. Select it to edit MIDI mappings.
                   </div>
-                  <form id="editor-detail-form" class="editor-detail-form" autocomplete="off">
-                    <div class="form-row">
-                      <label for="editor-stream-select">Input Stream</label>
-                      <select id="editor-stream-select">
-                        <option value="pose">Pose Landmarks</option>
-                        <option value="leftHand">Left Hand</option>
-                        <option value="rightHand">Right Hand</option>
-                        <option value="face">Face (centroid)</option>
-                        <option value="pointer">Pointer Input</option>
-                        <option value="keyboard">Keyboard</option>
-                      </select>
+                  <form id="editor-detail-form" class="editor-detail-form assignment-body" autocomplete="off">
+                    <div class="assignment-row">
+                      <label for="editor-shape-name">Name</label>
+                      <input id="editor-shape-name" type="text" name="editorShapeName" placeholder="Untitled shape">
                     </div>
-                    <div class="form-row">
-                      <label for="editor-landmark-select">Landmark</label>
-                      <select id="editor-landmark-select"></select>
+                    <div class="assignment-row">
+                      <label for="editor-shape-midi">MIDI</label>
+                      <div class="assignment-field-group assignment-field-group--compact">
+                        <select id="editor-shape-midi">
+                          <option value="broadcast">All Outputs</option>
+                        </select>
+                        <button id="editor-shape-midi-refresh" type="button" class="icon-button" title="Refresh MIDI ports" aria-label="Refresh MIDI ports">
+                          <span class="material-icons-outlined" aria-hidden="true">refresh</span>
+                        </button>
+                      </div>
                     </div>
-                    <div class="event-list-header">
-                      <span>Events</span>
-                      <button type="button" id="editor-add-event" class="icon-button" title="Add event" aria-label="Add event">
-                        <span class="material-icons-outlined" aria-hidden="true">add</span>
-                      </button>
+                    <div class="assignment-row assignment-row--split">
+                      <label for="editor-stream-select">Input</label>
+                      <div class="assignment-field-group">
+                        <select id="editor-stream-select">
+                          <option value="pose">Pose Landmarks</option>
+                          <option value="leftHand">Left Hand</option>
+                          <option value="rightHand">Right Hand</option>
+                          <option value="face">Face (centroid)</option>
+                          <option value="pointer">Pointer Input</option>
+                          <option value="keyboard">Keyboard</option>
+                        </select>
+                        <select id="editor-landmark-select"></select>
+                      </div>
                     </div>
-                    <div id="editor-event-list" class="event-list" role="list"></div>
-                    <p class="event-hint">
-                      Velocity and CC values can follow constant or normalised sources (X, Y, distance).
-                    </p>
-                    <div class="editor-detail-actions">
-                      <button type="button" id="editor-open-modal" class="secondary">Pop-out editor</button>
-                      <button type="button" id="editor-delete-shape" class="danger">Delete shape</button>
+                    <div class="assignment-events">
+                      <div class="event-list-header">
+                        <span>Events</span>
+                        <button type="button" id="editor-add-event" class="icon-button" title="Add event" aria-label="Add event">
+                          <span class="material-icons-outlined" aria-hidden="true">add</span>
+                        </button>
+                      </div>
+                      <div id="editor-event-list" class="event-list" role="list"></div>
                     </div>
                   </form>
                 </div>
@@ -360,6 +348,17 @@
         <label for="assignment-shape-name">Name</label>
         <input id="assignment-shape-name" type="text" name="shapeName" placeholder="Untitled shape">
       </div>
+      <div class="assignment-row">
+        <label for="assignment-midi-port">MIDI</label>
+        <div class="assignment-field-group assignment-field-group--compact">
+          <select id="assignment-midi-port">
+            <option value="broadcast">All Outputs</option>
+          </select>
+          <button id="assignment-midi-port-refresh" type="button" class="icon-button" title="Refresh MIDI ports" aria-label="Refresh MIDI ports">
+            <span class="material-icons-outlined" aria-hidden="true">refresh</span>
+          </button>
+        </div>
+      </div>
       <div class="assignment-row assignment-row--split">
         <label for="assignment-stream">Input</label>
         <div class="assignment-field-group">
@@ -372,17 +371,6 @@
             <option value="keyboard">Keyboard</option>
           </select>
           <select id="assignment-landmark"></select>
-        </div>
-      </div>
-      <div class="assignment-row">
-        <label for="assignment-midi-port">MIDI</label>
-        <div class="assignment-field-group assignment-field-group--compact">
-          <select id="assignment-midi-port">
-            <option value="broadcast">All Outputs</option>
-          </select>
-          <button id="assignment-midi-port-refresh" type="button" class="icon-button" title="Refresh MIDI ports" aria-label="Refresh MIDI ports">
-            <span class="material-icons-outlined" aria-hidden="true">refresh</span>
-          </button>
         </div>
       </div>
       <div class="assignment-events">

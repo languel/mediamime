@@ -142,7 +142,7 @@ html, body {
       padding: 1px;
       background: rgba(12, 18, 30, calc(var(--surface-opacity) * 0.75));
       border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 6px;
+      border-radius: 4px;
       color: var(--text-primary);
       box-shadow: 0 18px 32px rgba(0, 0, 0, 0.35);
       width: clamp(320px, 26vw, 360px);
@@ -932,20 +932,6 @@ html, body {
       font-size: 0.9rem;
       line-height: 1.4;
     }
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(4, 7, 13, calc(var(--surface-opacity) * 0.6));
-      /* backdrop-filter: blur(2px); */
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.2s ease;
-      z-index: 260;
-    }
-    .modal-backdrop.is-visible {
-      opacity: 1;
-      pointer-events: auto;
-    }
     .assignment-modal {
       position: fixed;
       top: 50%;
@@ -954,7 +940,7 @@ html, body {
       width: min(360px, calc(100vw - 2rem));
       max-height: calc(100vh - 2.5rem);
       background: rgba(9, 13, 22, calc(var(--surface-opacity) * 0.97));
-      border-radius: 14px;
+      border-radius: 10px;
       border: 1px solid rgba(255, 255, 255, 0.08);
       box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
       opacity: 0;
@@ -975,7 +961,7 @@ html, body {
       gap: 0.5rem;
       padding: 0.55rem 0.75rem;
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 14px 14px 0 0;
+      border-radius: 10px 10px 0 0;
       background: rgba(255, 255, 255, 0.02);
     }
     .assignment-handle {
@@ -1015,7 +1001,7 @@ html, body {
     .assignment-row {
       display: grid;
       grid-template-columns: 72px 1fr;
-      gap: 0.55rem;
+      gap: 0.45rem;
       align-items: center;
     }
     .assignment-row label {
@@ -1045,7 +1031,10 @@ html, body {
     }
     .assignment-modal select,
     .assignment-modal input[type="text"],
-    .assignment-modal input[type="number"] {
+    .assignment-modal input[type="number"],
+    .assignment-body select,
+    .assignment-body input[type="text"],
+    .assignment-body input[type="number"] {
       width: 100%;
       padding: 0.36rem 0.45rem;
       border-radius: 5px;
@@ -1058,10 +1047,6 @@ html, body {
       display: flex;
       flex-direction: column;
       gap: 0.4rem;
-      padding: 0.35rem 0.45rem;
-      border-radius: 6px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(10, 16, 26, calc(var(--surface-opacity) * 0.82));
     }
     .assignment-events .event-list {
       gap: 0.3rem;
@@ -1072,39 +1057,6 @@ html, body {
     }
     .assignment-events .event-card-header select {
       padding: 0.24rem 0.35rem;
-    }
-    .assignment-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 0.45rem;
-      margin-top: 0.25rem;
-    }
-    .assignment-actions button {
-      padding: 0.38rem 0.65rem;
-      border-radius: 5px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      background: rgba(82, 213, 255, calc(var(--surface-opacity) * 0.12));
-      color: #f5f7ff;
-      font-size: 0.82rem;
-      cursor: pointer;
-      transition: background 0.18s ease, border-color 0.18s ease;
-    }
-    .assignment-actions button:hover {
-      background: rgba(82, 213, 255, calc(var(--surface-opacity) * 0.22));
-      border-color: rgba(82, 213, 255, 0.32);
-    }
-    .assignment-actions button.secondary {
-      background: rgba(255, 255, 255, calc(var(--surface-opacity) * 0.08));
-      border-color: rgba(255, 255, 255, 0.1);
-    }
-    .assignment-actions button.secondary:hover {
-      background: rgba(255, 255, 255, calc(var(--surface-opacity) * 0.16));
-      border-color: rgba(255, 255, 255, 0.22);
-    }
-    .assignment-body .event-hint {
-      margin: 0;
-      font-size: 0.7rem;
-      color: rgba(245, 247, 255, 0.55);
     }
     @media (max-width: 560px) {
       .assignment-row {
@@ -1123,11 +1075,11 @@ html, body {
       .assignment-field-group input {
         flex: 1 1 100%;
       }
-    .assignment-field-group--compact .icon-button {
+      .assignment-field-group--compact .icon-button {
         width: auto;
         height: 100%;
         padding: 0.2rem 0.25rem;
-    }
+      }
     }
     .no-pointer {
       pointer-events: none;
@@ -1201,29 +1153,9 @@ html, body {
       color: rgba(245, 247, 255, 0.58);
     }
     .editor-detail-form {
-      display: grid;
-      gap: 0.3rem;
-    }
-    .editor-detail-form .form-row {
-      display: grid;
-      gap: 0.15rem;
-    }
-    .editor-detail-form label {
-      font-size: 0.7rem;
-      letter-spacing: 0.03em;
-      text-transform: uppercase;
-      color: var(--text-secondary);
-    }
-    .editor-detail-form select,
-    .editor-detail-form input[type="text"],
-    .editor-detail-form input[type="number"] {
-      width: 100%;
-      padding: 0.28rem 0.4rem;
-      border-radius: 2px;
-      border: 1px solid var(--border-subtle);
-      background: rgba(6, 10, 18, calc(var(--surface-opacity) * 0.94));
-      color: #f5f7ff;
-      font-size: 0.8rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
     }
     .event-list-header {
       display: flex;

@@ -482,6 +482,7 @@ const normalizeEvent = (event) => {
 const createDefaultInteraction = () => ({
   stream: "pose",
   landmark: "left_wrist",
+  midiPort: "broadcast",
   events: [createDefaultEvent("midiNote")]
 });
 
@@ -500,6 +501,7 @@ const mergeInteraction = (input) => {
   return {
     stream: streamDefinition?.id || defaults.stream,
     landmark: landmarkValid ? candidateLandmark : fallbackLandmark,
+    midiPort: typeof source.midiPort === "string" && source.midiPort.trim() ? source.midiPort.trim() : defaults.midiPort,
     events
   };
 };
@@ -637,13 +639,14 @@ export function initMapping({ editor }) {
   const editorShapeList = document.getElementById("editor-shape-list");
   const editorDetailEmpty = document.getElementById("editor-detail-empty");
   const editorDetailForm = document.getElementById("editor-detail-form");
+  const editorShapeNameInput = document.getElementById("editor-shape-name");
+  const editorShapeMidiSelect = document.getElementById("editor-shape-midi");
+  const editorShapeMidiRefreshButton = document.getElementById("editor-shape-midi-refresh");
+  const editorDeleteShapeButton = document.getElementById("editor-delete-shape");
   const editorStreamSelect = document.getElementById("editor-stream-select");
   const editorLandmarkSelect = document.getElementById("editor-landmark-select");
   const editorEventList = document.getElementById("editor-event-list");
   const editorAddEventButton = document.getElementById("editor-add-event");
-  const editorDeleteShapeButton = document.getElementById("editor-delete-shape");
-  const editorMidiPortSelect = document.getElementById("editor-midi-port");
-  const editorMidiPortRefreshButton = document.getElementById("editor-midi-port-refresh");
 
   if (!modal || !backdrop || !eventList) {
     console.warn("[mediamime] Mapping modal markup is missing; skipping mapping module.");
@@ -821,7 +824,9 @@ export function initMapping({ editor }) {
     return manufacturer ? `${baseName} (${manufacturer})` : baseName;
   };
 
-  const populateMidiPortSelect = (selectEl, selectedId = editorConfig.midiPort) => {
+  const getDefaultMidiPort = () => editorConfig.midiPort || "broadcast";
+
+  const populateMidiPortSelect = (selectEl, selectedId) => {
     if (!selectEl) return;
     const outputs = getMidiOutputs();
     const options = [
@@ -834,28 +839,74 @@ export function initMapping({ editor }) {
     const markup = options
       .map((option) => `<option value="${escapeHtml(option.id)}">${escapeHtml(option.label)}</option>`)
       .join("");
+    const fallback = options.some((option) => option.id === getDefaultMidiPort()) ? getDefaultMidiPort() : "broadcast";
+    const candidate = typeof selectedId === "string" && selectedId.trim() ? selectedId.trim() : fallback;
+    const normalized = options.some((option) => option.id === candidate) ? candidate : "broadcast";
     selectEl.innerHTML = markup;
-    const normalized = options.some((option) => option.id === selectedId) ? selectedId : "broadcast";
     selectEl.value = normalized;
     selectEl.dataset.selectedPort = normalized;
   };
 
+  const resolveActiveShapeMidiPort = () => {
+    if (!state.activeShapeId) return getDefaultMidiPort();
+    const shape = shapesById.get(state.activeShapeId);
+    if (!shape) return getDefaultMidiPort();
+    const explicit = typeof shape.interaction?.midiPort === "string" ? shape.interaction.midiPort.trim() : "";
+    if (explicit) {
+      return explicit;
+    }
+    const merged = mergeInteraction(shape.interaction);
+    const fallback = merged.midiPort || "broadcast";
+    return fallback === "broadcast" ? getDefaultMidiPort() : fallback;
+  };
+
+  const resolveDraftMidiPort = () => {
+    if (state.draftInteraction && typeof state.draftInteraction.midiPort === "string") {
+      const trimmed = state.draftInteraction.midiPort.trim();
+      return trimmed || getDefaultMidiPort();
+    }
+    return resolveActiveShapeMidiPort();
+  };
+
   const applyMidiSelections = () => {
     isSyncingConfig = true;
-    populateMidiPortSelect(assignmentMidiPortSelect, editorConfig.midiPort);
-    populateMidiPortSelect(editorMidiPortSelect, editorConfig.midiPort);
+    const activePort = resolveActiveShapeMidiPort();
+    const draftPort = resolveDraftMidiPort();
+    populateMidiPortSelect(assignmentMidiPortSelect, draftPort);
+    if (editorShapeMidiSelect) {
+      populateMidiPortSelect(editorShapeMidiSelect, activePort);
+      editorShapeMidiSelect.disabled = !state.activeShapeId;
+    }
+    if (editorShapeMidiRefreshButton) {
+      editorShapeMidiRefreshButton.disabled = !state.activeShapeId;
+    }
     isSyncingConfig = false;
   };
 
   const setMidiPort = (value) => {
-    const normalized = value && value !== "broadcast" ? value : "broadcast";
-    if (editorConfig.midiPort === normalized) {
-      applyMidiSelections();
-      return;
+    const candidate = typeof value === "string" ? value.trim() : "";
+    const normalized = candidate && candidate !== "broadcast" ? candidate : "broadcast";
+    if (state.modalOpen && state.draftInteraction) {
+      if (state.draftInteraction.midiPort !== normalized) {
+        state.draftInteraction.midiPort = normalized;
+        commitDraftInteraction();
+      }
+    } else if (state.activeShapeId) {
+      const shape = shapesById.get(state.activeShapeId);
+      if (shape) {
+        const current = mergeInteraction(shape.interaction).midiPort || "broadcast";
+        if (current !== normalized) {
+          updateSelectedInteraction((interaction) => {
+            interaction.midiPort = normalized;
+          });
+        }
+      }
     }
-    editorConfig.midiPort = normalized;
+    if (editorConfig.midiPort !== normalized) {
+      editorConfig.midiPort = normalized;
+      saveEditorConfig();
+    }
     applyMidiSelections();
-    saveEditorConfig();
   };
 
   const ensureMidiAccess = () => {
@@ -969,7 +1020,15 @@ export function initMapping({ editor }) {
     const fallbackName = getShapeDisplayName(shape, index >= 0 ? index : 0);
     const rawName = typeof shape.name === "string" ? shape.name.trim() : "";
     state.draftName = rawName || fallbackName;
-    state.draftInteraction = { ...mergeInteraction(shape.interaction), name: state.draftName };
+    const mergedInteraction = mergeInteraction(shape.interaction);
+    const explicitMidiPort = typeof shape.interaction?.midiPort === "string"
+      ? shape.interaction.midiPort.trim()
+      : "";
+    state.draftInteraction = {
+      ...mergedInteraction,
+      name: state.draftName,
+      midiPort: explicitMidiPort || getDefaultMidiPort()
+    };
   };
 
   const updateOpenButtonState = () => {
@@ -986,6 +1045,20 @@ export function initMapping({ editor }) {
     if (editorDetailForm) {
       editorDetailForm.style.display = hasShape ? "" : "none";
     }
+  };
+
+  const focusEditorShapeName = () => {
+    if (!editorShapeNameInput || editorShapeNameInput.disabled) return;
+    setTimeout(() => {
+      try {
+        editorShapeNameInput.focus({ preventScroll: true });
+      } catch (error) {
+        editorShapeNameInput.focus();
+      }
+      if (typeof editorShapeNameInput.select === "function") {
+        editorShapeNameInput.select();
+      }
+    }, 30);
   };
 
   const getShapeDisplayName = (shape, index = 0) => {
@@ -1037,6 +1110,11 @@ export function initMapping({ editor }) {
         return `<button type="button" id="editor-shape-${id}" class="editor-shape-item${isActive ? " is-active" : ""}" data-shape-id="${id}"${activeAttr} role="option" aria-selected="${isActive ? "true" : "false"}">
             <span class="shape-label">${escapeHtml(label)}</span>
             <span class="shape-meta">${escapeHtml(meta)}</span>
+            <span class="shape-row-actions">
+              <button type="button" class="icon-button" data-action="delete-shape" title="Delete shape" aria-label="Delete shape">
+                <span class="material-icons-outlined" aria-hidden="true">delete</span>
+              </button>
+            </span>
           </button>`;
       })
       .filter(Boolean)
@@ -1055,6 +1133,23 @@ export function initMapping({ editor }) {
     const shape = state.activeShapeId ? shapesById.get(state.activeShapeId) : null;
     const hasShape = Boolean(shape);
     setDetailVisibility(hasShape);
+    if (editorShapeNameInput) {
+      if (!hasShape) {
+        editorShapeNameInput.value = "";
+        editorShapeNameInput.placeholder = "Untitled shape";
+        editorShapeNameInput.disabled = true;
+      } else {
+        const index = shapeOrder.indexOf(shape.id);
+        const fallbackName = getShapeDisplayName(shape, index >= 0 ? index : 0);
+        const rawName = typeof shape.name === "string" ? shape.name.trim() : "";
+        editorShapeNameInput.disabled = false;
+        editorShapeNameInput.placeholder = fallbackName;
+        editorShapeNameInput.value = rawName || fallbackName;
+      }
+    }
+    if (editorShapeMidiSelect) {
+      editorShapeMidiSelect.disabled = !hasShape;
+    }
     if (!hasShape) {
       if (editorStreamSelect) {
         editorStreamSelect.disabled = true;
@@ -1072,6 +1167,7 @@ export function initMapping({ editor }) {
       if (editorDeleteShapeButton) {
         editorDeleteShapeButton.disabled = true;
       }
+      applyMidiSelections();
       return;
     }
     const interaction = mergeInteraction(shape.interaction);
@@ -1093,6 +1189,7 @@ export function initMapping({ editor }) {
     }
     renderEventList(editorEventList, interaction.events);
     isSyncingEditorForm = false;
+    applyMidiSelections();
   };
 
   const updateSelectedInteraction = (mutator) => {
@@ -1114,6 +1211,11 @@ export function initMapping({ editor }) {
       interaction.stream = draft.stream;
       interaction.landmark = draft.landmark;
       interaction.events = draft.events.map(normalizeEvent);
+      const resolvedMidiPort = draft.midiPort && draft.midiPort.trim()
+        ? draft.midiPort.trim()
+        : getDefaultMidiPort();
+      interaction.midiPort = resolvedMidiPort;
+      draft.midiPort = resolvedMidiPort;
       if (typeof draft.name === "string") {
         const trimmed = draft.name.trim();
         if (trimmed) {
@@ -1425,6 +1527,39 @@ export function initMapping({ editor }) {
         shape.name = normalized;
       }
     });
+  };
+
+  const handleEditorShapeNameInput = (event) => {
+    if (isSyncingEditorForm) return;
+    const value = event.target?.value ?? "";
+    if (state.modalOpen) {
+      state.draftName = value;
+      if (state.draftInteraction) {
+        state.draftInteraction.name = value.trim();
+      }
+    }
+    updateSelectedInteraction((interaction, shape) => {
+      const trimmed = value.trim();
+      interaction.name = trimmed;
+      if (shape) {
+        shape.name = trimmed;
+      }
+    });
+    if (!value.trim() && editorShapeNameInput) {
+      const shape = state.activeShapeId ? shapesById.get(state.activeShapeId) : null;
+      if (shape) {
+        const index = shapeOrder.indexOf(shape.id);
+        const fallbackName = getShapeDisplayName(shape, index >= 0 ? index : 0);
+        editorShapeNameInput.placeholder = fallbackName;
+      }
+    }
+  };
+
+  const normalizeEditorShapeName = () => {
+    if (isSyncingEditorForm || !editorShapeNameInput || editorShapeNameInput.disabled) return;
+    const normalized = editorShapeNameInput.value.trim();
+    editorShapeNameInput.value = normalized;
+    handleEditorShapeNameInput({ target: editorShapeNameInput });
   };
 
   const handleAssignmentStreamChange = () => {
@@ -1947,9 +2082,9 @@ export function initMapping({ editor }) {
     setMidiPort(assignmentMidiPortSelect.value);
   };
 
-  const handleEditorMidiPortChange = () => {
-    if (isSyncingConfig || !editorMidiPortSelect) return;
-    setMidiPort(editorMidiPortSelect.value);
+  const handleEditorShapeMidiChange = () => {
+    if (isSyncingConfig || !editorShapeMidiSelect) return;
+    setMidiPort(editorShapeMidiSelect.value);
   };
 
   const handleDeleteShape = () => {
@@ -1958,12 +2093,30 @@ export function initMapping({ editor }) {
   };
 
   const handleShapeListClick = (event) => {
+    const deleteTarget = event.target?.closest?.("[data-action='delete-shape']");
+    if (deleteTarget) {
+      const button = deleteTarget.closest("[data-shape-id]");
+      const shapeId = button?.dataset.shapeId;
+      if (shapeId && typeof editor.deleteShape === "function") {
+        editor.deleteShape(shapeId);
+      }
+      return;
+    }
     const button = event.target?.closest?.("[data-shape-id]");
     if (!button) return;
     const shapeId = button.dataset.shapeId;
     if (!shapeId) return;
+    const wasActive = state.activeShapeId === shapeId;
+    const shouldFocusName = Boolean(event.target?.closest?.(".shape-label"));
     if (typeof editor.selectShape === "function") {
       editor.selectShape(shapeId);
+    }
+    if (shouldFocusName) {
+      if (wasActive) {
+        focusEditorShapeName();
+      } else {
+        setTimeout(focusEditorShapeName, 60);
+      }
     }
   };
 
@@ -2029,6 +2182,8 @@ export function initMapping({ editor }) {
   addListener(landmarkSelect, "change", handleAssignmentLandmarkChange);
   addListener(assignmentMidiPortSelect, "change", handleAssignmentMidiPortChange);
   addListener(assignmentMidiPortRefreshButton, "click", refreshMidiPorts);
+  addListener(editorShapeMidiSelect, "change", handleEditorShapeMidiChange);
+  addListener(editorShapeMidiRefreshButton, "click", refreshMidiPorts);
   if (assignmentHandle) {
     addListener(assignmentHandle, "pointerdown", startModalDrag);
   }
@@ -2043,14 +2198,16 @@ export function initMapping({ editor }) {
   addListener(document, "keydown", handleKeyDown, true);
   addListener(svg, "dblclick", handleDoubleClick);
   addListener(editorShapeList, "click", handleShapeListClick);
+  addListener(editorShapeNameInput, "input", handleEditorShapeNameInput);
+  addListener(editorShapeNameInput, "change", normalizeEditorShapeName);
+  addListener(editorShapeNameInput, "blur", normalizeEditorShapeName);
+  addListener(editorDeleteShapeButton, "click", handleDeleteShape);
   addListener(editorAddEventButton, "click", handleEditorAddEvent);
   addListener(editorEventList, "click", handleEditorEventListClick);
   addListener(editorEventList, "change", handleEditorEventListInput);
   addListener(editorEventList, "input", handleEditorEventListInput);
   addListener(editorStreamSelect, "change", handleEditorStreamChange);
   addListener(editorLandmarkSelect, "change", handleEditorLandmarkChange);
-  addListener(editorDeleteShapeButton, "click", handleDeleteShape);
-  addListener(editorMidiPortSelect, "change", handleEditorMidiPortChange);
   addListener(window, "pointermove", handleInputPointerMove, { passive: true });
   addListener(window, "pointerdown", handleInputPointerDown, { passive: true });
   addListener(window, "pointerup", handleInputPointerUp, { passive: true });
