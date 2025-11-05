@@ -182,6 +182,9 @@ class Editor {
         shapes: (this.shapeStore ? this.shapeStore.list() : []).map(cloneShape),
         selection: this.state.selectedShapeId ? [this.state.selectedShapeId] : []
       }),
+      // Add basic shape management APIs for import/export workflows
+      addShape: (shape) => this.addShape(shape),
+      replaceShapes: (shapes) => this.replaceShapes(shapes),
       setTool: (tool) => this.setTool(tool),
       updateShape: (shapeId, mutator) => this.updateShape(shapeId, mutator),
       selectShape: (shapeId) => this.selectShape(shapeId),
@@ -384,6 +387,64 @@ class Editor {
     this.render();
     this.notifyShapesChanged();
     this.notifySelectionChanged();
+  }
+
+  // New: programmatically add a shape
+  addShape(shape) {
+    if (!shape || !this.shapeStore) return null;
+    const normalized = this.normalizeImportedShape(shape);
+    if (!normalized) return null;
+    // Avoid id collisions when appending
+    if (normalized.id && this.shapeStore.nodes?.has?.(normalized.id)) {
+      normalized.id = createId();
+    }
+    this.shapeStore.write(normalized);
+    this.renderShapes();
+    this.notifyShapesChanged();
+    return normalized.id;
+  }
+
+  // New: replace all shapes with provided list
+  replaceShapes(shapes) {
+    if (!this.shapeStore) return;
+    const list = Array.isArray(shapes) ? shapes : [];
+    this.shapeStore.clear();
+    list.forEach((shape) => {
+      const normalized = this.normalizeImportedShape(shape);
+      if (normalized) this.shapeStore.write(normalized);
+    });
+    this.state.selectedShapeId = null;
+    this.pendingLine = null;
+    this.render();
+    this.notifyShapesChanged();
+    this.notifySelectionChanged();
+  }
+
+  // Normalise incoming shapes from JSON imports
+  normalizeImportedShape(shape) {
+    if (!shape || typeof shape !== "object") return null;
+    const id = typeof shape.id === "string" && shape.id.trim() ? shape.id.trim() : createId();
+    const name = typeof shape.name === "string" ? shape.name : "";
+    const interaction = shape.interaction && typeof shape.interaction === "object"
+      ? JSON.parse(JSON.stringify(shape.interaction))
+      : null;
+    const style = { ...(shape.style || {}) };
+    if (shape.type === "rect" || shape.type === "ellipse") {
+      const x = Number(shape.x) || 0;
+      const y = Number(shape.y) || 0;
+      const width = Number(shape.width) || 0;
+      const height = Number(shape.height) || 0;
+      const rotation = Number(shape.rotation) || 0;
+      return { id, name, interaction, type: shape.type, x, y, width, height, rotation, style };
+    }
+    if (shape.type === "line" || shape.type === "path") {
+      const points = Array.isArray(shape.points) ? shape.points.map((p) => ({ x: Number(p.x) || 0, y: Number(p.y) || 0 })) : [];
+      const closed = Boolean(shape.closed);
+      const rotation = Number(shape.rotation) || 0;
+      return { id, name, interaction, type: shape.type, points, closed, rotation, style };
+    }
+    // Fallback to rect if type is unknown
+    return { id, name, interaction, type: "rect", x: 0, y: 0, width: 0, height: 0, rotation: 0, style };
   }
 
   toggleToolLock() {

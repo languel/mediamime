@@ -251,6 +251,23 @@
             <span class="material-icons-outlined" aria-hidden="true">drag_indicator</span>
           </div>
           <div class="panel-actions">
+            <span
+              class="editor-panel-tip"
+              role="note"
+              tabindex="0"
+              aria-label="Draw a shape to begin. Select it to edit MIDI mappings."
+              data-tip="Draw a shape to begin. Select it to edit MIDI mappings.">
+              <span class="material-icons-outlined" aria-hidden="true">info</span>
+            </span>
+            <button id="snapshot-import-button" type="button" class="icon-button" title="Import score from JSON" aria-label="Import score from JSON">
+              <span class="material-icons-outlined" aria-hidden="true">file_upload</span>
+            </button>
+            <button id="snapshot-append-button" type="button" class="icon-button" title="Append score from JSON" aria-label="Append score from JSON">
+              <span class="material-icons-outlined" aria-hidden="true">playlist_add</span>
+            </button>
+            <button id="snapshot-export-button" type="button" class="icon-button" title="Export score to JSON" aria-label="Export score to JSON">
+              <span class="material-icons-outlined" aria-hidden="true">file_download</span>
+            </button>
             <button type="button" class="icon-button panel-close" data-modal-close="map" title="Hide Map panel" aria-label="Hide Map panel">
               <span class="material-icons-outlined" aria-hidden="true">close</span>
             </button>
@@ -261,14 +278,6 @@
               <input id="snapshot-import-input" type="file" accept="application/json" hidden>
               <div class="editor-panel">
                 <div class="editor-panel-header">
-                  <span
-                    class="editor-panel-tip"
-                    role="note"
-                    tabindex="0"
-                    aria-label="Draw a shape to begin. Select it to edit MIDI mappings."
-                    data-tip="Draw a shape to begin. Select it to edit MIDI mappings.">
-                    <span class="material-icons-outlined" aria-hidden="true">info</span>
-                  </span>
                 </div>
                 <div class="editor-shape-list" id="editor-shape-list" role="listbox" aria-label="Score elements"></div>
                 <div class="editor-detail" id="editor-detail">

@@ -770,6 +770,48 @@ export function initMapping({ editor }) {
   const editorDetailEmpty = document.getElementById("editor-detail-empty");
   const editorDetailForm = document.getElementById("editor-detail-form");
   const editorShapeNameInput = document.getElementById("editor-shape-name");
+  // Import/Export controls in the Map panel header
+  const snapshotImportInput = document.getElementById("snapshot-import-input");
+  const snapshotImportButton = document.getElementById("snapshot-import-button");
+  const snapshotAppendButton = document.getElementById("snapshot-append-button");
+  const snapshotExportButton = document.getElementById("snapshot-export-button");
+  // Local storage: autosave/restore last score
+  const LAST_SCORE_STORAGE_KEY = "mediamime:last-score";
+  let saveDebounce = null;
+  const scheduleSaveLastScore = (shapes) => {
+    if (!Array.isArray(shapes) || typeof localStorage === "undefined") return;
+    if (saveDebounce) {
+      clearTimeout(saveDebounce);
+    }
+    saveDebounce = setTimeout(() => {
+      try {
+        const payload = { kind: "mediamime-score", version: 1, savedAt: new Date().toISOString(), shapes };
+        localStorage.setItem(LAST_SCORE_STORAGE_KEY, JSON.stringify(payload));
+      } catch (error) {
+        console.warn("[mediamime] Failed to persist last score", error);
+      }
+    }, 250);
+  };
+
+  const tryLoadLastScore = () => {
+    if (typeof localStorage === "undefined") return false;
+    try {
+      const raw = localStorage.getItem(LAST_SCORE_STORAGE_KEY);
+      if (!raw) return false;
+      const parsed = JSON.parse(raw);
+      const shapes = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.shapes) ? parsed.shapes : [];
+      if (!shapes.length) return false;
+      if (typeof editor?.replaceShapes === 'function') {
+        editor.replaceShapes(shapes);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.warn("[mediamime] Failed to load last score", error);
+      return false;
+    }
+  };
+
   const editorColorChip = document.querySelector("[data-color-toggle='editor']");
   const editorColorPanel = document.querySelector("[data-color-panel='editor']");
   const editorPickerRoot = editorColorPanel?.querySelector("[data-rgba-picker]");
@@ -1850,6 +1892,8 @@ export function initMapping({ editor }) {
     }
     updateShapeActiveIndicators();
     evaluateShapeInteractions();
+    // Auto-save last score
+    scheduleSaveLastScore(shapes);
   };
 
   const handleDoubleClick = (event) => {
@@ -2081,6 +2125,86 @@ export function initMapping({ editor }) {
     const landmark = landmarkSelect?.value || "";
     state.draftInteraction.landmark = landmark;
     commitDraftInteraction();
+  };
+
+  // ----- Import / Export -----
+  const buildExportPayload = () => {
+    const now = new Date().toISOString();
+    const shapes = (typeof editor?.getState === 'function') ? (editor.getState().shapes || []) : [];
+    return {
+      kind: "mediamime-score",
+      version: 1,
+      createdAt: now,
+      shapes
+    };
+  };
+
+  const downloadJson = (data, filename = "score.json") => {
+    try {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.warn("[mediamime] Failed to export score", error);
+    }
+  };
+
+  const handleSnapshotExport = () => {
+    const payload = buildExportPayload();
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    const filename = `mediamime-score-${ts}.json`;
+    downloadJson(payload, filename);
+  };
+
+  const safeParseJson = async (file) => {
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      return parsed;
+    } catch (error) {
+      console.warn("[mediamime] Failed to parse imported JSON", error);
+      return null;
+    }
+  };
+
+  const normalizeImportedShapes = (payload) => {
+    if (!payload) return [];
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload.shapes)) return payload.shapes;
+    return [];
+  };
+
+  let importMode = "replace"; // or "append"
+  const handleSnapshotImportFiles = async (event) => {
+    const files = Array.from(event.target?.files || []);
+    if (!files.length) return;
+    const parsed = await safeParseJson(files[0]);
+    const shapes = normalizeImportedShapes(parsed);
+    if (!Array.isArray(shapes)) return;
+    if (importMode === "append" && typeof editor?.addShape === 'function') {
+      shapes.forEach((s) => editor.addShape(s));
+    } else {
+      if (typeof editor?.replaceShapes === 'function') {
+        editor.replaceShapes(shapes);
+      } else if (typeof editor?.getState === 'function' && typeof editor?.deleteShape === 'function' && typeof editor?.addShape === 'function') {
+        const current = editor.getState().shapes || [];
+        current.forEach((s) => editor.deleteShape(s.id));
+        shapes.forEach((s) => editor.addShape(s));
+      } else {
+        console.warn('[mediamime] Editor API missing replaceShapes; import aborted.');
+      }
+    }
+    // reset input so the same file can be chosen again later
+    if (snapshotImportInput) {
+      snapshotImportInput.value = "";
+    }
+    importMode = "replace";
   };
 
   const handleEditorStreamChange = () => {
@@ -2729,6 +2853,17 @@ export function initMapping({ editor }) {
   addListener(editorEventList, "input", handleEditorEventListInput);
   addListener(editorStreamSelect, "change", handleEditorStreamChange);
   addListener(editorLandmarkSelect, "change", handleEditorLandmarkChange);
+  // Import/Export listeners
+  addListener(snapshotExportButton, "click", handleSnapshotExport);
+  addListener(snapshotImportButton, "click", () => {
+    importMode = "replace";
+    if (snapshotImportInput) snapshotImportInput.click();
+  });
+  addListener(snapshotAppendButton, "click", () => {
+    importMode = "append";
+    if (snapshotImportInput) snapshotImportInput.click();
+  });
+  addListener(snapshotImportInput, "change", handleSnapshotImportFiles);
   addListener(window, "pointermove", handleInputPointerMove, { passive: true });
   addListener(window, "pointerdown", handleInputPointerDown, { passive: true });
   addListener(window, "pointerup", handleInputPointerUp, { passive: true });
@@ -2742,7 +2877,9 @@ export function initMapping({ editor }) {
     editor.on("shapeschange", handleShapesChange);
   }
 
-  if (typeof editor.getState === "function") {
+  // Try restoring the last saved score first
+  const restored = tryLoadLastScore();
+  if (typeof editor.getState === "function" && !restored) {
     const initial = editor.getState();
     if (initial && Array.isArray(initial.selection) && initial.selection.length) {
       state.activeShapeId = initial.selection[0];
