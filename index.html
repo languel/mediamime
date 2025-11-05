@@ -276,9 +276,22 @@
                     No shape selected.
                   </div>
                   <form id="editor-detail-form" class="editor-detail-form assignment-body" autocomplete="off">
-                    <div class="assignment-row">
+                    <div class="assignment-row assignment-row--name">
                       <label for="editor-shape-name">Name</label>
-                      <input id="editor-shape-name" type="text" name="editorShapeName" placeholder="Untitled shape">
+                      <div class="assignment-field-group assignment-field-group--name">
+                        <input id="editor-shape-name" type="text" name="editorShapeName" placeholder="Untitled shape">
+                        <div class="color-chip-wrapper" data-color-picker="editor">
+                          <button type="button" class="color-chip" data-color-toggle="editor" aria-haspopup="true" aria-expanded="false" aria-label="Pick shape color"></button>
+                          <div class="color-picker-panel" data-color-panel="editor" hidden>
+                            <input id="editor-shape-color" type="color" class="color-input" value="#ffffff" aria-label="Shape color">
+                            <label class="color-opacity-control" for="editor-shape-opacity">
+                              <span>Opacity</span>
+                              <input id="editor-shape-opacity" class="opacity-slider" type="range" min="0" max="100" step="1" value="16" aria-label="Shape opacity">
+                              <output id="editor-shape-opacity-value" class="slider-value" for="editor-shape-opacity">16%</output>
+                            </label>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                     <div class="assignment-row">
                       <label for="editor-shape-midi">MIDI</label>
@@ -354,9 +367,22 @@
       </div>
     </div>
     <div class="assignment-body">
-      <div class="assignment-row">
+      <div class="assignment-row assignment-row--name">
         <label for="assignment-shape-name">Name</label>
-        <input id="assignment-shape-name" type="text" name="shapeName" placeholder="Untitled shape">
+        <div class="assignment-field-group assignment-field-group--name">
+          <input id="assignment-shape-name" type="text" name="shapeName" placeholder="Untitled shape">
+          <div class="color-chip-wrapper" data-color-picker="assignment">
+            <button type="button" class="color-chip" data-color-toggle="assignment" aria-haspopup="true" aria-expanded="false" aria-label="Pick shape color"></button>
+            <div class="color-picker-panel" data-color-panel="assignment" hidden>
+              <input id="assignment-shape-color" type="color" class="color-input" value="#ffffff" aria-label="Shape color">
+              <label class="color-opacity-control" for="assignment-shape-opacity">
+                <span>Opacity</span>
+                <input id="assignment-shape-opacity" class="opacity-slider" type="range" min="0" max="100" step="1" value="16" aria-label="Shape opacity">
+                <output id="assignment-shape-opacity-value" class="slider-value" for="assignment-shape-opacity">16%</output>
+              </label>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="assignment-row">
         <label for="assignment-midi-port">MIDI</label>

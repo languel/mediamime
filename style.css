@@ -991,6 +991,7 @@ html, body {
       gap: 0.35rem;
     }
     .assignment-body {
+      --shape-accent-color: #ffffff;
       padding: 0.6rem 0.65rem 0.7rem;
       overflow-y: auto;
       display: flex;
@@ -1017,11 +1018,101 @@ html, body {
       width: 100%;
     }
     .assignment-field-group select,
-    .assignment-field-group input {
+    .assignment-field-group input[type="text"],
+    .assignment-field-group input[type="number"] {
       flex: 1;
     }
     .assignment-field-group--compact {
       gap: 0.25rem;
+    }
+    .assignment-row--name .assignment-field-group--name {
+      gap: 0.3rem;
+    }
+    .assignment-field-group--name input[type="text"] {
+      flex: 1;
+    }
+    .assignment-field-group--name .color-input {
+      flex: 0 0 auto;
+    }
+    .color-chip-wrapper {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .color-chip {
+      width: 1.1rem;
+      height: 1.1rem;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: var(--chip-color, #ffffff);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25) inset;
+      cursor: pointer;
+      transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+    }
+    .color-chip:focus-visible {
+      outline: none;
+      transform: scale(1.05);
+      border-color: rgba(82, 213, 255, 0.75);
+      box-shadow: 0 0 0 2px rgba(82, 213, 255, 0.35);
+    }
+    .color-chip:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .color-chip[aria-expanded="true"] {
+      transform: scale(1.05);
+      border-color: rgba(82, 213, 255, 0.75);
+      box-shadow: 0 0 0 2px rgba(82, 213, 255, 0.35);
+    }
+    .color-picker-panel {
+      position: absolute;
+      z-index: 20;
+      top: 130%;
+      right: 0;
+      width: 118px;
+      padding: 0.3rem;
+      border-radius: 6px;
+      background: rgba(8, 14, 24, 0.94);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .color-picker-panel[hidden] {
+      display: none;
+    }
+    .color-picker-panel input[type="color"] {
+      width: 100%;
+      height: 1.3rem;
+      border: none;
+      border-radius: 4px;
+      padding: 0;
+      cursor: pointer;
+    }
+    .color-picker-panel .opacity-slider {
+      width: 100%;
+      height: 0.22rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      accent-color: var(--shape-accent-color, rgba(82, 213, 255, 0.8));
+      cursor: pointer;
+    }
+    .color-picker-panel .opacity-slider:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .color-opacity-control {
+      display: grid;
+      gap: 0.25rem;
+      font-size: 0.68rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: rgba(245, 247, 255, 0.55);
+    }
+    .color-opacity-control span {
+      display: block;
     }
     .assignment-row--split .assignment-field-group select:first-child {
       flex: 0.55;
@@ -1042,6 +1133,38 @@ html, body {
       background: rgba(6, 10, 18, calc(var(--surface-opacity) * 0.96));
       color: #f5f7ff;
       font-size: 0.82rem;
+    }
+    .color-input {
+      width: 0.75rem;
+      height: 0.75rem;
+      padding: 0;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: transparent;
+      cursor: pointer;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18) inset;
+      transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .color-input:focus {
+      outline: none;
+      transform: scale(1.05);
+      border-color: rgba(82, 213, 255, 0.6);
+      box-shadow: 0 0 0 2px rgba(82, 213, 255, 0.25);
+    }
+    .color-input::-webkit-color-swatch-wrapper {
+      padding: 0;
+      border: none;
+      border-radius: 50%;
+    }
+    .color-input::-webkit-color-swatch {
+      border: none;
+      border-radius: 50%;
+    }
+    .color-input::-moz-color-swatch {
+      border: none;
+      border-radius: 50%;
     }
     .assignment-events {
       display: flex;
@@ -1188,6 +1311,24 @@ html, body {
       font-size: 0.8rem;
       transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
     }
+    .editor-shape-list .shape-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.28rem;
+    }
+    .editor-shape-list .shape-label-text {
+      display: inline-flex;
+      align-items: center;
+    }
+    .shape-color-indicator {
+      width: 0.85rem;
+      height: 0.85rem;
+      border-radius: 50%;
+      background: var(--shape-color, #ffffff);
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25) inset;
+      flex-shrink: 0;
+    }
     .editor-shape-list button:hover {
       background: rgba(255, 255, 255, calc(var(--surface-opacity) * 0.08));
     }
@@ -1226,6 +1367,7 @@ html, body {
       color: rgba(245, 247, 255, 0.58);
     }
     .editor-detail-form {
+      --shape-accent-color: #ffffff;
       display: flex;
       flex-direction: column;
       gap: 0.45rem;

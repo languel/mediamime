@@ -5,8 +5,8 @@ const LINE_CLOSE_THRESHOLD = 0.02;
 const ERASER_TOLERANCE = 0.02;
 const FREEHAND_SIMPLIFY_TOLERANCE = 0.0015;
 const DEFAULT_STYLE = {
-  stroke: "rgba(82, 213, 255, 0.92)",
-  fill: "rgba(82, 213, 255, 0.14)",
+  stroke: "#ffffff",
+  fill: "rgba(255, 255, 255, 0.16)",
   strokeWidth: 2
 };
 
