@@ -283,12 +283,47 @@
                         <div class="color-chip-wrapper" data-color-picker="editor">
                           <button type="button" class="color-chip" data-color-toggle="editor" aria-haspopup="true" aria-expanded="false" aria-label="Pick shape color"></button>
                           <div class="color-picker-panel" data-color-panel="editor" hidden>
-                            <input id="editor-shape-color" type="color" class="color-input" value="#ffffff" aria-label="Shape color">
-                            <div class="color-opacity-control">
-                              <span class="opacity-chip" aria-hidden="true"></span>
-                              <div class="opacity-slider-group">
-                                <input id="editor-shape-opacity" class="opacity-slider" type="range" min="0" max="100" step="1" value="16" aria-label="Shape opacity">
-                                <output id="editor-shape-opacity-value" class="slider-value" for="editor-shape-opacity">16%</output>
+                            <div class="rgba-picker" data-rgba-picker="editor">
+                              <div class="rgba-picker-preview" aria-live="polite">
+                                <span class="rgba-picker-preview-swatch" aria-hidden="true"></span>
+                                <output class="rgba-picker-preview-value" data-rgba-output>rgba(255, 255, 255, 0.5)</output>
+                              </div>
+                              <div class="rgba-picker-workspace">
+                                <div class="rgba-picker-spectrum" data-rgba-spectrum>
+                                  <div class="rgba-picker-spectrum-cursor" data-rgba-spectrum-cursor aria-hidden="true"></div>
+                                </div>
+                                <div class="rgba-picker-slider-stack">
+                                  <div class="rgba-picker-slider" data-rgba-hue role="slider" aria-label="Hue" aria-valuemin="0" aria-valuemax="360" aria-valuenow="0">
+                                    <div class="rgba-picker-slider-track"></div>
+                                    <div class="rgba-picker-slider-thumb"></div>
+                                  </div>
+                                  <div class="rgba-picker-slider rgba-picker-slider--alpha" data-rgba-alpha role="slider" aria-label="Alpha" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+                                    <div class="rgba-picker-slider-track"></div>
+                                    <div class="rgba-picker-slider-thumb"></div>
+                                  </div>
+                                </div>
+                              </div>
+                              <div class="rgba-picker-inputs">
+                                <label class="rgba-picker-field">
+                                  <span>R</span>
+                                  <input type="number" min="0" max="255" data-rgba-channel="r" inputmode="numeric" aria-label="Red value">
+                                </label>
+                                <label class="rgba-picker-field">
+                                  <span>G</span>
+                                  <input type="number" min="0" max="255" data-rgba-channel="g" inputmode="numeric" aria-label="Green value">
+                                </label>
+                                <label class="rgba-picker-field">
+                                  <span>B</span>
+                                  <input type="number" min="0" max="255" data-rgba-channel="b" inputmode="numeric" aria-label="Blue value">
+                                </label>
+                                <label class="rgba-picker-field">
+                                  <span>A%</span>
+                                  <input type="number" min="0" max="100" data-rgba-channel="a" inputmode="numeric" aria-label="Alpha percentage">
+                                </label>
+                                <label class="rgba-picker-field rgba-picker-field--hex">
+                                  <span>Hex</span>
+                                  <input type="text" data-rgba-hex inputmode="text" aria-label="Hex color">
+                                </label>
                               </div>
                             </div>
                           </div>
@@ -376,12 +411,47 @@
           <div class="color-chip-wrapper" data-color-picker="assignment">
             <button type="button" class="color-chip" data-color-toggle="assignment" aria-haspopup="true" aria-expanded="false" aria-label="Pick shape color"></button>
             <div class="color-picker-panel" data-color-panel="assignment" hidden>
-              <input id="assignment-shape-color" type="color" class="color-input" value="#ffffff" aria-label="Shape color">
-              <div class="color-opacity-control">
-                <span class="opacity-chip" aria-hidden="true"></span>
-                <div class="opacity-slider-group">
-                  <input id="assignment-shape-opacity" class="opacity-slider" type="range" min="0" max="100" step="1" value="16" aria-label="Shape opacity">
-                  <output id="assignment-shape-opacity-value" class="slider-value" for="assignment-shape-opacity">16%</output>
+              <div class="rgba-picker" data-rgba-picker="assignment">
+                <div class="rgba-picker-preview" aria-live="polite">
+                  <span class="rgba-picker-preview-swatch" aria-hidden="true"></span>
+                  <output class="rgba-picker-preview-value" data-rgba-output>rgba(255, 255, 255, 0.5)</output>
+                </div>
+                <div class="rgba-picker-workspace">
+                  <div class="rgba-picker-spectrum" data-rgba-spectrum>
+                    <div class="rgba-picker-spectrum-cursor" data-rgba-spectrum-cursor aria-hidden="true"></div>
+                  </div>
+                  <div class="rgba-picker-slider-stack">
+                    <div class="rgba-picker-slider" data-rgba-hue role="slider" aria-label="Hue" aria-valuemin="0" aria-valuemax="360" aria-valuenow="0">
+                      <div class="rgba-picker-slider-track"></div>
+                      <div class="rgba-picker-slider-thumb"></div>
+                    </div>
+                    <div class="rgba-picker-slider rgba-picker-slider--alpha" data-rgba-alpha role="slider" aria-label="Alpha" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
+                      <div class="rgba-picker-slider-track"></div>
+                      <div class="rgba-picker-slider-thumb"></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="rgba-picker-inputs">
+                  <label class="rgba-picker-field">
+                    <span>R</span>
+                    <input type="number" min="0" max="255" data-rgba-channel="r" inputmode="numeric" aria-label="Red value">
+                  </label>
+                  <label class="rgba-picker-field">
+                    <span>G</span>
+                    <input type="number" min="0" max="255" data-rgba-channel="g" inputmode="numeric" aria-label="Green value">
+                  </label>
+                  <label class="rgba-picker-field">
+                    <span>B</span>
+                    <input type="number" min="0" max="255" data-rgba-channel="b" inputmode="numeric" aria-label="Blue value">
+                  </label>
+                  <label class="rgba-picker-field">
+                    <span>A%</span>
+                    <input type="number" min="0" max="100" data-rgba-channel="a" inputmode="numeric" aria-label="Alpha percentage">
+                  </label>
+                  <label class="rgba-picker-field rgba-picker-field--hex">
+                    <span>Hex</span>
+                    <input type="text" data-rgba-hex inputmode="text" aria-label="Hex color">
+                  </label>
                 </div>
               </div>
             </div>

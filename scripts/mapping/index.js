@@ -1,3 +1,5 @@
+import { createRgbaPicker } from "../ui/rgba-picker.js";
+
 const ensureUuid = () => {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -619,9 +621,8 @@ const renderEventList = (listEl, events = []) => {
 
 const HEX_COLOR_PATTERN = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i;
 const DEFAULT_SHAPE_COLOR = "#ffffff";
-const DEFAULT_SHAPE_OPACITY = 0.16;
-const DEFAULT_SHAPE_OPACITY_SLIDER = Math.round(DEFAULT_SHAPE_OPACITY * 100);
-const SHAPE_FILL_ALPHA = 0.16;
+const DEFAULT_SHAPE_OPACITY = 0.5;
+const SHAPE_FILL_ALPHA = 0.5;
 
 const clampOpacity = (value) => {
   const numeric = Number.isFinite(value) ? value : Number.parseFloat(`${value}`) || 0;
@@ -683,19 +684,6 @@ const hexToRgba = (hex, alpha = SHAPE_FILL_ALPHA) => {
   return `rgba(${r}, ${g}, ${b}, ${roundedAlpha})`;
 };
 
-const setSliderGradient = (slider, color) => {
-  if (!slider) return;
-  const { r, g, b } = hexToRgb(color);
-  slider.style.background = `linear-gradient(90deg, rgba(${r}, ${g}, ${b}, 0) 0%, rgba(${r}, ${g}, ${b}, 1) 100%)`;
-};
-
-const updateOpacityChip = (panel, color, opacity) => {
-  if (!panel) return;
-  const chip = panel.querySelector(".opacity-chip");
-  if (!chip) return;
-  chip.style.setProperty("--chip-color", hexToRgba(color, opacity));
-};
-
 const getShapeColor = (shape, fallback = DEFAULT_SHAPE_COLOR) => {
   if (!shape || typeof shape !== "object") return fallback;
   const style = shape.style || {};
@@ -753,15 +741,13 @@ export function initMapping({ editor }) {
   const modal = document.getElementById("assignment-modal");
   const backdrop = document.getElementById("assignment-backdrop");
   const shapeNameInput = document.getElementById("assignment-shape-name");
-  const assignmentShapeColorInput = document.getElementById("assignment-shape-color");
-  const assignmentShapeOpacityInput = document.getElementById("assignment-shape-opacity");
-  const assignmentShapeOpacityValue = document.getElementById("assignment-shape-opacity-value");
   const streamSelect = document.getElementById("assignment-stream");
   const landmarkSelect = document.getElementById("assignment-landmark");
   const assignmentMidiPortSelect = document.getElementById("assignment-midi-port");
   const assignmentMidiPortRefreshButton = document.getElementById("assignment-midi-port-refresh");
   const assignmentColorChip = document.querySelector("[data-color-toggle='assignment']");
   const assignmentColorPanel = document.querySelector("[data-color-panel='assignment']");
+  const assignmentPickerRoot = assignmentColorPanel?.querySelector("[data-rgba-picker]");
   const addEventButton = document.getElementById("assignment-add-event");
   const eventList = document.getElementById("assignment-event-list");
   const closeButton = document.getElementById("assignment-modal-close");
@@ -773,11 +759,11 @@ export function initMapping({ editor }) {
   const editorDetailEmpty = document.getElementById("editor-detail-empty");
   const editorDetailForm = document.getElementById("editor-detail-form");
   const editorShapeNameInput = document.getElementById("editor-shape-name");
-  const editorShapeColorInput = document.getElementById("editor-shape-color");
-  const editorShapeOpacityInput = document.getElementById("editor-shape-opacity");
-  const editorShapeOpacityValue = document.getElementById("editor-shape-opacity-value");
   const editorColorChip = document.querySelector("[data-color-toggle='editor']");
   const editorColorPanel = document.querySelector("[data-color-panel='editor']");
+  const editorPickerRoot = editorColorPanel?.querySelector("[data-rgba-picker]");
+  let editorColorPicker = null;
+  let assignmentColorPicker = null;
   const editorShapeMidiSelect = document.getElementById("editor-shape-midi");
   const editorShapeMidiRefreshButton = document.getElementById("editor-shape-midi-refresh");
   const editorDeleteShapeButton = document.getElementById("editor-delete-shape");
@@ -1139,31 +1125,87 @@ export function initMapping({ editor }) {
   const colorPopovers = [];
   function registerColorPopover(toggle, panel) {
     if (!toggle || !panel) return null;
+
+    if (!panel.dataset.popoverPortal) {
+      panel.dataset.popoverPortal = "true";
+      panel.hidden = true;
+      panel.classList.remove("is-open");
+      panel.style.top = "-9999px";
+      panel.style.left = "-9999px";
+      try {
+        document.body.appendChild(panel);
+      } catch (error) {
+        console.warn("[mediamime] Failed to portal color picker panel.", error);
+      }
+    }
+
+    const stopPropagation = (event) => {
+      if (typeof event.stopImmediatePropagation === "function") {
+        event.stopImmediatePropagation();
+      }
+      event.stopPropagation();
+    };
+
     const entry = {
       toggle,
       panel,
-      open() {
-        if (entry.isOpen) return;
-        colorPopovers.forEach((other) => {
-          if (other !== entry) other.close();
-        });
-        panel.hidden = false;
-        toggle.setAttribute("aria-expanded", "true");
-        toggle.classList.add("is-open");
-        entry.isOpen = true;
-      },
-      close() {
-        if (!entry.isOpen) return;
-        panel.hidden = true;
-        toggle.setAttribute("aria-expanded", "false");
-        toggle.classList.remove("is-open");
-        entry.isOpen = false;
-      },
       isOpen: false
     };
-    panel.hidden = true;
-    toggle.setAttribute("aria-expanded", "false");
-    toggle.classList.remove("is-open");
+
+    const repositionPanel = () => {
+      if (!entry.isOpen || !toggle || !panel) return;
+      const margin = 12;
+      const rect = toggle.getBoundingClientRect();
+      if (!rect || (rect.width === 0 && rect.height === 0)) return;
+      panel.style.top = "-9999px";
+      panel.style.left = "-9999px";
+      const maxHeight = Math.max(180, window.innerHeight - margin * 2);
+      panel.style.maxHeight = `${maxHeight}px`;
+      const panelWidth = panel.offsetWidth;
+      const panelHeight = Math.min(panel.offsetHeight, maxHeight);
+      let top = rect.bottom + margin;
+      let origin = "top right";
+      if (top + panelHeight > window.innerHeight - margin) {
+        top = Math.max(margin, rect.top - panelHeight - margin);
+        origin = "bottom right";
+      }
+      let left = rect.left + rect.width - panelWidth;
+      const minLeft = margin;
+      const maxLeft = window.innerWidth - panelWidth - margin;
+      if (Number.isFinite(minLeft) && Number.isFinite(maxLeft)) {
+        left = Math.min(Math.max(left, minLeft), maxLeft);
+      }
+      panel.style.top = `${Math.round(top)}px`;
+      panel.style.left = `${Math.round(left)}px`;
+      panel.style.setProperty("--color-popover-origin", origin);
+    };
+
+    entry.open = () => {
+      if (entry.isOpen) return;
+      colorPopovers.forEach((other) => {
+        if (other !== entry) other.close();
+      });
+      panel.hidden = false;
+      panel.classList.add("is-open");
+      toggle.setAttribute("aria-expanded", "true");
+      toggle.classList.add("is-open");
+      entry.isOpen = true;
+      repositionPanel();
+      requestAnimationFrame(repositionPanel);
+    };
+
+    entry.close = () => {
+      if (!entry.isOpen) return;
+      entry.isOpen = false;
+      panel.classList.remove("is-open");
+      panel.hidden = true;
+      panel.style.top = "-9999px";
+      panel.style.left = "-9999px";
+      panel.style.removeProperty("--color-popover-origin");
+      toggle.setAttribute("aria-expanded", "false");
+      toggle.classList.remove("is-open");
+    };
+
     const handleToggle = (event) => {
       event.preventDefault();
       if (toggle.disabled) return;
@@ -1173,7 +1215,18 @@ export function initMapping({ editor }) {
         entry.open();
       }
     };
+
     addListener(toggle, "click", handleToggle);
+    addListener(window, "resize", repositionPanel);
+    addListener(window, "scroll", repositionPanel, true);
+    addListener(panel, "pointerdown", stopPropagation);
+    addListener(panel, "mousedown", stopPropagation);
+    addListener(panel, "touchstart", stopPropagation);
+    addListener(panel, "click", stopPropagation);
+
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.classList.remove("is-open");
+    panel.hidden = true;
     colorPopovers.push(entry);
     return entry;
   }
@@ -1183,11 +1236,20 @@ export function initMapping({ editor }) {
   };
 
   const handleGlobalPointerDown = (event) => {
-    if (colorPopovers.some((entry) => entry.isOpen)) {
-      const inside = colorPopovers.some((entry) => entry.isOpen && (entry.panel.contains(event.target) || entry.toggle.contains(event.target)));
-      if (!inside) {
-        closeColorPopovers();
+    if (!colorPopovers.some((entry) => entry.isOpen)) return;
+    const path = typeof event.composedPath === "function" ? event.composedPath() : null;
+    const inside = colorPopovers.some((entry) => {
+      if (!entry.isOpen) return false;
+      if (entry.panel.contains(event.target) || entry.toggle.contains(event.target)) {
+        return true;
       }
+      if (path) {
+        return path.includes(entry.panel) || path.includes(entry.toggle);
+      }
+      return false;
+    });
+    if (!inside) {
+      closeColorPopovers();
     }
   };
 
@@ -1200,100 +1262,75 @@ export function initMapping({ editor }) {
   addListener(document, "pointerdown", handleGlobalPointerDown);
   addListener(document, "keydown", handleGlobalKeyDown);
 
-  const sliderValueFromOpacity = (alpha) => Math.round(clampOpacity(alpha) * 100);
-
-  function updateEditorColorDisplay(color, opacity = state.draftOpacity ?? DEFAULT_SHAPE_OPACITY) {
-    const normalized = normalizeHexColor(color, DEFAULT_SHAPE_COLOR);
-    if (editorShapeColorInput && editorShapeColorInput.value !== normalized) {
-      editorShapeColorInput.value = normalized;
-    }
+  function updateEditorColorDisplay(color, opacity = (typeof state !== "undefined" && state?.draftOpacity) ?? DEFAULT_SHAPE_OPACITY) {
+    const normalizedColor = normalizeHexColor(color, DEFAULT_SHAPE_COLOR);
+    const normalizedOpacity = clampOpacity(opacity);
     if (editorColorChip) {
-      editorColorChip.style.setProperty("--chip-color", normalized);
+      editorColorChip.style.setProperty("--chip-color", hexToRgba(normalizedColor, normalizedOpacity));
     }
     if (editorDetailForm) {
-      editorDetailForm.style.setProperty("--shape-accent-color", normalized);
+      editorDetailForm.style.setProperty("--shape-accent-color", normalizedColor);
     }
-    setSliderGradient(editorShapeOpacityInput, normalized);
-    updateOpacityChip(editorColorPanel, normalized, opacity);
+    if (editorColorPicker) {
+      editorColorPicker.setColor(normalizedColor, normalizedOpacity, { emit: false, source: "program" });
+    }
   }
 
-  function updateAssignmentColorDisplay(color, opacity = state.draftOpacity ?? DEFAULT_SHAPE_OPACITY) {
-    const normalized = normalizeHexColor(color, DEFAULT_SHAPE_COLOR);
-    if (assignmentShapeColorInput && assignmentShapeColorInput.value !== normalized) {
-      assignmentShapeColorInput.value = normalized;
-    }
+  function updateAssignmentColorDisplay(color, opacity = (typeof state !== "undefined" && state?.draftOpacity) ?? DEFAULT_SHAPE_OPACITY) {
+    const normalizedColor = normalizeHexColor(color, DEFAULT_SHAPE_COLOR);
+    const normalizedOpacity = clampOpacity(opacity);
     if (assignmentColorChip) {
-      assignmentColorChip.style.setProperty("--chip-color", normalized);
+      assignmentColorChip.style.setProperty("--chip-color", hexToRgba(normalizedColor, normalizedOpacity));
     }
     if (assignmentBody) {
-      assignmentBody.style.setProperty("--shape-accent-color", normalized);
+      assignmentBody.style.setProperty("--shape-accent-color", normalizedColor);
     }
-    setSliderGradient(assignmentShapeOpacityInput, normalized);
-    updateOpacityChip(assignmentColorPanel, normalized, opacity);
+    if (assignmentColorPicker) {
+      assignmentColorPicker.setColor(normalizedColor, normalizedOpacity, { emit: false, source: "program" });
+    }
   }
 
-  function updateColorDisplays(color, opacity = state.draftOpacity ?? DEFAULT_SHAPE_OPACITY) {
+  function updateColorDisplays(color, opacity = (typeof state !== "undefined" && state?.draftOpacity) ?? DEFAULT_SHAPE_OPACITY) {
     updateEditorColorDisplay(color, opacity);
     updateAssignmentColorDisplay(color, opacity);
   }
 
-  function updateEditorOpacityDisplay(opacity, color = (typeof state !== "undefined" && state?.draftColor) || DEFAULT_SHAPE_COLOR) {
-    const sliderValue = sliderValueFromOpacity(opacity);
-    if (editorShapeOpacityInput && editorShapeOpacityInput.value !== `${sliderValue}`) {
-      editorShapeOpacityInput.value = `${sliderValue}`;
-    }
-    if (editorShapeOpacityValue) {
-      editorShapeOpacityValue.textContent = `${sliderValue}%`;
-    }
-    updateOpacityChip(editorColorPanel, color, opacity);
-  }
-
-  function updateAssignmentOpacityDisplay(opacity, color = (typeof state !== "undefined" && state?.draftColor) || DEFAULT_SHAPE_COLOR) {
-    const sliderValue = sliderValueFromOpacity(opacity);
-    if (assignmentShapeOpacityInput && assignmentShapeOpacityInput.value !== `${sliderValue}`) {
-      assignmentShapeOpacityInput.value = `${sliderValue}`;
-    }
-    if (assignmentShapeOpacityValue) {
-      assignmentShapeOpacityValue.textContent = `${sliderValue}%`;
-    }
-    updateOpacityChip(assignmentColorPanel, color, opacity);
-  }
-
-  function updateOpacityDisplays(opacity) {
-    const color = (typeof state !== "undefined" && state?.draftColor) || DEFAULT_SHAPE_COLOR;
-    updateEditorOpacityDisplay(opacity, color);
-    updateAssignmentOpacityDisplay(opacity, color);
-  }
-
-  if (editorShapeColorInput) {
-    editorShapeColorInput.value = DEFAULT_SHAPE_COLOR;
-    editorShapeColorInput.disabled = true;
-  }
   if (editorColorChip) {
     editorColorChip.disabled = true;
-    editorColorChip.style.setProperty("--chip-color", DEFAULT_SHAPE_COLOR);
-  }
-  if (editorShapeOpacityInput) {
-    editorShapeOpacityInput.value = `${DEFAULT_SHAPE_OPACITY_SLIDER}`;
-    editorShapeOpacityInput.disabled = true;
-  }
-  if (editorShapeOpacityValue) {
-    editorShapeOpacityValue.textContent = `${DEFAULT_SHAPE_OPACITY_SLIDER}%`;
-  }
-  if (assignmentShapeColorInput) {
-    assignmentShapeColorInput.value = DEFAULT_SHAPE_COLOR;
-    assignmentShapeColorInput.disabled = true;
+    editorColorChip.style.setProperty("--chip-color", hexToRgba(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY));
   }
   if (assignmentColorChip) {
     assignmentColorChip.disabled = true;
-    assignmentColorChip.style.setProperty("--chip-color", DEFAULT_SHAPE_COLOR);
+    assignmentColorChip.style.setProperty("--chip-color", hexToRgba(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY));
   }
-  if (assignmentShapeOpacityInput) {
-    assignmentShapeOpacityInput.value = `${DEFAULT_SHAPE_OPACITY_SLIDER}`;
-    assignmentShapeOpacityInput.disabled = true;
+
+  editorColorPicker = createRgbaPicker({
+    root: editorPickerRoot,
+    initialHex: DEFAULT_SHAPE_COLOR,
+    initialAlpha: DEFAULT_SHAPE_OPACITY,
+    onChange: (payload) => {
+      if (!payload) return;
+      handleEditorColorPickerInput(payload);
+    }
+  });
+
+  assignmentColorPicker = createRgbaPicker({
+    root: assignmentPickerRoot,
+    initialHex: DEFAULT_SHAPE_COLOR,
+    initialAlpha: DEFAULT_SHAPE_OPACITY,
+    onChange: (payload) => {
+      if (!payload) return;
+      handleAssignmentColorPickerInput(payload);
+    }
+  });
+
+  if (editorColorPicker) {
+    editorColorPicker.setColor(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY, { emit: false, source: "program" });
+    editorColorPicker.setDisabled(true);
   }
-  if (assignmentShapeOpacityValue) {
-    assignmentShapeOpacityValue.textContent = `${DEFAULT_SHAPE_OPACITY_SLIDER}%`;
+  if (assignmentColorPicker) {
+    assignmentColorPicker.setColor(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY, { emit: false, source: "program" });
+    assignmentColorPicker.setDisabled(true);
   }
 
   registerColorPopover(editorColorChip, editorColorPanel);
@@ -1355,31 +1392,21 @@ export function initMapping({ editor }) {
     if (editorDetailForm) {
       editorDetailForm.style.display = hasShape ? "" : "none";
     }
-    if (editorShapeColorInput) {
-      editorShapeColorInput.disabled = !hasShape;
-      if (!hasShape) {
-        editorShapeColorInput.value = DEFAULT_SHAPE_COLOR;
-      }
-    }
     if (editorColorChip) {
       editorColorChip.disabled = !hasShape;
       if (!hasShape) {
-        editorColorChip.style.setProperty("--chip-color", DEFAULT_SHAPE_COLOR);
+        editorColorChip.style.setProperty("--chip-color", hexToRgba(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY));
       }
     }
-    if (editorShapeOpacityInput) {
-      editorShapeOpacityInput.disabled = !hasShape;
+    if (editorColorPicker) {
+      editorColorPicker.setDisabled(!hasShape);
       if (!hasShape) {
-        editorShapeOpacityInput.value = `${DEFAULT_SHAPE_OPACITY_SLIDER}`;
+        editorColorPicker.setColor(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY, { emit: false, source: "program" });
       }
-    }
-    if (!hasShape && editorShapeOpacityValue) {
-      editorShapeOpacityValue.textContent = `${DEFAULT_SHAPE_OPACITY_SLIDER}%`;
     }
     if (!hasShape) {
       state.draftColor = DEFAULT_SHAPE_COLOR;
       state.draftOpacity = DEFAULT_SHAPE_OPACITY;
-      updateOpacityDisplays(DEFAULT_SHAPE_OPACITY);
       closeColorPopovers();
       updateColorDisplays(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY);
     }
@@ -1512,15 +1539,14 @@ export function initMapping({ editor }) {
       }
       state.draftColor = DEFAULT_SHAPE_COLOR;
       state.draftOpacity = DEFAULT_SHAPE_OPACITY;
-      if (editorShapeColorInput) {
-        editorShapeColorInput.disabled = true;
-        editorShapeColorInput.value = DEFAULT_SHAPE_COLOR;
+      if (editorColorPicker) {
+        editorColorPicker.setDisabled(true);
+        editorColorPicker.setColor(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY, { emit: false, source: "program" });
       }
-      if (assignmentShapeColorInput) {
-        assignmentShapeColorInput.value = DEFAULT_SHAPE_COLOR;
+      if (assignmentColorPicker) {
+        assignmentColorPicker.setColor(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY, { emit: false, source: "program" });
       }
       updateColorDisplays(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY);
-      updateOpacityDisplays(DEFAULT_SHAPE_OPACITY);
       applyMidiSelections();
       return;
     }
@@ -1545,15 +1571,14 @@ export function initMapping({ editor }) {
     const opacity = getShapeOpacity(shape, DEFAULT_SHAPE_OPACITY);
     state.draftColor = color;
     state.draftOpacity = opacity;
-    if (editorShapeColorInput) {
-      editorShapeColorInput.disabled = false;
-      editorShapeColorInput.value = color;
+    if (editorColorPicker) {
+      editorColorPicker.setDisabled(false);
+      editorColorPicker.setColor(color, opacity, { emit: false, source: "program" });
     }
-    if (assignmentShapeColorInput) {
-      assignmentShapeColorInput.value = color;
+    if (assignmentColorPicker) {
+      assignmentColorPicker.setColor(color, opacity, { emit: false, source: "program" });
     }
     updateColorDisplays(color, opacity);
-    updateOpacityDisplays(opacity);
     renderEventList(editorEventList, interaction.events);
     isSyncingEditorForm = false;
     applyMidiSelections();
@@ -1624,17 +1649,14 @@ export function initMapping({ editor }) {
     const normalizedOpacity = clampOpacity(opacity);
     state.draftColor = normalizedColor;
     state.draftOpacity = normalizedOpacity;
-    if (assignmentShapeColorInput) {
-      assignmentShapeColorInput.disabled = false;
-    }
     if (assignmentColorChip) {
       assignmentColorChip.disabled = false;
     }
-    if (assignmentShapeOpacityInput) {
-      assignmentShapeOpacityInput.disabled = false;
+    if (assignmentColorPicker) {
+      assignmentColorPicker.setDisabled(false);
+      assignmentColorPicker.setColor(normalizedColor, normalizedOpacity, { emit: false, source: "program" });
     }
     updateColorDisplays(normalizedColor, normalizedOpacity);
-    updateOpacityDisplays(normalizedOpacity);
   };
 
   const closeModal = () => {
@@ -1654,23 +1676,15 @@ export function initMapping({ editor }) {
       modal.releasePointerCapture(dragContext.pointerId);
     }
     dragContext = null;
-    if (assignmentShapeColorInput) {
-      assignmentShapeColorInput.disabled = true;
-      assignmentShapeColorInput.value = DEFAULT_SHAPE_COLOR;
-    }
     if (assignmentColorChip) {
       assignmentColorChip.disabled = true;
-      assignmentColorChip.style.setProperty("--chip-color", DEFAULT_SHAPE_COLOR);
+      assignmentColorChip.style.setProperty("--chip-color", hexToRgba(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY));
     }
-    if (assignmentShapeOpacityInput) {
-      assignmentShapeOpacityInput.disabled = true;
-      assignmentShapeOpacityInput.value = `${DEFAULT_SHAPE_OPACITY_SLIDER}`;
+    if (assignmentColorPicker) {
+      assignmentColorPicker.setDisabled(true);
+      assignmentColorPicker.setColor(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY, { emit: false, source: "program" });
     }
-    if (assignmentShapeOpacityValue) {
-      assignmentShapeOpacityValue.textContent = `${DEFAULT_SHAPE_OPACITY_SLIDER}%`;
-    }
-    updateAssignmentOpacityDisplay(DEFAULT_SHAPE_OPACITY);
-    updateAssignmentColorDisplay(DEFAULT_SHAPE_COLOR);
+    updateAssignmentColorDisplay(DEFAULT_SHAPE_COLOR, DEFAULT_SHAPE_OPACITY);
     closeColorPopovers();
   };
 
@@ -1733,8 +1747,10 @@ export function initMapping({ editor }) {
   };
 
   const handleSelectionChange = (payload) => {
+    const previousId = state.activeShapeId;
     const selection = Array.isArray(payload?.selection) ? payload.selection : [];
     const nextId = selection[0] || null;
+    const selectionChanged = nextId !== previousId;
     state.activeShapeId = nextId;
     updateOpenButtonState();
     renderShapeList();
@@ -1752,7 +1768,9 @@ export function initMapping({ editor }) {
         }
       }
     }
-    closeColorPopovers();
+    if (selectionChanged) {
+      closeColorPopovers();
+    }
     evaluateShapeInteractions();
   };
 
@@ -1979,7 +1997,6 @@ export function initMapping({ editor }) {
     state.draftColor = normalizedColor;
     state.draftOpacity = normalizedOpacity;
     updateColorDisplays(normalizedColor, normalizedOpacity);
-    updateOpacityDisplays(normalizedOpacity);
     if (!state.activeShapeId || typeof editor.updateShape !== "function") {
       return;
     }
@@ -1997,43 +2014,19 @@ export function initMapping({ editor }) {
     isSyncingColor = false;
   };
 
-  const handleEditorShapeColorInput = (event) => {
-    if (isSyncingEditorForm) return;
-    const value = event.target?.value;
-    if (!value) return;
-    const normalized = normalizeHexColor(value, state.draftColor || DEFAULT_SHAPE_COLOR);
-    if (event.target.value !== normalized) {
-      event.target.value = normalized;
-    }
-    commitShapeAppearance({ color: normalized });
-  };
+  function handleEditorColorPickerInput(payload) {
+    if (isSyncingEditorForm || !payload) return;
+    const normalizedColor = normalizeHexColor(payload.hex || state.draftColor || DEFAULT_SHAPE_COLOR, state.draftColor || DEFAULT_SHAPE_COLOR);
+    const normalizedOpacity = clampOpacity(payload.alpha ?? state.draftOpacity ?? DEFAULT_SHAPE_OPACITY);
+    commitShapeAppearance({ color: normalizedColor, opacity: normalizedOpacity });
+  }
 
-  const handleAssignmentShapeColorInput = (event) => {
-    if (!state.modalOpen) return;
-    const value = event.target?.value;
-    if (!value) return;
-    const normalized = normalizeHexColor(value, state.draftColor || DEFAULT_SHAPE_COLOR);
-    if (event.target.value !== normalized) {
-      event.target.value = normalized;
-    }
-    commitShapeAppearance({ color: normalized });
-  };
-
-  const handleEditorShapeOpacityInput = (event) => {
-    if (isSyncingEditorForm) return;
-    const value = event.target?.value;
-    if (value === undefined || value === null) return;
-    const normalizedOpacity = clampOpacity(Number.parseFloat(`${value}`) / 100);
-    commitShapeAppearance({ opacity: normalizedOpacity });
-  };
-
-  const handleAssignmentShapeOpacityInput = (event) => {
-    if (!state.modalOpen) return;
-    const value = event.target?.value;
-    if (value === undefined || value === null) return;
-    const normalizedOpacity = clampOpacity(Number.parseFloat(`${value}`) / 100);
-    commitShapeAppearance({ opacity: normalizedOpacity });
-  };
+  function handleAssignmentColorPickerInput(payload) {
+    if (!state.modalOpen || !payload) return;
+    const normalizedColor = normalizeHexColor(payload.hex || state.draftColor || DEFAULT_SHAPE_COLOR, state.draftColor || DEFAULT_SHAPE_COLOR);
+    const normalizedOpacity = clampOpacity(payload.alpha ?? state.draftOpacity ?? DEFAULT_SHAPE_OPACITY);
+    commitShapeAppearance({ color: normalizedColor, opacity: normalizedOpacity });
+  }
 
   const handleAssignmentStreamChange = () => {
     if (state.isSyncing) return;
@@ -2676,18 +2669,10 @@ export function initMapping({ editor }) {
   addListener(shapeNameInput, "change", normalizeAssignmentName);
   addListener(streamSelect, "change", handleAssignmentStreamChange);
   addListener(landmarkSelect, "change", handleAssignmentLandmarkChange);
-  addListener(assignmentShapeColorInput, "input", handleAssignmentShapeColorInput);
-  addListener(assignmentShapeColorInput, "change", handleAssignmentShapeColorInput);
-  addListener(assignmentShapeOpacityInput, "input", handleAssignmentShapeOpacityInput);
-  addListener(assignmentShapeOpacityInput, "change", handleAssignmentShapeOpacityInput);
   addListener(assignmentMidiPortSelect, "change", handleAssignmentMidiPortChange);
   addListener(assignmentMidiPortRefreshButton, "click", refreshMidiPorts);
   addListener(editorShapeMidiSelect, "change", handleEditorShapeMidiChange);
   addListener(editorShapeMidiRefreshButton, "click", refreshMidiPorts);
-  addListener(editorShapeColorInput, "input", handleEditorShapeColorInput);
-  addListener(editorShapeColorInput, "change", handleEditorShapeColorInput);
-  addListener(editorShapeOpacityInput, "input", handleEditorShapeOpacityInput);
-  addListener(editorShapeOpacityInput, "change", handleEditorShapeOpacityInput);
   if (assignmentHandle) {
     addListener(assignmentHandle, "pointerdown", startModalDrag);
   }
@@ -2744,6 +2729,12 @@ export function initMapping({ editor }) {
 
   return {
     dispose() {
+      if (editorColorPicker && typeof editorColorPicker.destroy === "function") {
+        editorColorPicker.destroy();
+      }
+      if (assignmentColorPicker && typeof assignmentColorPicker.destroy === "function") {
+        assignmentColorPicker.destroy();
+      }
       listeners.forEach((remove) => remove());
       if (typeof editor.off === "function") {
         editor.off("selectionchange", handleSelectionChange);
