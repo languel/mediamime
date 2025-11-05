@@ -1,1285 +1,1974 @@
-const MODAL_OFFSET = 18;
-const VIEWPORT_MARGIN = 16;
-
-const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
-
-const clamp01 = (value) => Math.min(Math.max(value, 0), 1);
-const toInt = (value, fallback = 0) => {
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) ? parsed : fallback;
-};
-const createId = () => {
+const ensureUuid = () => {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
   }
-  return `map-${Math.random().toString(36).slice(2, 10)}`;
+  return `evt-${Math.random().toString(36).slice(2, 10)}`;
 };
 
-const SOURCE_OPTIONS = [
-  { value: "mouseInside", label: "Mouse Inside" },
-  { value: "mouseDrag", label: "Mouse Drag (axis)" },
-  { value: "mouseX", label: "Mouse X (axis)" },
-  { value: "mouseY", label: "Mouse Y (axis)" },
-  { value: "mouseDown", label: "Mouse Down" },
-  { value: "mouseUp", label: "Mouse Up" },
-  { value: "mouseClick", label: "Mouse Click" },
-  { value: "keyDown", label: "Key Down" },
-  { value: "keyUp", label: "Key Up" }
-];
-
-const MIDI_TYPE_OPTIONS = [
-  { value: "note", label: "MIDI Note" },
-  { value: "cc", label: "MIDI CC" }
-];
-
-const NOTE_MODE_OPTIONS = [
-  { value: "noteOn", label: "Note On" },
-  { value: "noteOff", label: "Note Off" },
-  { value: "pulse", label: "Note Pulse" }
-];
-
-const DEFAULT_MAPPING = {
-  sourceType: "mouseClick",
-  requireInside: true,
-  key: "",
-  midiType: "note",
-  channel: 1,
-  note: 60,
-  velocity: 100,
-  offVelocity: 0,
-  noteMode: "noteOn",
-  noteDurationMs: 400,
-  cc: 1,
-  ccValue: 127,
-  ccMode: "constant"
+const clampRange = (value, min, max) => {
+  const number = Number.isFinite(value) ? value : Number.parseFloat(`${value}`) || 0;
+  return Math.min(max, Math.max(min, number));
 };
 
-const clampMidiChannel = (value) => clamp(Math.round(value), 1, 16);
-const clampMidiValue = (value) => clamp(Math.round(value), 0, 127);
+const clampUnit = (value) => clampRange(value, 0, 1);
 
-const createMapping = (overrides = {}) => ({
-  id: createId(),
-  ...DEFAULT_MAPPING,
-  ...overrides
+const escapeHtml = (value) =>
+  String(value ?? "").replace(/[&<>"']/g, (match) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[match]));
+
+const POSE_LANDMARKS_LIST = [
+  { key: "nose", label: "Nose", index: 0 },
+  { key: "left_eye_inner", label: "Left eye inner", index: 1 },
+  { key: "left_eye", label: "Left eye", index: 2 },
+  { key: "left_eye_outer", label: "Left eye outer", index: 3 },
+  { key: "right_eye_inner", label: "Right eye inner", index: 4 },
+  { key: "right_eye", label: "Right eye", index: 5 },
+  { key: "right_eye_outer", label: "Right eye outer", index: 6 },
+  { key: "left_ear", label: "Left ear", index: 7 },
+  { key: "right_ear", label: "Right ear", index: 8 },
+  { key: "mouth_left", label: "Mouth (left)", index: 9 },
+  { key: "mouth_right", label: "Mouth (right)", index: 10 },
+  { key: "left_shoulder", label: "Left shoulder", index: 11 },
+  { key: "right_shoulder", label: "Right shoulder", index: 12 },
+  { key: "left_elbow", label: "Left elbow", index: 13 },
+  { key: "right_elbow", label: "Right elbow", index: 14 },
+  { key: "left_wrist", label: "Left wrist", index: 15 },
+  { key: "right_wrist", label: "Right wrist", index: 16 },
+  { key: "left_pinky", label: "Left pinky", index: 17 },
+  { key: "right_pinky", label: "Right pinky", index: 18 },
+  { key: "left_index", label: "Left index", index: 19 },
+  { key: "right_index", label: "Right index", index: 20 },
+  { key: "left_thumb", label: "Left thumb", index: 21 },
+  { key: "right_thumb", label: "Right thumb", index: 22 },
+  { key: "left_hip", label: "Left hip", index: 23 },
+  { key: "right_hip", label: "Right hip", index: 24 },
+  { key: "left_knee", label: "Left knee", index: 25 },
+  { key: "right_knee", label: "Right knee", index: 26 },
+  { key: "left_ankle", label: "Left ankle", index: 27 },
+  { key: "right_ankle", label: "Right ankle", index: 28 },
+  { key: "left_heel", label: "Left heel", index: 29 },
+  { key: "right_heel", label: "Right heel", index: 30 },
+  { key: "left_foot_index", label: "Left foot index", index: 31 },
+  { key: "right_foot_index", label: "Right foot index", index: 32 }
+];
+
+const HAND_LANDMARKS_LIST = [
+  { key: "wrist", label: "Wrist", index: 0 },
+  { key: "thumb_cmc", label: "Thumb CMC", index: 1 },
+  { key: "thumb_mcp", label: "Thumb MCP", index: 2 },
+  { key: "thumb_ip", label: "Thumb IP", index: 3 },
+  { key: "thumb_tip", label: "Thumb tip", index: 4 },
+  { key: "index_mcp", label: "Index MCP", index: 5 },
+  { key: "index_pip", label: "Index PIP", index: 6 },
+  { key: "index_dip", label: "Index DIP", index: 7 },
+  { key: "index_tip", label: "Index tip", index: 8 },
+  { key: "middle_mcp", label: "Middle MCP", index: 9 },
+  { key: "middle_pip", label: "Middle PIP", index: 10 },
+  { key: "middle_dip", label: "Middle DIP", index: 11 },
+  { key: "middle_tip", label: "Middle tip", index: 12 },
+  { key: "ring_mcp", label: "Ring MCP", index: 13 },
+  { key: "ring_pip", label: "Ring PIP", index: 14 },
+  { key: "ring_dip", label: "Ring DIP", index: 15 },
+  { key: "ring_tip", label: "Ring tip", index: 16 },
+  { key: "pinky_mcp", label: "Pinky MCP", index: 17 },
+  { key: "pinky_pip", label: "Pinky PIP", index: 18 },
+  { key: "pinky_dip", label: "Pinky DIP", index: 19 },
+  { key: "pinky_tip", label: "Pinky tip", index: 20 }
+];
+
+const FACE_REFERENCE_POINTS = [
+  { key: "centroid", label: "Face centroid" },
+  { key: "nose_tip", label: "Nose tip", index: 1 }
+];
+
+const POINTER_REFERENCE_POINTS = [
+  { key: "position", label: "Pointer position" },
+  { key: "button", label: "Pointer button (inside shape)" }
+];
+
+const KEYBOARD_DIGIT_KEYS = Array.from({ length: 10 }, (_, index) => ({
+  key: `Digit${index}`,
+  label: `${index}`
+}));
+
+const KEYBOARD_LETTER_KEYS = Array.from("ABCDEFGHIJKLMNOPQRSTUVWXYZ").map((char) => ({
+  key: `Key${char}`,
+  label: char
+}));
+
+const KEYBOARD_REFERENCE_KEYS = [
+  { key: "Space", label: "Space" },
+  { key: "Enter", label: "Enter" },
+  { key: "Escape", label: "Escape" },
+  { key: "Tab", label: "Tab" },
+  { key: "Backspace", label: "Backspace" },
+  { key: "ArrowUp", label: "Arrow Up" },
+  { key: "ArrowDown", label: "Arrow Down" },
+  { key: "ArrowLeft", label: "Arrow Left" },
+  { key: "ArrowRight", label: "Arrow Right" },
+  { key: "ShiftLeft", label: "Shift (Left)" },
+  { key: "ShiftRight", label: "Shift (Right)" },
+  { key: "AltLeft", label: "Option / Alt (Left)" },
+  { key: "AltRight", label: "Option / Alt (Right)" },
+  { key: "ControlLeft", label: "Control (Left)" },
+  { key: "ControlRight", label: "Control (Right)" },
+  { key: "MetaLeft", label: "Command (Left)" },
+  { key: "MetaRight", label: "Command (Right)" },
+  { key: "NumpadEnter", label: "Numpad Enter" },
+  ...KEYBOARD_DIGIT_KEYS,
+  ...KEYBOARD_LETTER_KEYS
+];
+
+const STREAM_DEFINITIONS = {
+  pose: {
+    id: "pose",
+    label: "Pose Landmarks",
+    options: POSE_LANDMARKS_LIST
+  },
+  leftHand: {
+    id: "leftHand",
+    label: "Left Hand",
+    options: HAND_LANDMARKS_LIST
+  },
+  rightHand: {
+    id: "rightHand",
+    label: "Right Hand",
+    options: HAND_LANDMARKS_LIST
+  },
+  face: {
+    id: "face",
+    label: "Face (centroid)",
+    options: FACE_REFERENCE_POINTS
+  },
+  pointer: {
+    id: "pointer",
+    label: "Pointer Input",
+    options: POINTER_REFERENCE_POINTS
+  },
+  keyboard: {
+    id: "keyboard",
+    label: "Keyboard",
+    options: KEYBOARD_REFERENCE_KEYS
+  }
+};
+
+const EVENT_TYPE_OPTIONS = [
+  { id: "none", label: "None" },
+  { id: "midiNote", label: "MIDI Note" },
+  { id: "midiCc", label: "MIDI CC" }
+];
+
+const EVENT_TRIGGER_OPTIONS = [
+  { id: "enter", label: "Enter" },
+  { id: "exit", label: "Exit" },
+  { id: "enterExit", label: "Enter + Exit" },
+  { id: "inside", label: "While Inside" }
+];
+
+const VALUE_SOURCE_OPTIONS = [
+  { id: "constant", label: "Constant" },
+  { id: "normX", label: "Norm X" },
+  { id: "normY", label: "Norm Y" },
+  { id: "distance", label: "Distance" }
+];
+
+const RAD_TO_DEG = 180 / Math.PI;
+const CONTINUOUS_TRIGGER_INTERVAL_MS = 120;
+const MIN_METRIC_SPAN = 1e-4;
+const DEFAULT_METRICS = Object.freeze({ normX: 0, normY: 0, distance: 0 });
+
+const normalizeAngle = (angle) => {
+  if (!Number.isFinite(angle)) return 0;
+  let value = angle;
+  while (value <= -Math.PI) value += Math.PI * 2;
+  while (value > Math.PI) value -= Math.PI * 2;
+  return value;
+};
+
+const rotateVector = (vector, angle) => {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return {
+    x: vector.x * cos - vector.y * sin,
+    y: vector.x * sin + vector.y * cos
+  };
+};
+
+const rotatePointAround = (px, py, cx, cy, angle) => {
+  const translated = {
+    x: px - cx,
+    y: py - cy
+  };
+  const rotated = rotateVector(translated, angle);
+  return {
+    x: rotated.x + cx,
+    y: rotated.y + cy
+  };
+};
+
+const normalizeVertices = (vertices) => {
+  if (!Array.isArray(vertices)) return [];
+  const normalized = [];
+  for (const vertex of vertices) {
+    const x = clampUnit(vertex?.x ?? 0);
+    const y = clampUnit(vertex?.y ?? 0);
+    if (!normalized.length) {
+      normalized.push({ x, y });
+      continue;
+    }
+    const prev = normalized[normalized.length - 1];
+    if (Math.abs(prev.x - x) <= 1e-6 && Math.abs(prev.y - y) <= 1e-6) {
+      normalized[normalized.length - 1] = { x, y };
+    } else {
+      normalized.push({ x, y });
+    }
+  }
+  return normalized;
+};
+
+const getSqSegDist = (p, p1, p2) => {
+  let x = p1.x;
+  let y = p1.y;
+  let dx = p2.x - x;
+  let dy = p2.y - y;
+  if (dx !== 0 || dy !== 0) {
+    const t = ((p.x - x) * dx + (p.y - y) * dy) / (dx * dx + dy * dy);
+    if (t > 1) {
+      x = p2.x;
+      y = p2.y;
+    } else if (t > 0) {
+      x += dx * t;
+      y += dy * t;
+    }
+  }
+  dx = p.x - x;
+  dy = p.y - y;
+  return dx * dx + dy * dy;
+};
+
+const pointInPolygon = (vertices, point) => {
+  let inside = false;
+  for (let i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
+    const xi = vertices[i].x;
+    const yi = vertices[i].y;
+    const xj = vertices[j].x;
+    const yj = vertices[j].y;
+    const intersect = ((yi > point.y) !== (yj > point.y)) && (point.x < ((xj - xi) * (point.y - yi)) / ((yj - yi) || 1e-9) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+};
+
+const pointNearPolyline = (vertices, point, tolerance) => {
+  const tolSq = tolerance * tolerance;
+  for (let i = 0; i < vertices.length - 1; i++) {
+    if (getSqSegDist(point, vertices[i], vertices[i + 1]) <= tolSq) {
+      return true;
+    }
+  }
+  if (vertices.length > 2 && getSqSegDist(point, vertices[vertices.length - 1], vertices[0]) <= tolSq) {
+    return true;
+  }
+  return false;
+};
+
+const getShapeAabb = (shape) => {
+  if (!shape) return null;
+  if (shape.type === "rect" || shape.type === "ellipse") {
+    return {
+      minX: clampUnit(shape.x ?? 0),
+      minY: clampUnit(shape.y ?? 0),
+      maxX: clampUnit((shape.x ?? 0) + (shape.width ?? 0)),
+      maxY: clampUnit((shape.y ?? 0) + (shape.height ?? 0))
+    };
+  }
+  if (shape.type === "line" || shape.type === "path" || shape.type === "polyline") {
+    const vertices = normalizeVertices(shape.points || shape.vertices || []);
+    if (!vertices.length) return null;
+    let minX = 1;
+    let minY = 1;
+    let maxX = 0;
+    let maxY = 0;
+    vertices.forEach((vertex) => {
+      minX = Math.min(minX, vertex.x);
+      minY = Math.min(minY, vertex.y);
+      maxX = Math.max(maxX, vertex.x);
+      maxY = Math.max(maxY, vertex.y);
+    });
+    return { minX, minY, maxX, maxY };
+  }
+  return null;
+};
+
+const shapeContainsPoint = (shape, point, tolerance = 0.01) => {
+  if (!shape) return false;
+  if (shape.type === "rect" || shape.type === "ellipse") {
+    const rotation = normalizeAngle(shape.rotation || 0);
+    const width = shape.width ?? 0;
+    const height = shape.height ?? 0;
+    if (width <= 0 || height <= 0) return false;
+    const cx = (shape.x ?? 0) + width / 2;
+    const cy = (shape.y ?? 0) + height / 2;
+    let localX = point.x;
+    let localY = point.y;
+    if (rotation) {
+      const rotated = rotatePointAround(point.x, point.y, cx, cy, -rotation);
+      localX = rotated.x;
+      localY = rotated.y;
+    }
+    const dx = localX - cx;
+    const dy = localY - cy;
+    const halfWidth = width / 2;
+    const halfHeight = height / 2;
+    if (shape.type === "ellipse") {
+      const nx = halfWidth > 0 ? dx / halfWidth : 0;
+      const ny = halfHeight > 0 ? dy / halfHeight : 0;
+      return nx * nx + ny * ny <= 1;
+    }
+    return Math.abs(dx) <= halfWidth && Math.abs(dy) <= halfHeight;
+  }
+  const vertices = normalizeVertices(shape.points || shape.vertices);
+  if (!vertices.length) return false;
+  if (shape.closed && vertices.length >= 3) {
+    if (pointInPolygon(vertices, point)) return true;
+  }
+  return pointNearPolyline(vertices, point, tolerance);
+};
+
+const getShapeCenter = (shape) => {
+  if (shape.type === "rect" || shape.type === "ellipse") {
+    return {
+      x: (shape.x ?? 0) + (shape.width ?? 0) / 2,
+      y: (shape.y ?? 0) + (shape.height ?? 0) / 2
+    };
+  }
+  const bounds = getShapeAabb(shape);
+  if (!bounds) return { x: 0.5, y: 0.5 };
+  return {
+    x: clampUnit((bounds.minX + bounds.maxX) / 2),
+    y: clampUnit((bounds.minY + bounds.maxY) / 2)
+  };
+};
+
+const computeShapeBounds = (shape) => {
+  if (!shape) {
+    return { minX: 0, minY: 0, width: 1, height: 1, centerX: 0.5, centerY: 0.5 };
+  }
+  const bounds = getShapeAabb(shape) || { minX: 0, minY: 0, maxX: 1, maxY: 1 };
+  const width = Math.max((bounds.maxX ?? 0) - (bounds.minX ?? 0), MIN_METRIC_SPAN);
+  const height = Math.max((bounds.maxY ?? 0) - (bounds.minY ?? 0), MIN_METRIC_SPAN);
+  const centerX = clampUnit((bounds.minX ?? 0) + width / 2);
+  const centerY = clampUnit((bounds.minY ?? 0) + height / 2);
+  return { minX: bounds.minX ?? 0, minY: bounds.minY ?? 0, width, height, centerX, centerY };
+};
+
+const computeShapeMetrics = (shape, point) => {
+  if (!shape || !point) {
+    return { normX: 0, normY: 0, distance: 0 };
+  }
+  const bounds = computeShapeBounds(shape);
+  const px = clampUnit(point.x ?? 0);
+  const py = clampUnit(point.y ?? 0);
+  const hasWidth = bounds.width > MIN_METRIC_SPAN;
+  const hasHeight = bounds.height > MIN_METRIC_SPAN;
+  const normX = hasWidth ? clampUnit((px - bounds.minX) / bounds.width) : 0.5;
+  const normY = hasHeight ? clampUnit((py - bounds.minY) / bounds.height) : 0.5;
+  const radius = Math.max(bounds.width, bounds.height) / 2;
+  const distance = radius > MIN_METRIC_SPAN
+    ? clampUnit(Math.hypot(px - bounds.centerX, py - bounds.centerY) / radius)
+    : 0;
+  return { normX, normY, distance };
+};
+
+const resolveValueFromMode = (mode, metrics, constantValue, { midi = false } = {}) => {
+  const data = { ...DEFAULT_METRICS, ...(metrics || {}) };
+  const asUnit = (value) => clampUnit(Number.isFinite(value) ? value : 0);
+  const asMidi = (value) => clampRange(Math.round(Number.isFinite(value) ? value : 0), 0, 127);
+  switch (mode) {
+    case "normX": {
+      const scalar = asUnit(data.normX);
+      return midi ? asMidi(scalar * 127) : scalar;
+    }
+    case "normY": {
+      const scalar = asUnit(data.normY);
+      return midi ? asMidi(scalar * 127) : scalar;
+    }
+    case "distance": {
+      const scalar = asUnit(data.distance);
+      return midi ? asMidi(scalar * 127) : scalar;
+    }
+    case "constant":
+    default: {
+      if (midi) {
+        return asMidi(Number(constantValue));
+      }
+      return asUnit(Number(constantValue));
+    }
+  }
+};
+
+const getNow = () => (typeof performance !== "undefined" && typeof performance.now === "function") ? performance.now() : Date.now();
+
+
+const distanceBetween = (a, b) => {
+  if (!a || !b) return 0;
+  const dx = (a.x ?? 0) - (b.x ?? 0);
+  const dy = (a.y ?? 0) - (b.y ?? 0);
+  return Math.hypot(dx, dy);
+};
+
+const createDefaultEvent = (type = "none") => {
+  const id = ensureUuid();
+  switch (type) {
+    case "midiNote":
+      return {
+        id,
+        type,
+        trigger: "enter",
+        channel: 1,
+        note: 60,
+        velocityMode: "constant",
+        velocityValue: 96
+      };
+    case "midiCc":
+      return {
+        id,
+        type,
+        trigger: "enter",
+        channel: 1,
+        cc: 1,
+        ccValueMode: "constant",
+        ccValue: 100
+      };
+    default:
+      return {
+        id,
+        type: "none",
+        trigger: "enter"
+      };
+  }
+};
+
+const normalizeEvent = (event) => {
+  if (!event || typeof event !== "object") {
+    return createDefaultEvent("none");
+  }
+  const typeValid = EVENT_TYPE_OPTIONS.some((option) => option.id === event.type);
+  const type = typeValid ? event.type : "none";
+  const base = createDefaultEvent(type);
+  const normalized = {
+    ...base,
+    ...event,
+    id: event.id || base.id,
+    type
+  };
+  const triggerValid = EVENT_TRIGGER_OPTIONS.some((option) => option.id === normalized.trigger);
+  normalized.trigger = triggerValid ? normalized.trigger : "enter";
+  if (type === "midiNote") {
+    normalized.channel = clampRange(Number.parseInt(`${normalized.channel}`, 10) || 1, 1, 16);
+    normalized.note = clampRange(Number.parseInt(`${normalized.note}`, 10) || 60, 0, 127);
+    const velocityModeValid = VALUE_SOURCE_OPTIONS.some((option) => option.id === normalized.velocityMode);
+    normalized.velocityMode = velocityModeValid ? normalized.velocityMode : "constant";
+    normalized.velocityValue = clampRange(Number.parseInt(`${normalized.velocityValue}`, 10) || 96, 0, 127);
+  } else if (type === "midiCc") {
+    normalized.channel = clampRange(Number.parseInt(`${normalized.channel}`, 10) || 1, 1, 16);
+    normalized.cc = clampRange(Number.parseInt(`${normalized.cc}`, 10) || 1, 0, 127);
+    const ccValueModeValid = VALUE_SOURCE_OPTIONS.some((option) => option.id === normalized.ccValueMode);
+    normalized.ccValueMode = ccValueModeValid ? normalized.ccValueMode : "constant";
+    normalized.ccValue = clampRange(Number.parseInt(`${normalized.ccValue}`, 10) || 100, 0, 127);
+  }
+  return normalized;
+};
+
+const createDefaultInteraction = () => ({
+  stream: "pose",
+  landmark: "left_wrist",
+  events: [createDefaultEvent("midiNote")]
 });
 
-const template = `
-  <div class="modal-chrome mapping-context-chrome" data-drag-handle>
-    <div class="mapping-context-title">
-      <span class="material-icons-outlined" aria-hidden="true">music_note</span>
-      <span data-shape-label>MIDI Mapping</span>
-    </div>
-    <div class="panel-actions">
-      <button type="button" class="icon-button panel-close" title="Close mapping dialog" aria-label="Close mapping dialog" data-mapping-close>
-        <span class="material-icons-outlined" aria-hidden="true">close</span>
-      </button>
-    </div>
-  </div>
-  <div class="floating-modal-body mapping-context-body">
-    <div class="mapping-shape-name">
-      <label for="mapping-shape-name-input">Name</label>
-      <input id="mapping-shape-name-input" type="text" data-shape-name placeholder="Untitled shape" maxlength="48">
-    </div>
-    <div class="mapping-rule-header">
-      <span class="mapping-rule-title">Mappings</span>
-      <button type="button" class="icon-button" title="Add mapping" aria-label="Add mapping" data-mapping-add>
-        <span class="material-icons-outlined" aria-hidden="true">add</span>
-      </button>
-    </div>
-    <div class="mapping-rule-list" data-mapping-list></div>
-  </div>
-`;
-
-const createModal = () => {
-  const modal = document.createElement("section");
-  modal.className = "panel floating-modal mapping-context is-hidden";
-  modal.setAttribute("role", "dialog");
-  modal.setAttribute("aria-modal", "false");
-  modal.setAttribute("aria-label", "MIDI mapping");
-  modal.setAttribute("tabindex", "-1");
-  modal.innerHTML = template;
-  return modal;
+const mergeInteraction = (input) => {
+  const defaults = createDefaultInteraction();
+  const source = input && typeof input === "object" ? input : {};
+  const streamKey = STREAM_DEFINITIONS[source.stream] ? source.stream : defaults.stream;
+  const streamDefinition = STREAM_DEFINITIONS[streamKey];
+  const options = Array.isArray(streamDefinition?.options) ? streamDefinition.options : [];
+  const candidateLandmark = source.landmark;
+  const landmarkValid = options.some((option) => option.key === candidateLandmark);
+  const fallbackLandmark = options[0]?.key || defaults.landmark;
+  const events = Array.isArray(source.events) && source.events.length
+    ? source.events.map(normalizeEvent)
+    : defaults.events.map((event) => ({ ...normalizeEvent(event) }));
+  return {
+    stream: streamDefinition?.id || defaults.stream,
+    landmark: landmarkValid ? candidateLandmark : fallbackLandmark,
+    events
+  };
 };
 
-const getLayer = () => {
-  let layer = document.getElementById("modal-layer");
-  if (!layer) {
-    layer = document.createElement("div");
-    layer.id = "modal-layer";
-    layer.className = "floating-modal-layer";
-    document.body.appendChild(layer);
+const renderOptions = (options, selected) =>
+  options
+    .map((option) => `<option value="${escapeHtml(option.id)}"${option.id === selected ? " selected" : ""}>${escapeHtml(option.label)}</option>`)
+    .join("");
+
+const renderEventCard = (event) => {
+  const normalized = normalizeEvent(event);
+  const typeOptions = renderOptions(EVENT_TYPE_OPTIONS, normalized.type);
+  const triggerOptions = renderOptions(EVENT_TRIGGER_OPTIONS, normalized.trigger);
+  const renderModeOptions = (mode) => renderOptions(VALUE_SOURCE_OPTIONS, mode || "constant");
+  const velocityValueStyle = normalized.type === "midiNote" && normalized.velocityMode === "constant" ? "" : ' style="display:none;"';
+  const ccValueStyle = normalized.type === "midiCc" && normalized.ccValueMode === "constant" ? "" : ' style="display:none;"';
+
+  let bodyMarkup = `<div class="event-body"><div class="event-row"><span class="event-empty">Select an event type.</span></div></div>`;
+  if (normalized.type === "midiNote") {
+    bodyMarkup = `
+      <div class="event-body">
+        <div class="event-row">
+          <label class="field-compact small" title="MIDI Channel">
+            <span>Ch</span>
+            <input type="number" min="1" max="16" value="${clampRange(normalized.channel, 1, 16)}" data-field="channel">
+          </label>
+          <label class="field-compact small" title="Note">
+            <span>Note</span>
+            <input type="number" min="0" max="127" value="${clampRange(normalized.note, 0, 127)}" data-field="note">
+          </label>
+        </div>
+        <div class="event-row">
+          <label class="field-compact" title="Velocity source">
+            <span>Vel</span>
+            <select data-field="velocityMode">${renderModeOptions(normalized.velocityMode)}</select>
+          </label>
+          <label class="field-compact" title="Velocity value"${velocityValueStyle}>
+            <span>Val</span>
+            <input type="number" min="0" max="127" value="${clampRange(normalized.velocityValue, 0, 127)}" data-field="velocityValue">
+          </label>
+        </div>
+      </div>
+    `;
+  } else if (normalized.type === "midiCc") {
+    bodyMarkup = `
+      <div class="event-body">
+        <div class="event-row">
+          <label class="field-compact small" title="MIDI Channel">
+            <span>Ch</span>
+            <input type="number" min="1" max="16" value="${clampRange(normalized.channel, 1, 16)}" data-field="channel">
+          </label>
+          <label class="field-compact small" title="Control Change number">
+            <span>CC#</span>
+            <input type="number" min="0" max="127" value="${clampRange(normalized.cc, 0, 127)}" data-field="cc">
+          </label>
+        </div>
+        <div class="event-row">
+          <label class="field-compact" title="Value source">
+            <span>Val</span>
+            <select data-field="ccValueMode">${renderModeOptions(normalized.ccValueMode)}</select>
+          </label>
+          <label class="field-compact" title="Value amount"${ccValueStyle}>
+            <span>Amt</span>
+            <input type="number" min="0" max="127" value="${clampRange(normalized.ccValue, 0, 127)}" data-field="ccValue">
+          </label>
+        </div>
+      </div>
+    `;
   }
-  return layer;
+
+  return `
+    <div class="event-card" data-event-id="${escapeHtml(normalized.id)}" data-event-type="${escapeHtml(normalized.type)}">
+      <div class="event-card-header">
+        <select data-field="type">${typeOptions}</select>
+        <select data-field="trigger">${triggerOptions}</select>
+        <button type="button" class="icon-button event-remove" data-action="remove-event" title="Remove event" aria-label="Remove event">
+          <span class="material-icons-outlined" aria-hidden="true">delete</span>
+        </button>
+      </div>
+      ${bodyMarkup}
+    </div>
+  `;
+};
+
+const populateStreamSelect = (selectEl) => {
+  if (!selectEl) return;
+  const options = Object.values(STREAM_DEFINITIONS).map(
+    (stream) => `<option value="${escapeHtml(stream.id)}">${escapeHtml(stream.label)}</option>`
+  );
+  selectEl.innerHTML = options.join("");
+};
+
+const populateLandmarkOptions = (streamId, selectedKey, selectEl) => {
+  if (!selectEl) return "";
+  const definition = STREAM_DEFINITIONS[streamId] || STREAM_DEFINITIONS.pose;
+  const options = Array.isArray(definition.options) ? definition.options : [];
+  selectEl.innerHTML = options
+    .map((option) => `<option value="${escapeHtml(option.key)}">${escapeHtml(option.label)}</option>`)
+    .join("");
+  const fallback = options[0]?.key || "";
+  const normalised = options.some((option) => option.key === selectedKey) ? selectedKey : fallback;
+  selectEl.value = normalised || "";
+  return normalised;
+};
+
+const renderEventList = (listEl, events = []) => {
+  if (!listEl) return;
+  const normalized = Array.isArray(events) ? events.map(normalizeEvent) : [];
+  if (!normalized.length) {
+    listEl.innerHTML = `<div class="event-empty">No events configured.</div>`;
+    return;
+  }
+  listEl.innerHTML = normalized.map((event) => renderEventCard(event)).join("");
 };
 
 export function initMapping({ editor }) {
   if (!editor) {
     console.warn("[mediamime] Mapping module requires an editor API.");
-    return {
-      dispose() {}
-    };
+    return { dispose() {} };
   }
 
-  const layer = getLayer();
-  const modal = createModal();
-  layer.appendChild(modal);
+  const modal = document.getElementById("assignment-modal");
+  const backdrop = document.getElementById("assignment-backdrop");
+  const shapeNameInput = document.getElementById("assignment-shape-name");
+  const streamSelect = document.getElementById("assignment-stream");
+  const landmarkSelect = document.getElementById("assignment-landmark");
+  const assignmentMidiPortSelect = document.getElementById("assignment-midi-port");
+  const assignmentMidiPortRefreshButton = document.getElementById("assignment-midi-port-refresh");
+  const addEventButton = document.getElementById("assignment-add-event");
+  const eventList = document.getElementById("assignment-event-list");
+  const closeButton = document.getElementById("assignment-modal-close");
+  const cancelButton = document.getElementById("assignment-modal-cancel");
+  const applyButton = document.getElementById("assignment-modal-apply");
+  const openButton = document.getElementById("editor-open-modal");
+  const assignmentHandle = modal.querySelector("[data-assignment-handle]");
+  const svg = document.getElementById("gesture-svg");
+  const editorShapeList = document.getElementById("editor-shape-list");
+  const editorDetailEmpty = document.getElementById("editor-detail-empty");
+  const editorDetailForm = document.getElementById("editor-detail-form");
+  const editorStreamSelect = document.getElementById("editor-stream-select");
+  const editorLandmarkSelect = document.getElementById("editor-landmark-select");
+  const editorEventList = document.getElementById("editor-event-list");
+  const editorAddEventButton = document.getElementById("editor-add-event");
+  const editorDeleteShapeButton = document.getElementById("editor-delete-shape");
+  const editorMidiPortSelect = document.getElementById("editor-midi-port");
+  const editorMidiPortRefreshButton = document.getElementById("editor-midi-port-refresh");
 
-const closeButtons = Array.from(modal.querySelectorAll("[data-mapping-close]"));
-const shapeLabelEl = modal.querySelector("[data-shape-label]");
-const shapeNameInput = modal.querySelector("[data-shape-name]");
-const focusTarget = modal;
-const mappingListEl = modal.querySelector("[data-mapping-list]");
-const addMappingButton = modal.querySelector("[data-mapping-add]");
-const shapeTableEl = document.getElementById("editor-shape-list");
-const mappingStore = new Map();
-const shapeNames = new Map();
-const runtimeState = new Map();
-const midiState = {
-  access: null,
-  outputs: new Set(),
-  ready: false
-};
-const clampMidiChannel = (value) => clamp(Math.round(value), 1, 16);
-const clampMidiValue = (value) => clamp(Math.round(value), 0, 127);
-const pointerState = {
-  normalized: null,
-  insideShapes: new Map(),
-  overEditor: false,
-  isDown: false
-};
-const svg = document.getElementById("gesture-svg");
-const editorRoot = document.getElementById("gesture-editor");
-const midiSend = (bytes) => {
-  if (!midiState.ready || !midiState.outputs.size) {
-    console.warn("[mediamime] MIDI send skipped – no output available.");
-    return;
+  if (!modal || !backdrop || !eventList) {
+    console.warn("[mediamime] Mapping modal markup is missing; skipping mapping module.");
+    return { dispose() {} };
   }
-  midiState.outputs.forEach((output) => {
+
+  populateStreamSelect(streamSelect);
+  populateStreamSelect(editorStreamSelect);
+
+  const CONFIG_STORAGE_KEY = "mediamime:config";
+  const DEFAULT_EDITOR_CONFIG = {
+    midiPort: "broadcast"
+  };
+  const editorConfig = { ...DEFAULT_EDITOR_CONFIG };
+
+  const loadEditorConfig = () => {
+    if (typeof localStorage === "undefined") return;
     try {
-      output.send(bytes);
+      const raw = localStorage.getItem(CONFIG_STORAGE_KEY);
+      if (!raw) return;
+      const stored = JSON.parse(raw);
+      if (!stored || typeof stored !== "object") return;
+      if (stored.midiPort) editorConfig.midiPort = String(stored.midiPort);
     } catch (error) {
-      console.warn("[mediamime] Failed to send MIDI message", error);
+      console.warn("[mediamime] Failed to load config", error);
     }
-  });
-};
-const getDefaultShapeName = (shape) => {
-  if (!shape) return "Untitled";
-  const type = shape.type ? shape.type.charAt(0).toUpperCase() + shape.type.slice(1) : "Shape";
-  const suffix = shape.id ? ` ${String(shape.id).slice(0, 4)}` : "";
-  return `${type}${suffix}`;
-};
-
-const ensureShapeName = (shapeId, shape) => {
-  if (!shapeId) return getDefaultShapeName(shape);
-  if (!shapeNames.has(shapeId)) {
-    shapeNames.set(shapeId, getDefaultShapeName(shape));
-  }
-  return shapeNames.get(shapeId);
-};
-const sendNoteOn = (channel, note, velocity) => {
-  const status = 0x90 | ((clampMidiChannel(channel) - 1) & 0x0f);
-  midiSend([status, clampMidiValue(note), clampMidiValue(velocity)]);
-};
-const sendNoteOff = (channel, note, velocity = 0) => {
-  const status = 0x80 | ((clampMidiChannel(channel) - 1) & 0x0f);
-  midiSend([status, clampMidiValue(note), clampMidiValue(velocity)]);
-};
-const sendControlChange = (channel, cc, value) => {
-  const status = 0xb0 | ((clampMidiChannel(channel) - 1) & 0x0f);
-  midiSend([status, clampMidiValue(cc), clampMidiValue(value)]);
-};
-const flashShape = (() => {
-  const timeouts = new Map();
-  return (shapeId) => {
-    if (!shapeId) return;
-    const node = editorRoot?.querySelector(`[data-shape-id="${shapeId}"]`);
-    if (!node) return;
-    node.classList.add("is-mapping");
-    if (timeouts.has(shapeId)) {
-      clearTimeout(timeouts.get(shapeId));
-    }
-    const timeout = window.setTimeout(() => {
-      node.classList.remove("is-mapping");
-      timeouts.delete(shapeId);
-    }, 160);
-    timeouts.set(shapeId, timeout);
-  };
-})();
-const flashPanel = (() => {
-  let timeoutId = null;
-  return () => {
-    if (!modal) return;
-    modal.classList.add("is-active");
-    if (timeoutId) window.clearTimeout(timeoutId);
-    timeoutId = window.setTimeout(() => {
-      modal.classList.remove("is-active");
-      timeoutId = null;
-    }, 150);
-  };
-})();
-
-  const renderShapeTable = () => {
-    if (!shapeTableEl) return;
-    const shapes = Array.from(shapesCache.values());
-    if (!shapes.length) {
-      shapeTableEl.innerHTML = `<div class="editor-list-empty">No shapes yet.</div>`;
-      return;
-    }
-    const rows = shapes.map((shape) => {
-      const name = ensureShapeName(shape.id, shape);
-      const mappingCount = getMappings(shape.id).length;
-      const meta = mappingCount === 1 ? "1 mapping" : `${mappingCount} mappings`;
-      const isActive = state.shapeId === shape.id;
-      return `<button type="button" data-shape-id="${shape.id}" data-active="${isActive ? "true" : "false"}" class="${isActive ? "is-active" : ""}">
-          <span class="shape-name">${name}</span>
-          <span class="shape-meta">${meta}</span>
-        </button>`;
-    });
-    shapeTableEl.innerHTML = rows.join("");
   };
 
-  const bootstrapInitialState = () => {
-    if (typeof editor.getState !== "function") return;
-    const stateSnapshot = editor.getState();
-    if (!stateSnapshot || !Array.isArray(stateSnapshot.shapes)) return;
-    stateSnapshot.shapes.forEach((shape) => {
-      if (shape?.id) {
-        shapesCache.set(shape.id, shape);
-        ensureShapeName(shape.id, shape);
-      }
-    });
-    renderShapeTable();
-  };
-const refreshMidiOutputs = () => {
-  midiState.outputs.clear();
-  if (!midiState.access) return;
-  const preferred = localStorage.getItem("mediamime:midi-output");
-  let fallback = null;
-  midiState.access.outputs.forEach((output) => midiState.outputs.add(output));
-  if (preferred && midiState.access.outputs.has(preferred)) {
-    midiState.outputs.clear();
-    midiState.outputs.add(midiState.access.outputs.get(preferred));
-  } else if (midiState.access.outputs.size && !preferred) {
-    fallback = midiState.access.outputs.values().next().value;
-    midiState.outputs.clear();
-    midiState.outputs.add(fallback);
-  }
-  if (fallback) {
+  const saveEditorConfig = () => {
+    if (typeof localStorage === "undefined") return;
     try {
-      localStorage.setItem("mediamime:midi-output", fallback.id || fallback.name || "");
+      localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify({ midiPort: editorConfig.midiPort }));
     } catch (error) {
-      // ignore storage errors
+      console.warn("[mediamime] Failed to persist config", error);
     }
-  }
-  if (!midiState.outputs.size) {
-    console.warn("[mediamime] No MIDI outputs available.");
-  }
-};
-  const initializeMidi = () => {
-    if (!navigator.requestMIDIAccess) {
-      console.info("[mediamime] Web MIDI is not supported in this browser.");
-      return;
-    }
-    navigator
-      .requestMIDIAccess()
-      .then((access) => {
-        midiState.access = access;
-        midiState.ready = true;
-        refreshMidiOutputs();
-        access.addEventListener("statechange", refreshMidiOutputs);
-      })
-      .catch((error) => {
-        console.warn("[mediamime] Failed to initialize MIDI access", error);
-      });
   };
 
-  const shapesCache = new Map();
-  const state = {
-    isOpen: false,
-    shapeId: null
+  loadEditorConfig();
+
+  const midiState = {
+    supported: typeof navigator !== "undefined" && typeof navigator.requestMIDIAccess === "function",
+    ready: false,
+    pending: null,
+    access: null,
+    outputs: []
   };
-  const getMappings = (shapeId) => mappingStore.get(shapeId) || [];
+
+  let isSyncingConfig = false;
+  let isSyncingEditorForm = false;
+
+  const shapesById = new Map();
+  const shapeOrder = [];
+  const runtimeState = new Map();
+  const inputState = {
+    pointer: {
+      normalized: null,
+      isDown: false,
+      pointerId: null,
+      isOverCanvas: false,
+      lastUpdate: 0
+    },
+    keyboard: {
+      keys: new Map()
+    },
+    holistic: null
+  };
+
+  let dragContext = null;
+
   const ensureRuntimeShape = (shapeId) => {
+    if (!shapeId) return null;
     if (!runtimeState.has(shapeId)) {
-      runtimeState.set(shapeId, { inside: false, mappings: new Map() });
+      runtimeState.set(shapeId, {
+        inside: false,
+        hoverInside: false,
+        lastTriggerAt: 0,
+        lastContinuousAt: 0,
+        noteOn: false,
+        eventState: new Map(),
+        lastMetrics: { normX: 0, normY: 0, distance: 0 }
+      });
     }
     return runtimeState.get(shapeId);
   };
-  const ensureRuntimeMapping = (shapeId, mappingId) => {
-    const shapeRuntime = ensureRuntimeShape(shapeId);
-    if (!shapeRuntime.mappings.has(mappingId)) {
-      shapeRuntime.mappings.set(mappingId, { noteOn: false, lastValue: null, pulseTimeout: null, ccTimeout: null });
-    }
-    return shapeRuntime.mappings.get(mappingId);
+
+  const clearRuntimeState = (shapeId) => {
+    if (!shapeId) return;
+    runtimeState.delete(shapeId);
   };
-  const purgeRuntimeMappings = (shapeId, mappingIds) => {
-    const rt = runtimeState.get(shapeId);
-    if (!rt) return;
-    const keep = new Set(mappingIds);
-    Array.from(rt.mappings.keys()).forEach((id) => {
-      if (!keep.has(id)) {
-        rt.mappings.delete(id);
+
+  const isShapeActive = (shapeId) => {
+    const runtime = runtimeState.get(shapeId);
+    return Boolean(runtime?.inside || runtime?.hoverInside);
+  };
+
+  const applyShapeHighlight = (shapeId) => {
+    const active = isShapeActive(shapeId);
+    if (svg) {
+      const node = svg.querySelector(`[data-shape-id="${shapeId}"]`);
+      if (node) {
+        node.classList.toggle("is-mapping-active", active);
+      }
+    }
+    if (editorShapeList) {
+      const button = editorShapeList.querySelector(`[data-shape-id="${shapeId}"]`);
+      if (button) {
+        if (active) {
+          button.setAttribute("data-active", "true");
+        } else {
+          button.removeAttribute("data-active");
+        }
+      }
+    }
+  };
+
+  const updateShapeActiveIndicators = () => {
+    shapeOrder.forEach((shapeId) => applyShapeHighlight(shapeId));
+  };
+
+  const getMidiOutputs = () => Array.isArray(midiState.outputs) ? midiState.outputs : [];
+
+  const midiOptionLabel = (output, index) => {
+    const baseName = output?.name && output.name.trim() ? output.name.trim() : `Port ${index + 1}`;
+    const manufacturer = output?.manufacturer && output.manufacturer.trim() ? output.manufacturer.trim() : "";
+    return manufacturer ? `${baseName} (${manufacturer})` : baseName;
+  };
+
+  const populateMidiPortSelect = (selectEl, selectedId = editorConfig.midiPort) => {
+    if (!selectEl) return;
+    const outputs = getMidiOutputs();
+    const options = [
+      { id: "broadcast", label: "All Outputs" },
+      ...outputs.map((output, index) => ({
+        id: output.id || `port-${index}`,
+        label: midiOptionLabel(output, index)
+      }))
+    ];
+    const markup = options
+      .map((option) => `<option value="${escapeHtml(option.id)}">${escapeHtml(option.label)}</option>`)
+      .join("");
+    selectEl.innerHTML = markup;
+    const normalized = options.some((option) => option.id === selectedId) ? selectedId : "broadcast";
+    selectEl.value = normalized;
+    selectEl.dataset.selectedPort = normalized;
+  };
+
+  const applyMidiSelections = () => {
+    isSyncingConfig = true;
+    populateMidiPortSelect(assignmentMidiPortSelect, editorConfig.midiPort);
+    populateMidiPortSelect(editorMidiPortSelect, editorConfig.midiPort);
+    isSyncingConfig = false;
+  };
+
+  const setMidiPort = (value) => {
+    const normalized = value && value !== "broadcast" ? value : "broadcast";
+    if (editorConfig.midiPort === normalized) {
+      applyMidiSelections();
+      return;
+    }
+    editorConfig.midiPort = normalized;
+    applyMidiSelections();
+    saveEditorConfig();
+  };
+
+  const ensureMidiAccess = () => {
+    if (!midiState.supported) {
+      return Promise.resolve([]);
+    }
+    if (midiState.ready && midiState.access) {
+      midiState.outputs = Array.from(midiState.access.outputs.values());
+      applyMidiSelections();
+      return Promise.resolve(midiState.outputs);
+    }
+    if (!midiState.pending) {
+      midiState.pending = navigator.requestMIDIAccess({ sysex: false }).then((access) => {
+        midiState.access = access;
+        midiState.outputs = Array.from(access.outputs.values());
+        midiState.ready = true;
+        if (typeof access.addEventListener === "function") {
+          access.addEventListener("statechange", () => {
+            midiState.outputs = Array.from(access.outputs.values());
+            applyMidiSelections();
+          });
+        } else {
+          access.onstatechange = () => {
+            midiState.outputs = Array.from(access.outputs.values());
+            applyMidiSelections();
+          };
+        }
+        applyMidiSelections();
+        return midiState.outputs;
+      }).catch((error) => {
+        console.warn("[mediamime] MIDI access unavailable", error);
+        midiState.supported = false;
+        return [];
+      });
+    }
+    return midiState.pending;
+  };
+
+  const refreshMidiPorts = () => ensureMidiAccess().then(() => applyMidiSelections());
+
+  const sendMidiMessage = (status, data1, data2, portId = editorConfig.midiPort) => {
+    if (!midiState.ready) {
+      ensureMidiAccess();
+    }
+    const outputs = getMidiOutputs();
+    if (!outputs.length) {
+      if (midiState.ready) {
+        console.info('[MIDI]', { status, data1, data2, port: portId });
+      }
+      return;
+    }
+    const targets = portId && portId !== 'broadcast'
+      ? outputs.filter((output) => output.id === portId)
+      : outputs;
+    if (!targets.length) {
+      console.info('[MIDI no matching port]', { port: portId, status, data1, data2 });
+      return;
+    }
+    targets.forEach((output) => {
+      try {
+        output.send([status, data1, data2]);
+      } catch (error) {
+        console.warn('[mediamime] MIDI send failed', error);
       }
     });
   };
-  const setMappings = (shapeId, mappings) => {
+
+  const sendMidiNote = (channel, note, velocity, type = 'on', portId = editorConfig.midiPort) => {
+    const normalizedChannel = clampRange(Math.floor(channel) || 1, 1, 16);
+    const normalizedNote = clampRange(Math.floor(note) || 0, 0, 127);
+    const normalizedVelocity = clampRange(Math.floor(velocity) || 0, 0, 127);
+    const status = (type === 'off' ? 0x80 : 0x90) | ((normalizedChannel - 1) & 0x0f);
+    sendMidiMessage(status, normalizedNote, normalizedVelocity, portId);
+  };
+
+  const sendMidiCc = (channel, cc, value, portId = editorConfig.midiPort) => {
+    const normalizedChannel = clampRange(Math.floor(channel) || 1, 1, 16);
+    const normalizedCc = clampRange(Math.floor(cc) || 0, 0, 127);
+    const normalizedValue = clampRange(Math.floor(value) || 0, 0, 127);
+    const status = 0xb0 | ((normalizedChannel - 1) & 0x0f);
+    sendMidiMessage(status, normalizedCc, normalizedValue, portId);
+  };
+
+  const listeners = [];
+  const addListener = (target, type, handler, options) => {
+    if (!target) return;
+    target.addEventListener(type, handler, options);
+    listeners.push(() => target.removeEventListener(type, handler, options));
+  };
+
+  const state = {
+    activeShapeId: null,
+    draftName: "",
+    draftInteraction: null,
+    isSyncing: false,
+    modalOpen: false
+  };
+
+  const getShapeSnapshot = (shapeId) => {
+    if (!shapeId || typeof editor.getShapeSnapshot !== "function") return null;
+    return editor.getShapeSnapshot(shapeId);
+  };
+
+  const ensureDraftFromShape = (shape) => {
+    if (!shape) {
+      state.draftInteraction = null;
+      state.draftName = "";
+      return;
+    }
+    const index = shapeOrder.indexOf(shape.id);
+    const fallbackName = getShapeDisplayName(shape, index >= 0 ? index : 0);
+    const rawName = typeof shape.name === "string" ? shape.name.trim() : "";
+    state.draftName = rawName || fallbackName;
+    state.draftInteraction = mergeInteraction(shape.interaction);
+  };
+
+  const updateOpenButtonState = () => {
+    if (openButton) {
+      const hasShape = state.activeShapeId && shapesById.has(state.activeShapeId);
+      openButton.disabled = !hasShape;
+    }
+  };
+
+  const setDetailVisibility = (hasShape) => {
+    if (editorDetailEmpty) {
+      editorDetailEmpty.style.display = hasShape ? "none" : "";
+    }
+    if (editorDetailForm) {
+      editorDetailForm.style.display = hasShape ? "" : "none";
+    }
+  };
+
+  const getShapeDisplayName = (shape, index = 0) => {
+    if (!shape) return `Shape ${index + 1}`;
+    const raw = typeof shape.name === "string" ? shape.name.trim() : "";
+    if (raw) return raw;
+    const typeLabel = shape.type ? shape.type.charAt(0).toUpperCase() + shape.type.slice(1) : "Shape";
+    return `${typeLabel} ${index + 1}`;
+  };
+
+  const buildShapeMeta = (shape) => {
+    if (!shape) return "No events";
+    const interaction = mergeInteraction(shape.interaction);
+    const streamLabel = STREAM_DEFINITIONS[interaction.stream]?.label || "Stream";
+    const events = interaction.events.filter((event) => event.type && event.type !== "none");
+    const primary = events[0] || null;
+    let eventLabel = "No events";
+    if (primary) {
+      eventLabel = primary.type === "midiCc" ? "MIDI CC" : primary.type === "midiNote" ? "MIDI Note" : "Event";
+    }
+    const extraSuffix = events.length > 1 ? ` (+${events.length - 1})` : "";
+    const triggerLabel = primary?.trigger
+      ? primary.trigger.replace(/^\w/, (char) => char.toUpperCase())
+      : null;
+    const parts = [streamLabel, `${eventLabel}${extraSuffix}`];
+    if (triggerLabel) {
+      parts.push(triggerLabel);
+    }
+    return parts.join(" · ");
+  };
+
+  const renderShapeList = () => {
+    if (!editorShapeList) return;
+    if (!shapeOrder.length) {
+      editorShapeList.innerHTML = `<div class="editor-detail-empty">No shapes yet. Draw on the canvas to add one.</div>`;
+      editorShapeList.removeAttribute("aria-activedescendant");
+      return;
+    }
+    const markup = shapeOrder
+      .map((id, index) => {
+        const shape = shapesById.get(id);
+        if (!shape) return "";
+        const label = getShapeDisplayName(shape, index);
+        const meta = buildShapeMeta(shape);
+        const isActive = id === state.activeShapeId;
+        const runtime = runtimeState.get(id);
+        const isRunning = Boolean(runtime?.inside || runtime?.hoverInside);
+        const activeAttr = isRunning ? ` data-active="true"` : "";
+        return `<button type="button" id="editor-shape-${id}" class="editor-shape-item${isActive ? " is-active" : ""}" data-shape-id="${id}"${activeAttr} role="option" aria-selected="${isActive ? "true" : "false"}">
+            <span class="shape-label">${escapeHtml(label)}</span>
+            <span class="shape-meta">${escapeHtml(meta)}</span>
+          </button>`;
+      })
+      .filter(Boolean)
+      .join("");
+    editorShapeList.innerHTML = markup;
+    if (state.activeShapeId && shapesById.has(state.activeShapeId)) {
+      editorShapeList.setAttribute("aria-activedescendant", `editor-shape-${state.activeShapeId}`);
+    } else {
+      editorShapeList.removeAttribute("aria-activedescendant");
+    }
+    updateShapeActiveIndicators();
+  };
+
+  const syncEditorDetailForm = () => {
+    if (!editorDetailForm || !editorDetailEmpty) return;
+    const shape = state.activeShapeId ? shapesById.get(state.activeShapeId) : null;
+    const hasShape = Boolean(shape);
+    setDetailVisibility(hasShape);
+    if (!hasShape) {
+      if (editorStreamSelect) {
+        editorStreamSelect.disabled = true;
+      }
+      if (editorLandmarkSelect) {
+        editorLandmarkSelect.disabled = true;
+        editorLandmarkSelect.innerHTML = "";
+      }
+      if (editorEventList) {
+        editorEventList.innerHTML = `<div class="event-empty">Select a shape to configure events.</div>`;
+      }
+      if (editorAddEventButton) {
+        editorAddEventButton.disabled = true;
+      }
+      if (editorDeleteShapeButton) {
+        editorDeleteShapeButton.disabled = true;
+      }
+      return;
+    }
+    const interaction = mergeInteraction(shape.interaction);
+    isSyncingEditorForm = true;
+    if (editorStreamSelect) {
+      editorStreamSelect.disabled = false;
+      editorStreamSelect.value = interaction.stream;
+    }
+    const resolvedLandmark = populateLandmarkOptions(interaction.stream, interaction.landmark, editorLandmarkSelect);
+    if (editorLandmarkSelect) {
+      editorLandmarkSelect.disabled = false;
+      editorLandmarkSelect.value = resolvedLandmark;
+    }
+    if (editorAddEventButton) {
+      editorAddEventButton.disabled = false;
+    }
+    if (editorDeleteShapeButton) {
+      editorDeleteShapeButton.disabled = false;
+    }
+    renderEventList(editorEventList, interaction.events);
+    isSyncingEditorForm = false;
+  };
+
+  const updateSelectedInteraction = (mutator) => {
+    if (!state.activeShapeId || typeof editor.updateShape !== "function") return;
+    editor.updateShape(state.activeShapeId, (shape) => {
+      const interaction = mergeInteraction(shape.interaction);
+      mutator(interaction);
+      shape.interaction = interaction;
+      return shape;
+    });
+    evaluateShapeInteractions();
+  };
+
+  const syncModal = () => {
+    if (!state.modalOpen || state.isSyncing) return;
+    const draft = state.draftInteraction ? mergeInteraction(state.draftInteraction) : createDefaultInteraction();
+    state.isSyncing = true;
+    if (shapeNameInput) {
+      shapeNameInput.value = state.draftName;
+    }
+    if (streamSelect) {
+      streamSelect.value = draft.stream;
+    }
+    const landmark = populateLandmarkOptions(draft.stream, draft.landmark, landmarkSelect);
+    if (landmarkSelect) {
+      landmarkSelect.value = landmark;
+    }
+    renderEventList(eventList, draft.events);
+    state.isSyncing = false;
+    applyMidiSelections();
+  };
+
+  const closeModal = () => {
+    if (!state.modalOpen) return;
+    state.modalOpen = false;
+    state.draftInteraction = null;
+    if (backdrop) {
+      backdrop.classList.remove("is-visible");
+      backdrop.setAttribute("aria-hidden", "true");
+    }
+    modal.classList.remove("is-visible");
+    modal.classList.remove("is-dragging");
+    modal.setAttribute("aria-hidden", "true");
+    if (dragContext && modal.hasPointerCapture(dragContext.pointerId)) {
+      modal.releasePointerCapture(dragContext.pointerId);
+    }
+    dragContext = null;
+    modal.style.transform = "";
+    modal.style.left = "";
+    modal.style.top = "";
+    modal.style.right = "";
+    modal.style.bottom = "";
+  };
+
+  const openModalForShape = (shapeId, { focus = true } = {}) => {
+    const targetId = shapeId || state.activeShapeId;
+    if (!targetId) return;
+    const shape = getShapeSnapshot(targetId);
+    if (!shape) return;
+    state.activeShapeId = shape.id;
+    ensureDraftFromShape(shape);
+    state.modalOpen = true;
+    if (backdrop) {
+      backdrop.classList.add("is-visible");
+      backdrop.setAttribute("aria-hidden", "false");
+    }
+    modal.style.transform = "";
+    modal.style.left = "";
+    modal.style.top = "";
+    modal.style.right = "";
+    modal.style.bottom = "";
+    modal.classList.add("is-visible");
+    modal.setAttribute("aria-hidden", "false");
+    syncModal();
+    if (focus && shapeNameInput) {
+      setTimeout(() => {
+        try {
+          shapeNameInput.focus({ preventScroll: true });
+        } catch (error) {
+          shapeNameInput.focus();
+        }
+        if (typeof shapeNameInput.select === "function") {
+          shapeNameInput.select();
+        }
+      }, 20);
+    }
+  };
+
+  const applyModal = () => {
+    if (!state.modalOpen || !state.activeShapeId || !state.draftInteraction) {
+      closeModal();
+      return;
+    }
+    const draft = mergeInteraction(state.draftInteraction);
+    const nameValue = shapeNameInput ? shapeNameInput.value : state.draftName;
+    const nextName = typeof nameValue === "string" ? nameValue.trim() : "";
+    draft.stream = streamSelect?.value || draft.stream;
+    draft.landmark = landmarkSelect?.value || draft.landmark;
+    if (typeof editor.updateShape === "function") {
+      editor.updateShape(state.activeShapeId, (shape) => {
+        shape.name = nextName;
+        shape.interaction = draft;
+        return shape;
+      });
+    } else {
+      console.warn("[mediamime] editor.updateShape is not available; interaction changes were not applied.");
+    }
+    if (!isSyncingConfig && assignmentMidiPortSelect) {
+      setMidiPort(assignmentMidiPortSelect.value);
+    }
+    state.draftName = nextName;
+    state.draftInteraction = draft;
+    closeModal();
+    evaluateShapeInteractions();
+  };
+
+  const handleSelectionChange = (payload) => {
+    const selection = Array.isArray(payload?.selection) ? payload.selection : [];
+    const nextId = selection[0] || null;
+    state.activeShapeId = nextId;
+    updateOpenButtonState();
+    renderShapeList();
+    syncEditorDetailForm();
+    if (state.modalOpen) {
+      if (!nextId) {
+        closeModal();
+      } else {
+        const shape = getShapeSnapshot(nextId);
+        if (shape) {
+          ensureDraftFromShape(shape);
+          syncModal();
+        } else {
+          closeModal();
+        }
+      }
+    }
+    evaluateShapeInteractions();
+  };
+
+  const handleShapeAltClick = ({ shapeId }) => {
     if (!shapeId) return;
-    const sanitized = mappings.map((mapping) => ({ ...DEFAULT_MAPPING, ...mapping, id: mapping.id || createId() }));
-    mappingStore.set(shapeId, sanitized);
-    purgeRuntimeMappings(shapeId, sanitized.map((mapping) => mapping.id));
-    ensureRuntimeShape(shapeId);
-    renderShapeTable();
+    state.activeShapeId = shapeId;
+    const shape = getShapeSnapshot(shapeId);
+    ensureDraftFromShape(shape);
+    updateOpenButtonState();
+    renderShapeList();
+    syncEditorDetailForm();
+    openModalForShape(shapeId);
+    evaluateShapeInteractions();
   };
 
-  const renderNoteFields = (mapping) => {
-    const channelId = `${mapping.id}-channel`;
-    const noteId = `${mapping.id}-note`;
-    const velocityId = `${mapping.id}-velocity`;
-    const offVelocityId = `${mapping.id}-off-velocity`;
-    const modeId = `${mapping.id}-note-mode`;
-    const durationId = `${mapping.id}-note-duration`;
-    const noteModeOptions = NOTE_MODE_OPTIONS.map((option) => `<option value="${option.value}" ${mapping.noteMode === option.value ? "selected" : ""}>${option.label}</option>`).join("");
-    const showVelocity = mapping.noteMode !== "noteOff";
-    const showOffVelocity = mapping.noteMode !== "noteOn";
-    const showDuration = mapping.noteMode === "pulse";
-    return `
-      <div class="mapping-field">
-        <label for="${channelId}">CHN</label>
-        <input type="number" id="${channelId}" min="1" max="16" value="${mapping.channel}" data-mapping-field="channel">
-      </div>
-      <div class="mapping-field">
-        <label for="${noteId}">NOTE</label>
-        <input type="number" id="${noteId}" min="0" max="127" value="${mapping.note}" data-mapping-field="note">
-      </div>
-      <div class="mapping-field">
-        <label for="${modeId}">MODE</label>
-        <select id="${modeId}" data-mapping-field="noteMode">
-          ${noteModeOptions}
-        </select>
-      </div>
-      ${showVelocity
-        ? `<div class="mapping-field"><label for="${velocityId}">VEL</label><input type="number" id="${velocityId}" min="1" max="127" value="${mapping.velocity}" data-mapping-field="velocity"></div>`
-        : ""}
-      ${showOffVelocity
-        ? `<div class="mapping-field"><label for="${offVelocityId}">OFF</label><input type="number" id="${offVelocityId}" min="0" max="127" value="${mapping.offVelocity}" data-mapping-field="offVelocity"></div>`
-        : ""}
-      ${showDuration
-        ? `<div class="mapping-field"><label for="${durationId}">DUR</label><input type="number" id="${durationId}" min="10" max="60000" value="${mapping.noteDurationMs}" data-mapping-field="noteDurationMs"></div>`
-        : ""}
-    `;
-  };
-
-  const renderCcFields = (mapping, isAxisSource) => {
-    const channelId = `${mapping.id}-channel`;
-    const ccId = `${mapping.id}-cc`;
-    const valueId = `${mapping.id}-cc-value`;
-    const modeId = `${mapping.id}-cc-mode`;
-    const modeOptions = [
-      { value: "constant", label: "Constant" },
-      { value: "whileInside", label: "While inside" },
-      ...(isAxisSource ? [{ value: "axis", label: "Follow axis" }] : [])
-    ];
-    const modeOptionsHtml = modeOptions
-      .map((option) => `<option value="${option.value}" ${mapping.ccMode === option.value ? "selected" : ""}>${option.label}</option>`)
-      .join("");
-    const showValueField = mapping.ccMode !== "axis";
-    return `
-      <div class="mapping-field">
-        <label for="${channelId}">CHN</label>
-        <input type="number" id="${channelId}" min="1" max="16" value="${mapping.channel}" data-mapping-field="channel">
-      </div>
-      <div class="mapping-field">
-        <label for="${ccId}">CC#</label>
-        <input type="number" id="${ccId}" min="0" max="127" value="${mapping.cc}" data-mapping-field="cc">
-      </div>
-      <div class="mapping-field">
-        <label for="${modeId}">MODE</label>
-        <select id="${modeId}" data-mapping-field="ccMode">
-          ${modeOptionsHtml}
-        </select>
-      </div>
-      ${showValueField
-        ? `<div class="mapping-field"><label for="${valueId}">VAL</label><input type="number" id="${valueId}" min="0" max="127" value="${mapping.ccValue}" data-mapping-field="ccValue"></div>`
-        : ""}
-    `;
-  };
-
-  const renderMappingCard = (mapping) => {
-    const sourceOptions = SOURCE_OPTIONS
-      .map((option) => `<option value="${option.value}" ${mapping.sourceType === option.value ? "selected" : ""}>${option.label}</option>`)
-      .join("");
-    const isKeySource = mapping.sourceType === "keyDown" || mapping.sourceType === "keyUp";
-    const isAxisSource = mapping.sourceType === "mouseX" || mapping.sourceType === "mouseY" || mapping.sourceType === "mouseDrag";
-    const keyFieldId = `${mapping.id}-key`;
-    const insideId = `${mapping.id}-require-inside`;
-    const midiOptions = MIDI_TYPE_OPTIONS
-      .map((option) => `<option value="${option.value}" ${mapping.midiType === option.value ? "selected" : ""}>${option.label}</option>`)
-      .join("");
-    const midiFieldHtml = mapping.midiType === "note" ? renderNoteFields(mapping) : renderCcFields(mapping, isAxisSource);
-    return `
-      <div class="mapping-rule-card" data-mapping-id="${mapping.id}">
-        <div class="mapping-rule-fields">
-          <div class="mapping-field">
-            <label for="${mapping.id}-source">SRC</label>
-            <select id="${mapping.id}-source" data-mapping-field="sourceType">
-              ${sourceOptions}
-            </select>
-          </div>
-          ${isKeySource
-            ? `<div class="mapping-field"><label for="${keyFieldId}">KEY</label><input type="text" id="${keyFieldId}" value="${mapping.key ?? ""}" data-mapping-field="key" maxlength="20" placeholder="e.g. a"></div>`
-            : ""}
-          <div class="mapping-field checkbox-field">
-            <input type="checkbox" id="${insideId}" data-mapping-field="requireInside" ${mapping.requireInside ? "checked" : ""}>
-            <label for="${insideId}">INSIDE</label>
-          </div>
-          <div class="mapping-field">
-            <label for="${mapping.id}-midi-type">TYPE</label>
-            <select id="${mapping.id}-midi-type" data-mapping-field="midiType">
-              ${midiOptions}
-            </select>
-          </div>
-          ${midiFieldHtml}
-        </div>
-        <div class="mapping-rule-footer">
-          <button type="button" data-mapping-remove>Remove</button>
-        </div>
-      </div>
-    `;
-  };
-
-  const renderMappingList = () => {
-    if (!mappingListEl) return;
-    const shapeId = state.shapeId;
-    if (!shapeId) {
-      mappingListEl.innerHTML = `<p class="mapping-empty">Select a shape to manage mappings.</p>`;
-      return;
+  const handleShapesChange = (shapes) => {
+    if (!Array.isArray(shapes)) return;
+    const previousIds = new Set(shapeOrder);
+    shapesById.clear();
+    shapeOrder.length = 0;
+    shapes.forEach((shape) => {
+      if (!shape || !shape.id) return;
+      shapeOrder.push(shape.id);
+      shapesById.set(shape.id, shape);
+      previousIds.delete(shape.id);
+    });
+    previousIds.forEach((removedId) => {
+      clearRuntimeState(removedId);
+      applyShapeHighlight(removedId);
+    });
+    if (state.activeShapeId && !shapesById.has(state.activeShapeId)) {
+      state.activeShapeId = shapeOrder[0] || null;
     }
-    const mappings = getMappings(shapeId);
-    if (!mappings.length) {
-      mappingListEl.innerHTML = `<p class="mapping-empty">No mappings yet. Use the plus button to add one.</p>`;
-      return;
+    renderShapeList();
+    updateOpenButtonState();
+    syncEditorDetailForm();
+    if (state.modalOpen) {
+      if (!state.activeShapeId || !shapesById.has(state.activeShapeId)) {
+        closeModal();
+      } else {
+        const shape = shapesById.get(state.activeShapeId);
+        ensureDraftFromShape(shape);
+        syncModal();
+      }
     }
-    mappingListEl.innerHTML = mappings.map((mapping) => renderMappingCard(mapping)).join("");
+    updateShapeActiveIndicators();
+    evaluateShapeInteractions();
   };
 
-  const updateMapping = (shapeId, mappingId, mutate) => {
-    if (!shapeId || !mappingId || typeof mutate !== "function") return;
-    const existing = getMappings(shapeId);
-    const index = existing.findIndex((mapping) => mapping.id === mappingId);
+  const handleDoubleClick = (event) => {
+    if (!svg) return;
+    const shapeTarget = event.target?.closest?.("[data-shape-id]");
+    if (!shapeTarget) return;
+    const shapeId = shapeTarget.getAttribute("data-shape-id");
+    if (!shapeId) return;
+    state.activeShapeId = shapeId;
+    updateOpenButtonState();
+    openModalForShape(shapeId);
+    evaluateShapeInteractions();
+  };
+
+  const handleAssignmentAddEvent = () => {
+    if (!state.draftInteraction) {
+      state.draftInteraction = mergeInteraction(null);
+    }
+    state.draftInteraction.events = [...state.draftInteraction.events, createDefaultEvent("midiNote")];
+    syncModal();
+    evaluateShapeInteractions();
+  };
+
+  const handleAssignmentRemoveEvent = (eventId) => {
+    if (!state.draftInteraction) return;
+    state.draftInteraction.events = state.draftInteraction.events.filter((event) => event.id !== eventId);
+    if (!state.draftInteraction.events.length) {
+      state.draftInteraction.events = [createDefaultEvent("midiNote")];
+    }
+    syncModal();
+    evaluateShapeInteractions();
+  };
+
+  const handleAssignmentEventFieldChange = (eventId, field, value) => {
+    if (!state.draftInteraction) return;
+    const index = state.draftInteraction.events.findIndex((event) => event.id === eventId);
     if (index === -1) return;
-    const next = existing.map((item, i) => (i === index ? { ...item } : { ...item }));
-    const target = next[index];
-    mutate(target);
-    setMappings(shapeId, next);
+    const current = normalizeEvent(state.draftInteraction.events[index]);
+    let next = { ...current };
+    switch (field) {
+      case "type": {
+        const nextType = EVENT_TYPE_OPTIONS.some((option) => option.id === value) ? value : "none";
+        const replacement = createDefaultEvent(nextType);
+        replacement.id = current.id;
+        replacement.trigger = current.trigger;
+        next = normalizeEvent(replacement);
+        break;
+      }
+      case "trigger":
+        next.trigger = value;
+        break;
+      case "channel":
+        next.channel = clampRange(Number.parseInt(`${value}`, 10) || current.channel, 1, 16);
+        break;
+      case "note":
+        next.note = clampRange(Number.parseInt(`${value}`, 10) || current.note, 0, 127);
+        break;
+      case "velocityMode":
+        next.velocityMode = VALUE_SOURCE_OPTIONS.some((option) => option.id === value) ? value : current.velocityMode;
+        break;
+      case "velocityValue":
+        next.velocityValue = clampRange(Number.parseInt(`${value}`, 10) || current.velocityValue, 0, 127);
+        break;
+      case "cc":
+        next.cc = clampRange(Number.parseInt(`${value}`, 10) || current.cc, 0, 127);
+        break;
+      case "ccValueMode":
+        next.ccValueMode = VALUE_SOURCE_OPTIONS.some((option) => option.id === value) ? value : current.ccValueMode;
+        break;
+      case "ccValue":
+        next.ccValue = clampRange(Number.parseInt(`${value}`, 10) || current.ccValue, 0, 127);
+        break;
+      default:
+        break;
+    }
+    state.draftInteraction.events[index] = normalizeEvent(next);
+    syncModal();
+    evaluateShapeInteractions();
   };
 
-  const removeMapping = (shapeId, mappingId) => {
-    if (!shapeId || !mappingId) return;
-    const existing = getMappings(shapeId);
-    const next = existing.filter((mapping) => mapping.id !== mappingId);
-    setMappings(shapeId, next);
-  };
-
-  const addMapping = () => {
-    if (!state.shapeId) return;
-    const base = createMapping();
-    const mappings = [...getMappings(state.shapeId), base];
-    setMappings(state.shapeId, mappings);
-    renderMappingList();
-    if (pointerState.normalized) {
-      updateInsideStates(pointerState.normalized);
+  const handleAssignmentEventListClick = (event) => {
+    const action = event.target?.closest?.("[data-action]");
+    if (!action) return;
+    const card = action.closest(".event-card");
+    if (!card) return;
+    const eventId = card.dataset.eventId;
+    if (!eventId) return;
+    event.preventDefault();
+    if (action.dataset.action === "remove-event") {
+      handleAssignmentRemoveEvent(eventId);
     }
   };
-  const handleMappingFieldChange = (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) return;
-    const field = target.dataset.mappingField;
-    if (!field || !state.shapeId) return;
-    if (event.type === "input" && target.type === "checkbox") return;
-    const card = target.closest("[data-mapping-id]");
+
+  const handleAssignmentEventListInput = (event) => {
+    if (state.isSyncing) return;
+    const control = event.target;
+    if (!control || !control.dataset.field) return;
+    const card = control.closest(".event-card");
     if (!card) return;
-    const mappingId = card.dataset.mappingId;
-    if (!mappingId) return;
-    const previousSelection =
-      target.selectionStart !== undefined ? { start: target.selectionStart, end: target.selectionEnd } : null;
-    let refresh = false;
-    updateMapping(state.shapeId, mappingId, (mapping) => {
+    const eventId = card.dataset.eventId;
+    if (!eventId) return;
+    handleAssignmentEventFieldChange(eventId, control.dataset.field, control.value);
+  };
+
+  const handleAssignmentShapeNameInput = (event) => {
+    if (state.isSyncing) return;
+    state.draftName = event.target?.value ?? "";
+  };
+
+  const handleAssignmentShapeNameChange = (event) => {
+    const normalized = (event.target?.value ?? "").trim();
+    if (shapeNameInput) {
+      shapeNameInput.value = normalized;
+    }
+    state.draftName = normalized;
+  };
+
+  const handleAssignmentStreamChange = () => {
+    if (state.isSyncing) return;
+    const streamId = streamSelect?.value || "pose";
+    if (!state.draftInteraction) {
+      state.draftInteraction = mergeInteraction({ stream: streamId });
+    } else {
+      const merged = mergeInteraction({ ...state.draftInteraction, stream: streamId });
+      state.draftInteraction.stream = merged.stream;
+      state.draftInteraction.landmark = merged.landmark;
+      state.draftInteraction.events = merged.events;
+    }
+    syncModal();
+    evaluateShapeInteractions();
+  };
+
+  const handleAssignmentLandmarkChange = () => {
+    if (state.isSyncing || !state.draftInteraction) return;
+    const landmark = landmarkSelect?.value || "";
+    state.draftInteraction.landmark = landmark;
+    evaluateShapeInteractions();
+  };
+
+  const handleEditorStreamChange = () => {
+    if (isSyncingEditorForm || !state.activeShapeId) return;
+    const streamId = editorStreamSelect?.value || "pose";
+    isSyncingEditorForm = true;
+    updateSelectedInteraction((interaction) => {
+      interaction.stream = streamId;
+      const resolved = populateLandmarkOptions(streamId, interaction.landmark, editorLandmarkSelect);
+      interaction.landmark = resolved;
+    });
+    isSyncingEditorForm = false;
+  };
+
+  const handleEditorLandmarkChange = () => {
+    if (isSyncingEditorForm || !state.activeShapeId) return;
+    const landmark = editorLandmarkSelect?.value || "";
+    updateSelectedInteraction((interaction) => {
+      interaction.landmark = landmark;
+    });
+  };
+
+  const handleEditorAddEvent = () => {
+    if (!state.activeShapeId) return;
+    updateSelectedInteraction((interaction) => {
+      interaction.events = [...interaction.events, createDefaultEvent("midiNote")];
+    });
+  };
+
+  const handleEditorRemoveEvent = (eventId) => {
+    if (!state.activeShapeId) return;
+    updateSelectedInteraction((interaction) => {
+      interaction.events = interaction.events.filter((event) => event.id !== eventId);
+      if (!interaction.events.length) {
+        interaction.events = [createDefaultEvent("midiNote")];
+      }
+    });
+  };
+
+  const handleEditorEventFieldChange = (eventId, field, value) => {
+    if (!state.activeShapeId) return;
+    updateSelectedInteraction((interaction) => {
+      const index = interaction.events.findIndex((event) => event.id === eventId);
+      if (index === -1) return;
+      const current = normalizeEvent(interaction.events[index]);
+      let next = { ...current };
       switch (field) {
-        case "sourceType": {
-          const nextSource = target.value;
-          mapping.sourceType = nextSource;
-          const isAxis = nextSource === "mouseX" || nextSource === "mouseY" || nextSource === "mouseDrag";
-          if (isAxis && mapping.midiType === "cc") {
-            mapping.ccMode = "axis";
-          }
-          if (!isAxis && mapping.ccMode === "axis") {
-            mapping.ccMode = "constant";
-          }
-          if (!(nextSource === "keyDown" || nextSource === "keyUp")) {
-            mapping.key = mapping.key || "";
-          }
-          if (nextSource === "mouseInside") {
-            mapping.requireInside = true;
-          }
-          refresh = true;
+        case "type": {
+          const nextType = EVENT_TYPE_OPTIONS.some((option) => option.id === value) ? value : "none";
+          const replacement = createDefaultEvent(nextType);
+          replacement.id = current.id;
+          replacement.trigger = current.trigger;
+          next = normalizeEvent(replacement);
           break;
         }
-        case "key": {
-          mapping.key = target.value.trim().toLowerCase();
+        case "trigger":
+          next.trigger = value;
           break;
-        }
-        case "requireInside": {
-          mapping.requireInside = target.checked;
-          if (!mapping.requireInside && mapping.ccMode === "whileInside") {
-            mapping.ccMode = "constant";
-          }
+        case "channel":
+          next.channel = clampRange(Number.parseInt(`${value}`, 10) || current.channel, 1, 16);
           break;
-        }
-        case "midiType": {
-          mapping.midiType = target.value;
-          if (mapping.midiType === "note" && mapping.velocity < 1) {
-            mapping.velocity = 100;
-          }
-          if (mapping.midiType === "cc") {
-            if (mapping.sourceType === "mouseX" || mapping.sourceType === "mouseY" || mapping.sourceType === "mouseDrag") {
-              mapping.ccMode = "axis";
-            } else if (mapping.ccMode === "axis") {
-              mapping.ccMode = "constant";
-            }
-          }
-          if (mapping.midiType === "note" && mapping.noteMode === "pulse" && !Number.isFinite(mapping.noteDurationMs)) {
-            mapping.noteDurationMs = 400;
-          }
-          refresh = true;
+        case "note":
+          next.note = clampRange(Number.parseInt(`${value}`, 10) || current.note, 0, 127);
           break;
-        }
-        case "channel": {
-          mapping.channel = clamp(toInt(target.value, mapping.channel), 1, 16);
+        case "velocityMode":
+          next.velocityMode = VALUE_SOURCE_OPTIONS.some((option) => option.id === value) ? value : current.velocityMode;
           break;
-        }
-        case "note": {
-          mapping.note = clamp(toInt(target.value, mapping.note), 0, 127);
+        case "velocityValue":
+          next.velocityValue = clampRange(Number.parseInt(`${value}`, 10) || current.velocityValue, 0, 127);
           break;
-        }
-        case "noteMode": {
-          mapping.noteMode = target.value;
-          if (mapping.noteMode === "pulse" && !Number.isFinite(mapping.noteDurationMs)) {
-            mapping.noteDurationMs = 400;
-          }
-          refresh = true;
+        case "cc":
+          next.cc = clampRange(Number.parseInt(`${value}`, 10) || current.cc, 0, 127);
           break;
-        }
-        case "noteDurationMs": {
-          mapping.noteDurationMs = clamp(toInt(target.value, mapping.noteDurationMs), 10, 60000);
+        case "ccValueMode":
+          next.ccValueMode = VALUE_SOURCE_OPTIONS.some((option) => option.id === value) ? value : current.ccValueMode;
           break;
-        }
-        case "velocity": {
-          mapping.velocity = clamp(toInt(target.value, mapping.velocity), 1, 127);
+        case "ccValue":
+          next.ccValue = clampRange(Number.parseInt(`${value}`, 10) || current.ccValue, 0, 127);
           break;
-        }
-        case "offVelocity": {
-          mapping.offVelocity = clamp(toInt(target.value, mapping.offVelocity), 0, 127);
-          break;
-        }
-        case "cc": {
-          mapping.cc = clamp(toInt(target.value, mapping.cc), 0, 127);
-          break;
-        }
-        case "ccValue": {
-          mapping.ccValue = clamp(toInt(target.value, mapping.ccValue), 0, 127);
-          break;
-        }
-        case "ccMode": {
-          const nextMode = target.value;
-          if (nextMode === "axis" && (mapping.sourceType === "mouseX" || mapping.sourceType === "mouseY")) {
-            mapping.ccMode = "axis";
-            break;
-          }
-          if (nextMode === "whileInside") {
-            mapping.ccMode = "whileInside";
-            mapping.requireInside = true;
-          } else {
-            mapping.ccMode = "constant";
-          }
-          refresh = true;
-          break;
-        }
         default:
           break;
       }
+      interaction.events[index] = normalizeEvent(next);
     });
-    if (pointerState.normalized) {
-      updateInsideStates(pointerState.normalized);
+  };
+
+  const handleEditorEventListClick = (event) => {
+    const action = event.target?.closest?.("[data-action]");
+    if (!action) return;
+    const card = action.closest(".event-card");
+    if (!card) return;
+    const eventId = card.dataset.eventId;
+    if (!eventId) return;
+    event.preventDefault();
+    if (action.dataset.action === "remove-event") {
+      handleEditorRemoveEvent(eventId);
     }
-    if (refresh) {
-      renderMappingList();
-      requestAnimationFrame(() => {
-        if (!mappingListEl) return;
-        const nextField = mappingListEl.querySelector(`[data-mapping-id="${mappingId}"] [data-mapping-field="${field}"]`);
-        if (nextField instanceof HTMLInputElement || nextField instanceof HTMLSelectElement) {
-          nextField.focus({ preventScroll: true });
-        }
-      });
+  };
+
+  const handleEditorEventListInput = (event) => {
+    if (isSyncingEditorForm) return;
+    const control = event.target;
+    if (!control || !control.dataset.field) return;
+    const card = control.closest(".event-card");
+    if (!card) return;
+    const eventId = card.dataset.eventId;
+    if (!eventId) return;
+    handleEditorEventFieldChange(eventId, control.dataset.field, control.value);
+  };
+
+  const resolveStreamPoint = (streamId, landmarkKey, holisticResults) => {
+    // Placeholder for future landmark integration
+    void streamId;
+    void landmarkKey;
+    void holisticResults;
+    return null;
+  };
+
+  const evaluateShapeInteractions = () => {
+    if (!shapeOrder.length) {
+      runtimeState.clear();
+      updateShapeActiveIndicators();
       return;
     }
-    if (event.type === "input") {
-      requestAnimationFrame(() => {
-        if (!mappingListEl) return;
-        const nextField = mappingListEl.querySelector(`[data-mapping-id="${mappingId}"] [data-mapping-field="${field}"]`);
-        if (nextField instanceof HTMLInputElement || nextField instanceof HTMLSelectElement) {
-          nextField.focus({ preventScroll: true });
-          if (previousSelection && nextField instanceof HTMLInputElement && typeof nextField.setSelectionRange === "function") {
-            nextField.setSelectionRange(previousSelection.start, previousSelection.end);
+    const now = getNow();
+    const pointerState = inputState.pointer;
+    const pointerPoint = pointerState.normalized;
+    const pointerIsDown = pointerState.isDown;
+    const holisticResults = inputState.holistic;
+    const pointCache = new Map();
+
+    shapeOrder.forEach((shapeId) => {
+      const shape = shapesById.get(shapeId);
+      if (!shape) {
+        clearRuntimeState(shapeId);
+        applyShapeHighlight(shapeId);
+        return;
+      }
+      shape.interaction = mergeInteraction(shape.interaction);
+      const interaction = shape.interaction;
+      const events = interaction.events.filter((event) => event && event.type && event.type !== 'none');
+      const runtime = ensureRuntimeShape(shapeId);
+      runtime.eventState = runtime.eventState instanceof Map ? runtime.eventState : new Map();
+      const previousInside = runtime.inside;
+      const previousHover = runtime.hoverInside;
+      let inside = false;
+      let hoverInside = false;
+      let metrics = runtime.lastMetrics || { ...DEFAULT_METRICS };
+
+      const streamId = interaction.stream || 'pose';
+      const landmarkKey = interaction.landmark || 'position';
+
+      if (streamId === 'pointer') {
+        const insideShape = pointerPoint ? shapeContainsPoint(shape, pointerPoint) : false;
+        hoverInside = insideShape;
+        if (insideShape && pointerPoint) {
+          metrics = computeShapeMetrics(shape, pointerPoint);
+        }
+        inside = landmarkKey === 'button' ? (insideShape && pointerIsDown) : insideShape;
+      } else if (streamId === 'keyboard') {
+        const keyState = inputState.keyboard.keys.get(landmarkKey || 'Space');
+        inside = Boolean(keyState?.isDown);
+        hoverInside = inside;
+      } else {
+        const cacheKey = `${streamId}:${landmarkKey}`;
+        if (!pointCache.has(cacheKey)) {
+          const resolved = resolveStreamPoint(streamId, landmarkKey, holisticResults);
+          pointCache.set(cacheKey, resolved);
+        }
+        const targetPoint = pointCache.get(cacheKey);
+        const insideShape = targetPoint ? shapeContainsPoint(shape, targetPoint) : false;
+        hoverInside = insideShape;
+        inside = insideShape;
+        if (insideShape && targetPoint) {
+          metrics = computeShapeMetrics(shape, targetPoint);
+        }
+      }
+
+      const justEntered = inside && !previousInside;
+      const justExited = !inside && previousInside;
+
+      runtime.inside = inside;
+      runtime.hoverInside = hoverInside;
+      runtime.lastMetrics = metrics;
+
+      const nowEventStates = runtime.eventState;
+
+      events.forEach((event) => {
+      const normalizedEvent = normalizeEvent(event);
+      let eventState = nowEventStates.get(normalizedEvent.id);
+      if (!eventState) {
+        eventState = { noteOn: false, lastContinuousAt: 0, meta: null };
+        nowEventStates.set(normalizedEvent.id, eventState);
+      }
+      const trigger = normalizedEvent.trigger || 'enter';
+      switch (normalizedEvent.type) {
+        case 'midiNote': {
+          const channel = normalizedEvent.channel ?? 1;
+          const note = normalizedEvent.note ?? 60;
+          const velocity = resolveValueFromMode(normalizedEvent.velocityMode, metrics, normalizedEvent.velocityValue ?? 96, { midi: true });
+          eventState.meta = { type: 'midiNote', channel, note };
+            const sendOn = () => sendMidiNote(channel, note, velocity, 'on', editorConfig.midiPort);
+            const sendOff = () => sendMidiNote(channel, note, 0, 'off', editorConfig.midiPort);
+            if (trigger === 'enterExit') {
+              if (justEntered) {
+                sendOn();
+                eventState.noteOn = true;
+              }
+              if (justExited && eventState.noteOn) {
+                sendOff();
+                eventState.noteOn = false;
+              }
+              break;
+            }
+            if (trigger === 'enter' && justEntered) {
+              sendOn();
+              eventState.noteOn = true;
+              break;
+            }
+            if (trigger === 'exit' && justExited) {
+              sendOff();
+              eventState.noteOn = false;
+              break;
+            }
+            if (trigger === 'inside' && inside) {
+              if (now - (eventState.lastContinuousAt || 0) >= CONTINUOUS_TRIGGER_INTERVAL_MS) {
+                eventState.lastContinuousAt = now;
+                sendOn();
+                eventState.noteOn = true;
+              }
+            }
+            if (justExited && eventState.noteOn) {
+              sendOff();
+              eventState.noteOn = false;
+            }
+            break;
           }
+          case 'midiCc': {
+            const channel = normalizedEvent.channel ?? 1;
+            const ccNumber = normalizedEvent.cc ?? 1;
+            const value = resolveValueFromMode(normalizedEvent.ccValueMode, metrics, normalizedEvent.ccValue ?? 100, { midi: true });
+            const sendValue = (val) => sendMidiCc(channel, ccNumber, val, editorConfig.midiPort);
+            eventState.meta = { type: 'midiCc', channel, cc: ccNumber };
+            if (trigger === 'enterExit') {
+              if (justEntered) sendValue(value);
+              if (justExited) sendValue(0);
+              break;
+            }
+            if (trigger === 'enter' && justEntered) {
+              sendValue(value);
+              break;
+            }
+            if (trigger === 'exit' && justExited) {
+              sendValue(0);
+              break;
+            }
+            if (trigger === 'inside' && inside) {
+              if (now - (eventState.lastContinuousAt || 0) >= CONTINUOUS_TRIGGER_INTERVAL_MS) {
+                eventState.lastContinuousAt = now;
+                sendValue(value);
+              }
+            }
+            break;
+          }
+          default:
+            break;
         }
       });
-    }
-  };
 
-  const handleMappingClick = (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) return;
-    if (target.closest("[data-mapping-remove]")) {
-      if (!state.shapeId) return;
-      const card = target.closest("[data-mapping-id]");
-      if (!card) return;
-      const mappingId = card.dataset.mappingId;
-      if (!mappingId) return;
-      removeMapping(state.shapeId, mappingId);
-      renderMappingList();
-      if (pointerState.normalized) {
-        updateInsideStates(pointerState.normalized);
+      nowEventStates.forEach((eventState, eventId) => {
+        const stillPresent = events.some((event) => event?.id === eventId);
+        if (!stillPresent) {
+          if (eventState.meta?.type === 'midiNote' && eventState.noteOn) {
+            const meta = eventState.meta;
+            sendMidiNote(meta.channel ?? 1, meta.note ?? 60, 0, 'off', editorConfig.midiPort);
+          }
+          if (eventState.meta?.type === 'midiCc') {
+            const meta = eventState.meta;
+            sendMidiCc(meta.channel ?? 1, meta.cc ?? 1, 0, editorConfig.midiPort);
+          }
+          nowEventStates.delete(eventId);
+        }
+      });
+
+      if (!inside) {
+        nowEventStates.forEach((eventState) => {
+          eventState.lastContinuousAt = 0;
+          if (eventState.noteOn) {
+            // Ensure lingering notes are released
+            eventState.noteOn = false;
+          }
+        });
       }
+
+      if (previousInside !== inside || previousHover !== hoverInside) {
+        applyShapeHighlight(shapeId);
+      }
+    });
+
+    updateShapeActiveIndicators();
+  };
+
+  const getPointerNormalized = (event) => {
+    if (!event || typeof editor.normalizePoint !== 'function') return null;
+    const point = editor.normalizePoint(event, { clamp: false });
+    if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+      return null;
+    }
+    if (point.x < 0 || point.x > 1 || point.y < 0 || point.y > 1) {
+      return null;
+    }
+    return { x: clampUnit(point.x), y: clampUnit(point.y) };
+  };
+
+  const applyPointerState = (updates = {}) => {
+    const target = inputState.pointer;
+    let changed = false;
+    if (Object.prototype.hasOwnProperty.call(updates, 'normalized')) {
+      const nextPoint = updates.normalized;
+      const prevPoint = target.normalized;
+      const bothNull = !prevPoint && !nextPoint;
+      let samePoint = false;
+      if (prevPoint && nextPoint) {
+        samePoint = Math.abs(prevPoint.x - nextPoint.x) < 1e-4 && Math.abs(prevPoint.y - nextPoint.y) < 1e-4;
+      }
+      if (!bothNull && !samePoint) {
+        changed = true;
+      }
+      target.normalized = nextPoint || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, 'isDown')) {
+      if (Boolean(updates.isDown) !== target.isDown) {
+        changed = true;
+      }
+      target.isDown = Boolean(updates.isDown);
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, 'pointerId')) {
+      if (updates.pointerId !== target.pointerId) {
+        changed = true;
+      }
+      target.pointerId = updates.pointerId;
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, 'isOverCanvas')) {
+      if (Boolean(updates.isOverCanvas) !== target.isOverCanvas) {
+        changed = true;
+      }
+      target.isOverCanvas = Boolean(updates.isOverCanvas);
+    }
+    target.lastUpdate = getNow();
+    return changed;
+  };
+
+  const handleInputPointerMove = (event) => {
+    const normalized = getPointerNormalized(event);
+    if (applyPointerState({ normalized, isOverCanvas: Boolean(normalized) })) {
+      evaluateShapeInteractions();
     }
   };
 
-  const handleShapeNameInput = (event) => {
-    if (!state.shapeId) return;
-    const value = (event.target.value || "").trim();
-    if (value) {
-      shapeNames.set(state.shapeId, value);
+  const handleInputPointerDown = (event) => {
+    const normalized = getPointerNormalized(event);
+    const isPrimaryButton = event.button === 0 || event.button === -1;
+    const updates = {
+      normalized,
+      isOverCanvas: Boolean(normalized)
+    };
+    if (isPrimaryButton && normalized) {
+      updates.pointerId = event.pointerId;
+      updates.isDown = true;
+    } else if (isPrimaryButton) {
+      updates.pointerId = null;
+      updates.isDown = false;
+    }
+    if (applyPointerState(updates)) {
+      evaluateShapeInteractions();
+    }
+  };
+
+  const handleInputPointerUp = (event) => {
+    const normalized = getPointerNormalized(event);
+    const isPrimaryButton = event.button === 0 || event.button === -1;
+    const shouldRelease = isPrimaryButton && (inputState.pointer.pointerId === event.pointerId || inputState.pointer.pointerId === null);
+    const updates = {
+      normalized,
+      isOverCanvas: Boolean(normalized)
+    };
+    if (shouldRelease) {
+      updates.pointerId = null;
+      updates.isDown = false;
+    }
+    if (applyPointerState(updates)) {
+      evaluateShapeInteractions();
+    }
+  };
+
+  const handleInputPointerCancel = (event) => {
+    if (inputState.pointer.pointerId !== null && event.pointerId !== inputState.pointer.pointerId) {
+      return;
+    }
+    if (applyPointerState({
+      normalized: null,
+      isOverCanvas: false,
+      isDown: false,
+      pointerId: null
+    })) {
+      evaluateShapeInteractions();
+    }
+  };
+
+  const shouldCaptureKeyboardInput = (event) => {
+    if (!event) return false;
+    const code = event.code;
+    if (!code || !KEYBOARD_REFERENCE_KEYS.some((entry) => entry.key === code)) {
+      return false;
+    }
+    const target = event.target;
+    if (!target) return true;
+    const tag = target.tagName?.toLowerCase?.() || '';
+    if (["input", "textarea", "select"].includes(tag)) {
+      return false;
+    }
+    if (target.isContentEditable) {
+      return false;
+    }
+    return true;
+  };
+
+  const updateKeyboardState = (code, isDown) => {
+    const keys = inputState.keyboard.keys;
+    const existing = keys.get(code) || { isDown: false, lastDownAt: 0, lastUpAt: 0 };
+    const nextState = {
+      isDown: Boolean(isDown),
+      lastDownAt: existing.lastDownAt,
+      lastUpAt: existing.lastUpAt
+    };
+    const timestamp = getNow();
+    if (isDown) {
+      nextState.lastDownAt = timestamp;
     } else {
-      const shape = shapesCache.get(state.shapeId);
-      shapeNames.set(state.shapeId, getDefaultShapeName(shape));
+      nextState.lastUpAt = timestamp;
     }
-    const currentShape = shapesCache.get(state.shapeId);
-    const name = ensureShapeName(state.shapeId, currentShape);
-    if (shapeLabelEl) {
-      shapeLabelEl.textContent = name;
-    }
-    if (!value && shapeNameInput) {
-      shapeNameInput.value = name;
+    const changed = existing.isDown !== nextState.isDown;
+    keys.set(code, nextState);
+    return changed;
+  };
+
+  const handleInputKeyDown = (event) => {
+    if (!shouldCaptureKeyboardInput(event)) return;
+    const changed = updateKeyboardState(event.code, true);
+    if (changed || event.repeat) {
+      evaluateShapeInteractions();
     }
   };
 
-  const dragHandle = modal.querySelector("[data-drag-handle]");
-  let dragContext = null;
-
-  const finalizeDrag = () => {
-    if (!dragContext) return;
-    try {
-      dragContext.target.releasePointerCapture(dragContext.pointerId);
-    } catch (error) {
-      // ignore
+  const handleInputKeyUp = (event) => {
+    if (!shouldCaptureKeyboardInput(event)) return;
+    if (updateKeyboardState(event.code, false)) {
+      evaluateShapeInteractions();
     }
-    dragContext.target.removeEventListener("pointermove", handleDragMove);
-    dragContext.target.removeEventListener("pointerup", finalizeDrag);
-    dragContext.target.removeEventListener("lostpointercapture", finalizeDrag);
-    dragContext = null;
   };
 
-  const handleDragMove = (event) => {
-    if (!dragContext || event.pointerId !== dragContext.pointerId) return;
-    const left = clamp(event.clientX - dragContext.offsetX, VIEWPORT_MARGIN, window.innerWidth - dragContext.width - VIEWPORT_MARGIN);
-    const top = clamp(event.clientY - dragContext.offsetY, VIEWPORT_MARGIN, window.innerHeight - dragContext.height - VIEWPORT_MARGIN);
-    modal.style.left = `${left}px`;
-    modal.style.top = `${top}px`;
+  const handleAssignmentMidiPortChange = () => {
+    if (isSyncingConfig || !assignmentMidiPortSelect) return;
+    setMidiPort(assignmentMidiPortSelect.value);
   };
 
-  const handleDragPointerDown = (event) => {
-    if (event.button !== 0) return;
-    if (event.target.closest?.(".panel-actions")) return;
+  const handleEditorMidiPortChange = () => {
+    if (isSyncingConfig || !editorMidiPortSelect) return;
+    setMidiPort(editorMidiPortSelect.value);
+  };
+
+  const handleDeleteShape = () => {
+    if (!state.activeShapeId || typeof editor.deleteShape !== "function") return;
+    editor.deleteShape(state.activeShapeId);
+  };
+
+  const handleShapeListClick = (event) => {
+    const button = event.target?.closest?.("[data-shape-id]");
+    if (!button) return;
+    const shapeId = button.dataset.shapeId;
+    if (!shapeId) return;
+    if (typeof editor.selectShape === "function") {
+      editor.selectShape(shapeId);
+    }
+  };
+
+  const startModalDrag = (event) => {
+    if (!modal || event.button === 1 || event.button === 2) return;
     event.preventDefault();
     const rect = modal.getBoundingClientRect();
     dragContext = {
       pointerId: event.pointerId,
       offsetX: event.clientX - rect.left,
-      offsetY: event.clientY - rect.top,
-      width: rect.width,
-      height: rect.height,
-      target: modal
+      offsetY: event.clientY - rect.top
     };
+    modal.style.transform = "none";
     modal.style.right = "auto";
     modal.style.bottom = "auto";
-    try {
-      modal.setPointerCapture(event.pointerId);
-    } catch (error) {
-      // ignore capture failure
-    }
-    modal.addEventListener("pointermove", handleDragMove);
-    modal.addEventListener("pointerup", finalizeDrag, { once: true });
-    modal.addEventListener("lostpointercapture", finalizeDrag, { once: true });
+    modal.style.left = `${rect.left}px`;
+    modal.style.top = `${rect.top}px`;
+    modal.classList.add("is-dragging");
+    modal.setPointerCapture(event.pointerId);
   };
 
-  const handleInsideTransition = (shapeId, wasInside, isInside) => {
-    if (wasInside === isInside) return;
-    const runtime = ensureRuntimeShape(shapeId);
-    runtime.inside = isInside;
-    if (wasInside && !isInside) {
-      const mappings = getMappings(shapeId);
-      mappings.forEach((mapping) => {
-        const mappingRuntime = ensureRuntimeMapping(shapeId, mapping.id);
-        if (mapping.sourceType === "mouseInside") {
-          return;
-        }
-        if (mapping.requireInside && mapping.midiType === "note" && mappingRuntime.noteOn) {
-          sendNoteOff(mapping.channel, mapping.note, mapping.offVelocity ?? 0);
-          mappingRuntime.noteOn = false;
-          if (mappingRuntime.pulseTimeout) {
-            clearTimeout(mappingRuntime.pulseTimeout);
-            mappingRuntime.pulseTimeout = null;
-          }
-        }
-        if (mapping.midiType === "cc") {
-          if (mapping.requireInside && mapping.ccMode === "axis" && mappingRuntime.lastValue !== null) {
-            sendControlChange(mapping.channel, mapping.cc, 0);
-            mappingRuntime.lastValue = null;
-            if (mappingRuntime.ccTimeout) {
-              clearTimeout(mappingRuntime.ccTimeout);
-              mappingRuntime.ccTimeout = null;
-            }
-          }
-          if (mapping.ccMode === "whileInside") {
-            triggerCc(shapeId, mapping, 0);
-          }
-        }
-      });
-    } else if (!wasInside && isInside) {
-      const mappings = getMappings(shapeId);
-      mappings.forEach((mapping) => {
-        if (mapping.sourceType === "mouseInside") return;
-        if (mapping.midiType === "cc" && mapping.ccMode === "whileInside") {
-          triggerCc(shapeId, mapping, mapping.ccValue ?? 127);
-        }
-      });
-    }
+  const updateModalDrag = (event) => {
+    if (!dragContext || event.pointerId !== dragContext.pointerId) return;
+    const width = modal.offsetWidth;
+    const height = modal.offsetHeight;
+    const maxLeft = Math.max(12, window.innerWidth - width - 12);
+    const maxTop = Math.max(12, window.innerHeight - height - 12);
+    const nextLeft = clampRange(event.clientX - dragContext.offsetX, 12, maxLeft);
+    const nextTop = clampRange(event.clientY - dragContext.offsetY, 12, maxTop);
+    modal.style.left = `${nextLeft}px`;
+    modal.style.top = `${nextTop}px`;
   };
 
-  const updateInsideStates = (normalizedPoint) => {
-    if (!normalizedPoint) return;
-    mappingStore.forEach((mappings, shapeId) => {
-      if (!mappings.length) return;
-      const previous = pointerState.insideShapes.get(shapeId) || false;
-      const inside = !!editor.shapeContainsPoint(shapeId, normalizedPoint, 0.001);
-      pointerState.insideShapes.set(shapeId, inside);
-      handleInsideTransition(shapeId, previous, inside);
-    });
-    dispatchMouseInside();
-  };
-
-  const handleNoteMapping = (shapeId, mapping, intent) => {
-    const runtime = ensureRuntimeMapping(shapeId, mapping.id);
-    if (mapping.noteMode !== "pulse" && runtime.pulseTimeout) {
-      clearTimeout(runtime.pulseTimeout);
-      runtime.pulseTimeout = null;
+  const endModalDrag = (event) => {
+    if (!dragContext || event.pointerId !== dragContext.pointerId) return;
+    if (modal.hasPointerCapture(event.pointerId)) {
+      modal.releasePointerCapture(event.pointerId);
     }
-    switch (mapping.noteMode) {
-      case "noteOn": {
-        if (intent === "on" || intent === "pulse") {
-          if (!runtime.noteOn) {
-            const shapeName = ensureShapeName(shapeId, shapesCache.get(shapeId));
-            console.info("[mediamime] Note On", {
-              shape: shapeName,
-              mappingId: mapping.id,
-              channel: mapping.channel,
-              note: mapping.note,
-              velocity: mapping.velocity ?? 100
-            });
-            sendNoteOn(mapping.channel, mapping.note, mapping.velocity ?? 100);
-            runtime.noteOn = true;
-            flashShape(shapeId);
-            flashPanel();
-          }
-        }
-        break;
-      }
-      case "noteOff": {
-        if (intent === "off" || intent === "pulse") {
-          const shapeName = ensureShapeName(shapeId, shapesCache.get(shapeId));
-          console.info("[mediamime] Note Off", {
-            shape: shapeName,
-            mappingId: mapping.id,
-            channel: mapping.channel,
-            note: mapping.note,
-            velocity: mapping.offVelocity ?? 0
-          });
-          sendNoteOff(mapping.channel, mapping.note, mapping.offVelocity ?? 0);
-          runtime.noteOn = false;
-          flashShape(shapeId);
-          flashPanel();
-        }
-        break;
-      }
-      case "pulse": {
-        if (intent === "on" || intent === "pulse") {
-          const duration = Number.isFinite(mapping.noteDurationMs) ? mapping.noteDurationMs : 400;
-          const shapeName = ensureShapeName(shapeId, shapesCache.get(shapeId));
-          console.info("[mediamime] Note Pulse", {
-            shape: shapeName,
-            mappingId: mapping.id,
-            channel: mapping.channel,
-            note: mapping.note,
-            velocity: mapping.velocity ?? 100,
-            duration
-          });
-          sendNoteOn(mapping.channel, mapping.note, mapping.velocity ?? 100);
-          runtime.noteOn = true;
-          flashShape(shapeId);
-          flashPanel();
-          runtime.pulseTimeout = window.setTimeout(() => {
-            sendNoteOff(mapping.channel, mapping.note, mapping.offVelocity ?? 0);
-            runtime.noteOn = false;
-            runtime.pulseTimeout = null;
-            flashShape(shapeId);
-            flashPanel();
-          }, clamp(Math.floor(duration), 10, 60000));
-        }
-        break;
-      }
-      default:
-        break;
-    }
-  };
-
-  const triggerCc = (shapeId, mapping, value) => {
-    const runtime = ensureRuntimeMapping(shapeId, mapping.id);
-    if (runtime.ccTimeout) {
-      clearTimeout(runtime.ccTimeout);
-      runtime.ccTimeout = null;
-    }
-    const midiValue = clampMidiValue(value);
-    if (runtime.lastValue === midiValue) return;
-    const shapeName = ensureShapeName(shapeId, shapesCache.get(shapeId));
-    console.info("[mediamime] Control Change", {
-      shape: shapeName,
-      mappingId: mapping.id,
-      channel: mapping.channel,
-      cc: mapping.cc,
-      value: midiValue
-    });
-    sendControlChange(mapping.channel, mapping.cc, midiValue);
-    runtime.lastValue = midiValue;
-    flashShape(shapeId);
-    flashPanel();
-  };
-
-  function dispatchMouseInside() {
-    mappingStore.forEach((mappings, shapeId) => {
-      if (!mappings.length) return;
-      const inside = pointerState.insideShapes.get(shapeId) || false;
-      const intent = inside ? "on" : "off";
-      mappings.forEach((mapping) => {
-        if (mapping.sourceType !== "mouseInside") return;
-        if (mapping.midiType === "note") {
-          handleNoteMapping(shapeId, mapping, intent);
-        } else if (mapping.midiType === "cc") {
-          const value = intent === "on" ? mapping.ccValue ?? 127 : 0;
-          triggerCc(shapeId, mapping, value);
-        }
-      });
-    });
-  }
-
-  const dispatchAxisMappings = (normalizedPoint) => {
-    if (!normalizedPoint) return;
-    mappingStore.forEach((mappings, shapeId) => {
-      if (!mappings.length) return;
-      const inside = pointerState.insideShapes.get(shapeId) || false;
-      mappings.forEach((mapping) => {
-        if (mapping.midiType !== "cc" || mapping.ccMode !== "axis") return;
-        if (mapping.requireInside && !inside) return;
-        const axisSource = mapping.sourceType;
-        if (axisSource === "mouseDrag" && !pointerState.isDown) return;
-        if (axisSource === "mouseX" || axisSource === "mouseY" || axisSource === "mouseDrag") {
-          const axisValue = axisSource === "mouseY" ? normalizedPoint.y : normalizedPoint.x;
-          const midiValue = clampMidiValue(clamp01(axisValue) * 127);
-          triggerCc(shapeId, mapping, midiValue);
-        }
-      });
-    });
-  };
-
-  const dispatchMouseEvent = (sourceType, intent) => {
-    if (pointerState.normalized) {
-      updateInsideStates(pointerState.normalized);
-    }
-    mappingStore.forEach((mappings, shapeId) => {
-      if (!mappings.length) return;
-      const inside = pointerState.insideShapes.get(shapeId) || false;
-      mappings.forEach((mapping) => {
-        if (mapping.sourceType !== sourceType) return;
-        if (mapping.requireInside && !inside) return;
-        if (mapping.midiType === "note") {
-          if (intent === "on" || intent === "off" || intent === "pulse") {
-            handleNoteMapping(shapeId, mapping, intent);
-          }
-        } else if (mapping.midiType === "cc") {
-          if (mapping.ccMode === "constant") {
-            if (intent === "on" || intent === "pulse") {
-              triggerCc(shapeId, mapping, mapping.ccValue ?? 127);
-              if (intent === "pulse") {
-                const runtime = ensureRuntimeMapping(shapeId, mapping.id);
-                runtime.ccTimeout = window.setTimeout(() => {
-                  sendControlChange(mapping.channel, mapping.cc, 0);
-                  runtime.lastValue = 0;
-                  runtime.ccTimeout = null;
-                }, 120);
-              }
-            } else if (intent === "off") {
-              triggerCc(shapeId, mapping, 0);
-            }
-          } else if (mapping.ccMode === "whileInside") {
-            if (intent === "on" || intent === "pulse") {
-              triggerCc(shapeId, mapping, mapping.ccValue ?? 127);
-            } else if (intent === "off") {
-              triggerCc(shapeId, mapping, 0);
-            }
-          }
-        }
-      });
-    });
-  };
-
-  const dispatchKeyEvent = (sourceType, event) => {
-    const lowerKey = event.key?.toLowerCase() || "";
-    if (pointerState.normalized) {
-      updateInsideStates(pointerState.normalized);
-    }
-    mappingStore.forEach((mappings, shapeId) => {
-      if (!mappings.length) return;
-      const inside = pointerState.insideShapes.get(shapeId) || false;
-      mappings.forEach((mapping) => {
-        if (mapping.sourceType !== sourceType) return;
-        if (mapping.requireInside && !inside) return;
-        if (mapping.key && mapping.key !== lowerKey) return;
-        if (mapping.midiType === "note") {
-          const intent = sourceType === "keyDown" ? "on" : "off";
-          handleNoteMapping(shapeId, mapping, intent);
-        } else if (mapping.midiType === "cc") {
-          if (mapping.ccMode === "constant" || mapping.ccMode === "whileInside") {
-            if (sourceType === "keyDown") {
-              triggerCc(shapeId, mapping, mapping.ccMode === "constant" ? mapping.ccValue ?? 127 : mapping.ccValue ?? 127);
-            } else if (sourceType === "keyUp") {
-              triggerCc(shapeId, mapping, 0);
-            }
-          }
-        }
-      });
-    });
-  };
-
-  const handlePointerMove = (event) => {
-    const normalized = editor.normalizePoint({ clientX: event.clientX, clientY: event.clientY }, { clamp: true });
-    if (!normalized) return;
-    pointerState.normalized = normalized;
-    pointerState.overEditor = true;
-    pointerState.isDown = (event.buttons ?? 0) !== 0;
-    updateInsideStates(normalized);
-    dispatchAxisMappings(normalized);
-  };
-
-  const handlePointerDown = (event) => {
-    pointerState.isDown = true;
-    if (event.currentTarget?.setPointerCapture) {
-      try {
-        event.currentTarget.setPointerCapture(event.pointerId);
-      } catch (error) {
-        // ignore capture errors
-      }
-    }
-    const normalized = editor.normalizePoint({ clientX: event.clientX, clientY: event.clientY }, { clamp: true });
-    if (normalized) {
-      pointerState.normalized = normalized;
-      updateInsideStates(normalized);
-    }
-    dispatchMouseEvent("mouseDown", "on");
-  };
-
-  const handlePointerUp = (event) => {
-    pointerState.isDown = false;
-    if (event.currentTarget?.releasePointerCapture) {
-      try {
-        event.currentTarget.releasePointerCapture(event.pointerId);
-      } catch (error) {
-        // ignore release errors
-      }
-    }
-    const normalized = editor.normalizePoint({ clientX: event.clientX, clientY: event.clientY }, { clamp: true });
-    if (normalized) {
-      pointerState.normalized = normalized;
-      updateInsideStates(normalized);
-    }
-    dispatchMouseEvent("mouseUp", "off");
-    dispatchMouseEvent("mouseDown", "off");
-  };
-
-  const handlePointerClick = (event) => {
-    const normalized = editor.normalizePoint({ clientX: event.clientX, clientY: event.clientY }, { clamp: true });
-    if (normalized) {
-      pointerState.normalized = normalized;
-      updateInsideStates(normalized);
-    }
-    dispatchMouseEvent("mouseClick", "pulse");
-  };
-
-  const handlePointerLeave = () => {
-    pointerState.overEditor = false;
-    pointerState.normalized = null;
-    pointerState.isDown = false;
-    mappingStore.forEach((_, shapeId) => {
-      const previous = pointerState.insideShapes.get(shapeId) || false;
-      pointerState.insideShapes.set(shapeId, false);
-      handleInsideTransition(shapeId, previous, false);
-    });
-    dispatchMouseInside();
+    dragContext = null;
+    modal.classList.remove("is-dragging");
   };
 
   const handleKeyDown = (event) => {
-    if (event.repeat) return;
-    const target = event.target;
-    const tag = target?.tagName?.toLowerCase();
-    if (["input", "textarea", "select"].includes(tag) || target?.isContentEditable) return;
-    dispatchKeyEvent("keyDown", event);
-  };
-
-  const handleKeyUp = (event) => {
-    const target = event.target;
-    const tag = target?.tagName?.toLowerCase();
-    if (["input", "textarea", "select"].includes(tag) || target?.isContentEditable) return;
-    dispatchKeyEvent("keyUp", event);
-  };
-
-  addMappingButton?.addEventListener("click", addMapping);
-  shapeNameInput?.addEventListener("input", handleShapeNameInput);
-  dragHandle?.addEventListener("pointerdown", handleDragPointerDown);
-  const attachPointerListeners = () => {
-    svg?.addEventListener("pointermove", handlePointerMove, { capture: true });
-    svg?.addEventListener("pointerdown", handlePointerDown, { capture: true });
-    svg?.addEventListener("pointerup", handlePointerUp, { capture: true });
-    svg?.addEventListener("click", handlePointerClick, { capture: true });
-    svg?.addEventListener("pointerleave", handlePointerLeave, { capture: true });
-    svg?.addEventListener("pointercancel", handlePointerLeave, { capture: true });
-  };
-
-  mappingListEl?.addEventListener("change", handleMappingFieldChange);
-  mappingListEl?.addEventListener("input", handleMappingFieldChange);
-  mappingListEl?.addEventListener("click", handleMappingClick);
-  shapeTableEl?.addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-shape-id]");
-    if (!button) return;
-    const shapeId = button.dataset.shapeId;
-    if (!shapeId) return;
-    const shapeSnapshot = editor.getShapeSnapshot ? editor.getShapeSnapshot(shapeId) : shapesCache.get(shapeId);
-    if (!shapeSnapshot) return;
-    const rect = button.getBoundingClientRect();
-    const pointer = {
-      clientX: rect.right + 12,
-      clientY: rect.top + rect.height / 2
-    };
-    handleMappingRequest({ shapeId, shape: shapeSnapshot, pointer });
-  });
-  attachPointerListeners();
-  editorRoot?.addEventListener("pointerleave", handlePointerLeave);
-  window.addEventListener("keydown", handleKeyDown, true);
-  window.addEventListener("keyup", handleKeyUp, true);
-
-  initializeMidi();
-  bootstrapInitialState();
-
-  const ensureVisibleWithinViewport = () => {
-    const rect = modal.getBoundingClientRect();
-    const maxLeft = Math.max(VIEWPORT_MARGIN, window.innerWidth - rect.width - VIEWPORT_MARGIN);
-    const maxTop = Math.max(VIEWPORT_MARGIN, window.innerHeight - rect.height - VIEWPORT_MARGIN);
-    const left = clamp(rect.left, VIEWPORT_MARGIN, maxLeft);
-    const top = clamp(rect.top, VIEWPORT_MARGIN, maxTop);
-    modal.style.left = `${left}px`;
-    modal.style.top = `${top}px`;
-  };
-
-  const positionModal = (pointer = {}) => {
-    const pointerX = Number.isFinite(pointer.clientX) ? pointer.clientX : window.innerWidth / 2;
-    const pointerY = Number.isFinite(pointer.clientY) ? pointer.clientY : window.innerHeight / 2;
-    modal.style.left = `${pointerX + MODAL_OFFSET}px`;
-    modal.style.top = `${pointerY + MODAL_OFFSET}px`;
-  };
-
-  const showModal = () => {
-    if (state.isOpen) return;
-    modal.classList.remove("is-hidden");
-    modal.classList.add("is-open", "is-visible");
-    modal.setAttribute("aria-hidden", "false");
-    state.isOpen = true;
-    requestAnimationFrame(() => {
-      ensureVisibleWithinViewport();
-      focusTarget?.focus?.({ preventScroll: true });
-    });
-  };
-
-  const hideModal = () => {
-    if (!state.isOpen) return;
-    modal.classList.remove("is-open", "is-visible");
-    modal.classList.add("is-hidden");
-    modal.setAttribute("aria-hidden", "true");
-    modal.classList.remove("is-active");
-    state.isOpen = false;
-    state.shapeId = null;
-    describeShape(null);
-    finalizeDrag();
-    renderShapeTable();
-  };
-
-  const describeShape = (shape) => {
-    if (!shapeLabelEl) return;
-    if (!shape || !state.shapeId) {
-      shapeLabelEl.textContent = "MIDI Mapping";
-      if (shapeNameInput) {
-        shapeNameInput.value = "";
-        shapeNameInput.placeholder = "Untitled shape";
-      }
-      return;
-    }
-    const name = ensureShapeName(state.shapeId, shape);
-    shapeLabelEl.textContent = name;
-    if (shapeNameInput) {
-      shapeNameInput.value = name;
-    }
-  };
-
-  const syncFromCache = () => {
-    if (!state.shapeId) return;
-    const shape = shapesCache.get(state.shapeId);
-    if (!shape) {
-      hideModal();
-      return;
-    }
-    describeShape(shape);
-  };
-
-  const handleMappingRequest = (payload) => {
-    if (!payload || !payload.shapeId || !payload.shape) return;
-    state.shapeId = payload.shapeId;
-    shapesCache.set(payload.shapeId, payload.shape);
-    ensureShapeName(payload.shapeId, payload.shape);
-    describeShape(payload.shape);
-    renderMappingList();
-    renderShapeTable();
-    positionModal(payload.pointer);
-    showModal();
-  };
-
-  const handleSelectionChange = (payload) => {
-    if (!state.isOpen || !state.shapeId) return;
-    if (!payload || !Array.isArray(payload.selection)) return;
-    if (!payload.selection.includes(state.shapeId)) {
-      hideModal();
-      return;
-    }
-    if (Array.isArray(payload.shapes)) {
-      payload.shapes.forEach((shape) => {
-        if (shape?.id) {
-          shapesCache.set(shape.id, shape);
-          ensureShapeName(shape.id, shape);
-        }
-      });
-      syncFromCache();
-      renderMappingList();
-      renderShapeTable();
-    }
-  };
-
-  const handleShapesChange = (shapes) => {
-    if (!Array.isArray(shapes)) return;
-    shapesCache.clear();
-    const present = new Set();
-    shapes.forEach((shape) => {
-      if (shape?.id) {
-        shapesCache.set(shape.id, shape);
-        present.add(shape.id);
-      }
-    });
-    Array.from(mappingStore.keys()).forEach((shapeId) => {
-      if (!present.has(shapeId)) {
-        mappingStore.delete(shapeId);
-        runtimeState.delete(shapeId);
-        pointerState.insideShapes.delete(shapeId);
-        shapeNames.delete(shapeId);
-      }
-    });
-    if (state.isOpen) {
-      syncFromCache();
-      renderMappingList();
-    }
-    if (pointerState.normalized) {
-      updateInsideStates(pointerState.normalized);
-    }
-    renderShapeTable();
-  };
-
-  const handleOutsidePointer = (event) => {
-    if (!state.isOpen) return;
-    if (modal.contains(event.target)) return;
-    hideModal();
-  };
-
-  const handleEscape = (event) => {
-    if (!state.isOpen) return;
-    if (event.key === "Escape") {
+    if (event.key === "Escape" && state.modalOpen) {
       event.preventDefault();
-      hideModal();
+      closeModal();
     }
   };
 
-  closeButtons.forEach((button) => {
-    button.addEventListener("click", hideModal);
-  });
+  addListener(openButton, "click", () => openModalForShape(state.activeShapeId));
+  addListener(addEventButton, "click", handleAssignmentAddEvent);
+  addListener(eventList, "click", handleAssignmentEventListClick);
+  addListener(eventList, "change", handleAssignmentEventListInput);
+  addListener(eventList, "input", handleAssignmentEventListInput);
+  addListener(shapeNameInput, "input", handleAssignmentShapeNameInput);
+  addListener(shapeNameInput, "change", handleAssignmentShapeNameChange);
+  addListener(streamSelect, "change", handleAssignmentStreamChange);
+  addListener(landmarkSelect, "change", handleAssignmentLandmarkChange);
+  addListener(assignmentMidiPortSelect, "change", handleAssignmentMidiPortChange);
+  addListener(assignmentMidiPortRefreshButton, "click", refreshMidiPorts);
+  if (assignmentHandle) {
+    addListener(assignmentHandle, "pointerdown", startModalDrag);
+  }
+  addListener(modal, "pointermove", updateModalDrag);
+  addListener(modal, "pointerup", endModalDrag);
+  addListener(modal, "pointercancel", endModalDrag);
 
-  document.addEventListener("pointerdown", handleOutsidePointer, true);
-  window.addEventListener("keydown", handleEscape, true);
+  addListener(closeButton, "click", closeModal);
+  addListener(cancelButton, "click", closeModal);
+  addListener(applyButton, "click", applyModal);
+  addListener(backdrop, "click", closeModal);
+  addListener(modal, "keydown", handleKeyDown);
+  addListener(document, "keydown", handleKeyDown, true);
+  addListener(svg, "dblclick", handleDoubleClick);
+  addListener(editorShapeList, "click", handleShapeListClick);
+  addListener(editorAddEventButton, "click", handleEditorAddEvent);
+  addListener(editorEventList, "click", handleEditorEventListClick);
+  addListener(editorEventList, "change", handleEditorEventListInput);
+  addListener(editorEventList, "input", handleEditorEventListInput);
+  addListener(editorStreamSelect, "change", handleEditorStreamChange);
+  addListener(editorLandmarkSelect, "change", handleEditorLandmarkChange);
+  addListener(editorDeleteShapeButton, "click", handleDeleteShape);
+  addListener(editorMidiPortSelect, "change", handleEditorMidiPortChange);
+  addListener(window, "pointermove", handleInputPointerMove, { passive: true });
+  addListener(window, "pointerdown", handleInputPointerDown, { passive: true });
+  addListener(window, "pointerup", handleInputPointerUp, { passive: true });
+  addListener(window, "pointercancel", handleInputPointerCancel);
+  addListener(window, "keydown", handleInputKeyDown, true);
+  addListener(window, "keyup", handleInputKeyUp, true);
 
-  editor.on("mappingrequest", handleMappingRequest);
-  editor.on("selectionchange", handleSelectionChange);
-  editor.on("shapeschange", handleShapesChange);
+  if (typeof editor.on === "function") {
+    editor.on("selectionchange", handleSelectionChange);
+    editor.on("shapealtclick", handleShapeAltClick);
+    editor.on("shapeschange", handleShapesChange);
+  }
+
+  if (typeof editor.getState === "function") {
+    const initial = editor.getState();
+    if (initial && Array.isArray(initial.selection) && initial.selection.length) {
+      state.activeShapeId = initial.selection[0];
+      ensureDraftFromShape(getShapeSnapshot(state.activeShapeId));
+    }
+    if (initial && Array.isArray(initial.shapes)) {
+      handleShapesChange(initial.shapes);
+    }
+  }
+  updateOpenButtonState();
+  renderShapeList();
+  syncEditorDetailForm();
+  applyMidiSelections();
+  ensureMidiAccess();
+  evaluateShapeInteractions();
 
   return {
     dispose() {
-      document.removeEventListener("pointerdown", handleOutsidePointer, true);
-      window.removeEventListener("keydown", handleEscape, true);
-      addMappingButton?.removeEventListener("click", addMapping);
-      shapeNameInput?.removeEventListener("input", handleShapeNameInput);
-      dragHandle?.removeEventListener("pointerdown", handleDragPointerDown);
-      mappingListEl?.removeEventListener("change", handleMappingFieldChange);
-      mappingListEl?.removeEventListener("input", handleMappingFieldChange);
-      mappingListEl?.removeEventListener("click", handleMappingClick);
-      svg?.removeEventListener("pointermove", handlePointerMove, true);
-      svg?.removeEventListener("pointerdown", handlePointerDown, true);
-      svg?.removeEventListener("pointerup", handlePointerUp, true);
-      svg?.removeEventListener("click", handlePointerClick, true);
-      svg?.removeEventListener("pointerleave", handlePointerLeave, true);
-      svg?.removeEventListener("pointercancel", handlePointerLeave, true);
-      editorRoot?.removeEventListener("pointerleave", handlePointerLeave);
-      window.removeEventListener("keydown", handleKeyDown, true);
-      window.removeEventListener("keyup", handleKeyUp, true);
-      if (midiState.access) {
-        midiState.access.removeEventListener("statechange", refreshMidiOutputs);
+      listeners.forEach((remove) => remove());
+      if (typeof editor.off === "function") {
+        editor.off("selectionchange", handleSelectionChange);
+        editor.off("shapealtclick", handleShapeAltClick);
+        editor.off("shapeschange", handleShapesChange);
       }
-      midiState.outputs.clear();
-      midiState.ready = false;
-      handlePointerLeave();
-      editor.off("mappingrequest", handleMappingRequest);
-      editor.off("selectionchange", handleSelectionChange);
-      editor.off("shapeschange", handleShapesChange);
-      modal.remove();
-      shapesCache.clear();
     }
   };
 }

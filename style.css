@@ -59,6 +59,17 @@ html, body {
       font-size: 18px;
       line-height: 1;
     }
+    .visually-hidden {
+      position: absolute !important;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
     .material-symbols-outlined {
       font-family: "Material Symbols Outlined";
       font-weight: normal;
@@ -940,99 +951,183 @@ html, body {
       top: 50%;
       left: 50%;
       transform: translate(-50%, -55%);
-      width: min(420px, calc(100vw - 2rem));
-      max-height: calc(100vh - 4rem);
-      overflow-y: auto;
+      width: min(360px, calc(100vw - 2rem));
+      max-height: calc(100vh - 2.5rem);
       background: rgba(9, 13, 22, calc(var(--surface-opacity) * 0.97));
-      border-radius: 16px;
-      padding: 1.5rem;
+      border-radius: 14px;
       border: 1px solid rgba(255, 255, 255, 0.08);
-      box-shadow: 0 32px 62px rgba(0, 0, 0, 0.55);
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.24s ease, transform 0.24s ease;
       z-index: 270;
+      display: flex;
+      flex-direction: column;
     }
     .assignment-modal.is-visible {
       opacity: 1;
       pointer-events: auto;
       transform: translate(-50%, -50%);
     }
-    .assignment-modal header {
+    .assignment-chrome {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 0.6rem;
-      margin-bottom: 0.6rem;
+      gap: 0.5rem;
+      padding: 0.55rem 0.75rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px 14px 0 0;
+      background: rgba(255, 255, 255, 0.02);
     }
-    .assignment-modal header button {
-      cursor: pointer;
-    }
-    .assignment-modal header h3 {
-      margin: 0;
-      font-size: 1rem;
-    }
-    .assignment-modal-handle {
-      width: 9rem;
-      height: 0.6rem;
-      margin: 0 auto 0.75rem;
-      border-radius: 999px 999px 4px 4px;
-      background: rgba(82, 213, 255, calc(var(--surface-opacity) * 0.18));
-      border: 1px solid rgba(82, 213, 255, 0.32);
+    .assignment-handle {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: #f5f7ff;
+      font-weight: 600;
       cursor: move;
       touch-action: none;
       user-select: none;
     }
-    .assignment-modal.is-dragging .assignment-modal-handle {
+    .assignment-handle span {
+      font-size: 0.92rem;
+      letter-spacing: 0.04em;
+    }
+    .assignment-handle .material-icons-outlined {
+      font-size: 1.1rem;
+      opacity: 0.72;
+    }
+    .assignment-modal.is-dragging .assignment-handle {
       cursor: grabbing;
-      background: rgba(82, 213, 255, calc(var(--surface-opacity) * 0.28));
     }
-    .assignment-modal .form-group {
-      display: grid;
+    .assignment-chrome .modal-actions {
+      display: flex;
+      align-items: center;
       gap: 0.35rem;
-      margin-bottom: 0.6rem;
     }
-    .assignment-modal label {
-      font-size: 0.78rem;
+    .assignment-body {
+      padding: 0.75rem 0.8rem 0.85rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      flex: 1 1 auto;
+    }
+    .assignment-row {
+      display: grid;
+      grid-template-columns: 72px 1fr;
+      gap: 0.55rem;
+      align-items: center;
+    }
+    .assignment-row label {
+      font-size: 0.72rem;
       letter-spacing: 0.05em;
       text-transform: uppercase;
       color: var(--text-secondary);
+    }
+    .assignment-field-group {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      width: 100%;
+    }
+    .assignment-field-group select,
+    .assignment-field-group input {
+      flex: 1;
+    }
+    .assignment-field-group--compact {
+      gap: 0.3rem;
+    }
+    .assignment-row--split .assignment-field-group select:first-child {
+      flex: 0.55;
+    }
+    .assignment-row--split .assignment-field-group select:last-child {
+      flex: 0.45;
     }
     .assignment-modal select,
     .assignment-modal input[type="text"],
     .assignment-modal input[type="number"] {
       width: 100%;
-      padding: 0.4rem 0.45rem;
-      border-radius: 4px;
+      padding: 0.36rem 0.45rem;
+      border-radius: 5px;
       border: 1px solid var(--border-subtle);
       background: rgba(6, 10, 18, calc(var(--surface-opacity) * 0.96));
       color: #f5f7ff;
       font-size: 0.82rem;
     }
-    .assignment-modal .modal-actions {
+    .assignment-events {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      padding: 0.35rem 0.45rem;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(10, 16, 26, calc(var(--surface-opacity) * 0.82));
+    }
+    .assignment-events .event-list {
+      gap: 0.3rem;
+    }
+    .assignment-events .event-card {
+      padding: 0.32rem 0.4rem;
+      border-radius: 5px;
+    }
+    .assignment-events .event-card-header select {
+      padding: 0.24rem 0.35rem;
+    }
+    .assignment-actions {
       display: flex;
       justify-content: flex-end;
-      gap: 0.6rem;
-      margin-top: 0.8rem;
+      gap: 0.45rem;
+      margin-top: 0.25rem;
     }
-    .assignment-modal .modal-actions button {
-      padding: 0.45rem 0.75rem;
-      border-radius: 4px;
-      border: 1px solid rgba(255, 255, 255, 0.14);
+    .assignment-actions button {
+      padding: 0.38rem 0.65rem;
+      border-radius: 5px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
       background: rgba(82, 213, 255, calc(var(--surface-opacity) * 0.12));
       color: #f5f7ff;
       font-size: 0.82rem;
       cursor: pointer;
-      transition: background 0.18s ease;
+      transition: background 0.18s ease, border-color 0.18s ease;
     }
-    .assignment-modal .modal-actions button:hover {
+    .assignment-actions button:hover {
       background: rgba(82, 213, 255, calc(var(--surface-opacity) * 0.22));
+      border-color: rgba(82, 213, 255, 0.32);
     }
-    .assignment-modal .modal-actions button.secondary {
+    .assignment-actions button.secondary {
       background: rgba(255, 255, 255, calc(var(--surface-opacity) * 0.08));
+      border-color: rgba(255, 255, 255, 0.1);
     }
-    .assignment-modal .modal-actions button.secondary:hover {
+    .assignment-actions button.secondary:hover {
       background: rgba(255, 255, 255, calc(var(--surface-opacity) * 0.16));
+      border-color: rgba(255, 255, 255, 0.22);
+    }
+    .assignment-body .event-hint {
+      margin: 0;
+      font-size: 0.7rem;
+      color: rgba(245, 247, 255, 0.55);
+    }
+    @media (max-width: 560px) {
+      .assignment-row {
+        grid-template-columns: 1fr;
+        gap: 0.4rem;
+        align-items: stretch;
+      }
+      .assignment-row label {
+        font-size: 0.74rem;
+      }
+      .assignment-field-group {
+        flex-wrap: wrap;
+        gap: 0.4rem;
+      }
+      .assignment-field-group select,
+      .assignment-field-group input {
+        flex: 1 1 100%;
+      }
+    .assignment-field-group--compact .icon-button {
+        width: auto;
+        height: 100%;
+        padding: 0.2rem 0.25rem;
+    }
     }
     .no-pointer {
       pointer-events: none;
@@ -1077,9 +1172,13 @@ html, body {
       color: #f5f7ff;
       box-shadow: inset 0 0 0 1px rgba(82, 213, 255, 0.24);
     }
-    .editor-shape-list button[data-active="true"]:not(.is-active) {
-      border-color: rgba(82, 213, 255, 0.22);
-      box-shadow: inset 0 0 0 1px rgba(82, 213, 255, 0.14);
+    .editor-shape-list button[data-active="true"] {
+      border-color: rgba(249, 115, 22, 0.38);
+      box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.24);
+    }
+    .editor-shape-list button[data-active="true"] .shape-label::after {
+      content: " •";
+      color: rgba(249, 115, 22, 0.85);
     }
     .editor-shape-list button .shape-meta {
       font-size: 0.72rem;
@@ -1277,9 +1376,13 @@ html, body {
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 0.3rem;
     }
-    .editor-shape.is-mapping {
-      filter: drop-shadow(0 0 12px rgba(82, 213, 255, 0.55));
-      transition: filter 0.12s ease;
+    .editor-shape.is-mapping-active > * {
+      stroke: rgba(249, 115, 22, 0.9) !important;
+      fill: rgba(249, 115, 22, 0.22) !important;
+      transition: stroke 0.12s ease, fill 0.12s ease;
+    }
+    .editor-shape.is-mapping-active {
+      filter: drop-shadow(0 0 18px rgba(249, 115, 22, 0.4));
     }
     @media (max-width: 1200px) {
       .editor-detail,

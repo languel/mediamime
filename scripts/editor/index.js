@@ -183,6 +183,9 @@ class Editor {
         selection: this.state.selectedShapeId ? [this.state.selectedShapeId] : []
       }),
       setTool: (tool) => this.setTool(tool),
+      updateShape: (shapeId, mutator) => this.updateShape(shapeId, mutator),
+      selectShape: (shapeId) => this.selectShape(shapeId),
+      deleteShape: (shapeId) => this.deleteShape(shapeId),
       on: (event, handler) => this.on(event, handler),
       off: (event, handler) => this.off(event, handler),
       normalizePoint: (clientPoint, options) => this.normalizeClientPoint(clientPoint, options),
@@ -414,6 +417,16 @@ class Editor {
       if (shapeId) {
         const shape = this.shapeStore?.read(shapeId);
         if (!shape) return;
+        if (event.altKey) {
+          if (this.state.selectedShapeId !== shapeId) {
+            this.state.selectedShapeId = shapeId;
+            this.render();
+            this.notifySelectionChanged();
+          }
+          this.emit("shapealtclick", { shapeId, originalEvent: event });
+          event.preventDefault();
+          return;
+        }
         if (this.state.selectedShapeId !== shapeId) {
           this.state.selectedShapeId = shapeId;
           this.render();
@@ -861,6 +874,48 @@ class Editor {
     });
   }
 
+  selectShape(shapeId) {
+    if (!shapeId) {
+      if (this.state.selectedShapeId !== null) {
+        this.state.selectedShapeId = null;
+        this.render();
+        this.notifySelectionChanged();
+      }
+      return;
+    }
+    const exists = this.shapeStore?.read(shapeId);
+    if (!exists) return;
+    if (this.state.selectedShapeId === shapeId) return;
+    this.state.selectedShapeId = shapeId;
+    this.render();
+    this.notifySelectionChanged();
+  }
+
+  deleteShape(shapeId) {
+    if (!shapeId) return;
+    if (!this.shapeStore?.read(shapeId)) return;
+    this.removeShape(shapeId);
+    this.render();
+    this.notifyShapesChanged();
+  }
+
+  updateShape(shapeId, mutator) {
+    if (!shapeId || typeof mutator !== "function") return;
+    const store = this.shapeStore;
+    if (!store) return;
+    const current = store.read(shapeId);
+    if (!current) return;
+    const draft = cloneShape(current);
+    const result = mutator(draft) || draft;
+    const next = result || draft;
+    store.write(next);
+    this.renderShapes();
+    this.notifyShapesChanged();
+    if (this.state.selectedShapeId === shapeId) {
+      this.notifySelectionChanged();
+    }
+  }
+
   render() {
     this.renderShapes();
     this.updateToolbar();
@@ -928,9 +983,14 @@ function createSvgElement(name, attrs = {}) {
 
 function createShape(tool, point, style) {
   const id = createId();
+  const base = {
+    id,
+    name: "",
+    interaction: null
+  };
   if (tool === "rect") {
     return {
-      id,
+      ...base,
       type: "rect",
       x: point.x,
       y: point.y,
@@ -942,7 +1002,7 @@ function createShape(tool, point, style) {
   }
   if (tool === "ellipse") {
     return {
-      id,
+      ...base,
       type: "ellipse",
       x: point.x,
       y: point.y,
@@ -954,14 +1014,14 @@ function createShape(tool, point, style) {
   }
   if (tool === "line") {
     return {
-      id,
+      ...base,
       type: "line",
       points: [{ x: point.x, y: point.y }, { x: point.x, y: point.y }],
       style: { ...style }
     };
   }
   return {
-    id,
+    ...base,
     type: "path",
     points: [{ x: point.x, y: point.y }],
     style: { ...style }
@@ -1327,6 +1387,8 @@ function cloneShape(shape) {
   if (shape.type === "rect" || shape.type === "ellipse") {
     return {
       id: shape.id,
+      name: shape.name || "",
+      interaction: shape.interaction ? JSON.parse(JSON.stringify(shape.interaction)) : null,
       type: shape.type,
       x: shape.x,
       y: shape.y,
@@ -1338,6 +1400,8 @@ function cloneShape(shape) {
   }
   return {
     id: shape.id,
+    name: shape.name || "",
+    interaction: shape.interaction ? JSON.parse(JSON.stringify(shape.interaction)) : null,
     type: shape.type,
     points: shape.points.map((point) => ({ x: point.x, y: point.y })),
     closed: Boolean(shape.closed),
@@ -1362,6 +1426,17 @@ function applyShapeNode(node, shape, view) {
   if (!node || !shape) return;
   node.dataset.shapeId = shape.id;
   node.dataset.shapeType = shape.type;
+  node.dataset.shapeName = shape.name || "";
+  if (shape.interaction) {
+    try {
+      node.dataset.shapeInteraction = JSON.stringify(shape.interaction);
+    } catch (error) {
+      console.warn("[mediamime] Failed to serialise shape interaction", error);
+      delete node.dataset.shapeInteraction;
+    }
+  } else {
+    delete node.dataset.shapeInteraction;
+  }
   const style = shape.style || DEFAULT_STYLE;
   node.dataset.shapeStroke = style.stroke || DEFAULT_STYLE.stroke;
   node.dataset.shapeFill = style.fill || DEFAULT_STYLE.fill;
@@ -1462,6 +1537,18 @@ function parseShapeNode(node, view) {
   const fill = node.dataset.shapeFill || DEFAULT_STYLE.fill;
   const strokeWidth = Number.parseFloat(node.dataset.shapeStrokeWidth || `${DEFAULT_STYLE.strokeWidth}`) || DEFAULT_STYLE.strokeWidth;
   const rotation = Number.parseFloat(node.dataset.shapeRotation || "0") || 0;
+  const name = node.dataset.shapeName || "";
+  let interaction = null;
+  if (node.dataset.shapeInteraction) {
+    try {
+      const parsed = JSON.parse(node.dataset.shapeInteraction);
+      if (parsed && typeof parsed === "object") {
+        interaction = parsed;
+      }
+    } catch (error) {
+      console.warn("[mediamime] Failed to parse shape interaction", error);
+    }
+  }
   if (type === "rect" || type === "ellipse") {
     const x = Number.parseFloat(node.dataset.shapeX || "0");
     const y = Number.parseFloat(node.dataset.shapeY || "0");
@@ -1469,6 +1556,8 @@ function parseShapeNode(node, view) {
     const height = Number.parseFloat(node.dataset.shapeHeight || "0");
     return {
       id,
+      name,
+      interaction,
       type,
       x,
       y,
@@ -1494,6 +1583,8 @@ function parseShapeNode(node, view) {
     const closed = node.dataset.shapeClosed === "true";
     return {
       id,
+      name,
+      interaction,
       type,
       points,
       closed,
@@ -1503,6 +1594,8 @@ function parseShapeNode(node, view) {
   }
   return {
     id,
+    name,
+    interaction,
     type: "rect",
     x: 0,
     y: 0,
