@@ -972,10 +972,18 @@ export function initMapping({ editor }) {
 
   const applyShapeHighlight = (shapeId) => {
     const active = isShapeActive(shapeId);
+    const shape = shapesById.get(shapeId);
     if (svg) {
       const node = svg.querySelector(`[data-shape-id="${shapeId}"]`);
       if (node) {
         node.classList.toggle("is-mapping-active", active);
+        if (active && shape) {
+          const color = getShapeColor(shape, DEFAULT_SHAPE_COLOR);
+          const opacity = Math.min(getShapeOpacity(shape, DEFAULT_SHAPE_OPACITY) + 0.3, 1);
+          node.style.setProperty("--shape-glow-color", hexToRgba(color, opacity));
+        } else {
+          node.style.removeProperty("--shape-glow-color");
+        }
       }
     }
     if (editorShapeList) {
