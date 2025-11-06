@@ -1019,6 +1019,15 @@ class Editor {
       return;
     }
     switch (key) {
+      case "delete": {
+        // Forward Delete (fn+Backspace on macOS): delete current selection
+        const selected = Array.from(this.state.selectedShapeIds);
+        if (selected.length) {
+          event.preventDefault();
+          this.deleteSelection();
+        }
+        break;
+      }
       case "v":
         this.setTool("select");
         event.preventDefault();
@@ -1067,6 +1076,20 @@ class Editor {
         break;
     }
   };
+
+  deleteSelection() {
+    if (!this.shapeStore) return;
+    const ids = Array.from(this.state.selectedShapeIds);
+    if (!ids.length) return;
+    // Remove shapes without spamming events, then emit once
+    ids.forEach((id) => {
+      this.shapeStore.remove(id);
+    });
+    this.state.selectedShapeIds.clear();
+    this.render();
+    this.notifyShapesChanged();
+    this.notifySelectionChanged();
+  }
 
   beginDrawing(tool, point, pointerId) {
     this.svg.setPointerCapture(pointerId);
