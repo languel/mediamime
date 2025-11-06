@@ -136,6 +136,9 @@ class Editor {
     this.modeToggle = document.getElementById("gesture-mode-toggle") || this.toolbar.querySelector("#gesture-mode-toggle");
     this.clearButton = document.getElementById("gesture-clear") || this.toolbar.querySelector("#gesture-clear");
     this.toolbarHidden = false;
+    // History (undo/redo)
+    this.history = { past: [], future: [], limit: 3 };
+    this.isRestoring = false;
   }
 
   init() {
@@ -144,6 +147,8 @@ class Editor {
     this.bindCanvas();
     this.updateModeUI();
     this.render();
+    // Seed history with initial state
+    this.commitHistory("init");
   }
 
   normalizeClientPoint(clientPoint, { clamp = true } = {}) {
@@ -216,6 +221,80 @@ class Editor {
         console.error(`[mediamime] Editor listener for "${event}" failed`, error);
       }
     });
+  }
+
+  // ===== History (Undo/Redo) =====
+  getSnapshot() {
+    return {
+      // Only capture score state (shapes), not UI state like selection
+      shapes: (this.shapeStore ? this.shapeStore.list() : []).map(cloneShape)
+    };
+  }
+
+  restoreSnapshot(snapshot) {
+    if (!snapshot || !Array.isArray(snapshot.shapes)) return;
+    this.isRestoring = true;
+    try {
+      // Replace shapes to match snapshot exactly
+      if (this.shapeStore) {
+        this.shapeStore.clear();
+        snapshot.shapes.forEach((shape) => this.shapeStore.write(shape));
+      }
+      // Prune selection to only shapes that still exist after restore
+      const beforeSel = new Set(this.state.selectedShapeIds);
+      const afterSel = new Set();
+      beforeSel.forEach((id) => {
+        if (this.shapeStore.read(id)) afterSel.add(id);
+      });
+      this.state.selectedShapeIds = afterSel;
+      this.render();
+      this.notifyShapesChanged();
+      this.notifySelectionChanged();
+    } finally {
+      this.isRestoring = false;
+    }
+  }
+
+  commitHistory(label = "commit") {
+    if (this.isRestoring) return;
+    const snap = this.getSnapshot();
+    // Skip duplicate of last past entry by deep-comparing shapes content
+    const last = this.history.past[this.history.past.length - 1];
+    if (last) {
+      try {
+        const lastStr = JSON.stringify(last.shapes);
+        const snapStr = JSON.stringify(snap.shapes);
+        if (lastStr === snapStr) return;
+      } catch {
+        // If stringify fails, fall through and record the commit
+      }
+    }
+    this.history.past.push(snap);
+    if (this.history.past.length > this.history.limit) {
+      this.history.past.shift();
+    }
+    // New commit invalidates redo chain
+    this.history.future.length = 0;
+  }
+
+  undo() {
+    if (!this.history.past.length) return;
+    const current = this.getSnapshot();
+    const target = this.history.past.pop();
+    this.history.future.push(current);
+    this.restoreSnapshot(target);
+  }
+
+  redo() {
+    if (!this.history.future.length) return;
+    const current = this.getSnapshot();
+    const target = this.history.future.pop();
+    // Move current to past for another undo step
+    this.history.past.push(current);
+    if (this.history.past.length > this.history.limit) {
+      this.history.past.shift();
+    }
+    this.restoreSnapshot(target);
   }
 
   prepareSvg() {
@@ -360,6 +439,7 @@ class Editor {
     this.render();
     this.notifyShapesChanged();
     this.notifySelectionChanged();
+    // Do not commit here to avoid spamming during drag; commit on pointerup if any erased
     return hit.id;
   }
 
@@ -387,6 +467,7 @@ class Editor {
     this.render();
     this.notifyShapesChanged();
     this.notifySelectionChanged();
+    this.commitHistory("clear");
   }
 
   // New: programmatically add a shape
@@ -401,6 +482,7 @@ class Editor {
     this.shapeStore.write(normalized);
     this.renderShapes();
     this.notifyShapesChanged();
+    this.commitHistory("addShape");
     return normalized.id;
   }
 
@@ -418,6 +500,7 @@ class Editor {
     this.render();
     this.notifyShapesChanged();
     this.notifySelectionChanged();
+    this.commitHistory("replaceShapes");
   }
 
   // Normalise incoming shapes from JSON imports
@@ -473,7 +556,26 @@ class Editor {
     const tool = this.state.tool;
     const target = event.target;
     const shapeId = target?.closest?.("[data-shape-id]")?.dataset?.shapeId || null;
-    const resizeHandle = target?.closest?.('.selection-frame [data-handle]');
+  const resizeHandle = target?.closest?.('.selection-frame [data-handle]');
+  const rotateHandle = target?.closest?.('.selection-frame [data-rotate]');
+
+    // Always allow rotation handle to start rotation, regardless of current tool
+    if (rotateHandle) {
+      const bounds = this.getCurrentSelectionBounds();
+      if (bounds) {
+        const center = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+        this.startSelectionRotate({
+          pointerId: event.pointerId,
+          origin: point,
+          originRaw: rawPoint,
+          center
+        });
+        // Switch to select tool during rotation gesture for consistency
+        if (this.state.tool !== 'select') this.setTool('select');
+        event.preventDefault();
+        return;
+      }
+    }
 
     if (tool === "select") {
       // If clicking a selection handle, start scaling
@@ -643,6 +745,11 @@ class Editor {
         this.updateSelectionScale(this.session, point);
         break;
       }
+      case "selection-rotate": {
+        event.preventDefault();
+        this.updateSelectionRotate(this.session, point, rawPoint);
+        break;
+      }
       case "box-select": {
         event.preventDefault();
         this.session.end = point;
@@ -677,10 +784,17 @@ class Editor {
         case "selection-scale":
           this.finishSelectionScale();
           break;
+        case "selection-rotate":
+          this.finishSelectionRotate();
+          break;
         case "box-select":
           this.finishBoxSelection();
           break;
         case "erase":
+          // Commit a history entry if anything was erased during this gesture
+          if (this.session?.erased && this.session.erased.size > 0) {
+            this.commitHistory("erase");
+          }
           if (!this.state.toolLocked) {
             this.setTool("select");
           }
@@ -709,6 +823,9 @@ class Editor {
           break;
         case "selection-scale":
           this.cancelSelectionScale();
+          break;
+        case "selection-rotate":
+          this.cancelSelectionRotate();
           break;
         case "box-select":
           this.cancelBoxSelection();
@@ -783,6 +900,47 @@ class Editor {
     };
   }
 
+  startSelectionRotate({ pointerId, origin, originRaw, center }) {
+    const ids = Array.from(this.state.selectedShapeIds);
+    if (!ids.length) return;
+    const baseShapes = new Map();
+    ids.forEach((id) => {
+      const shape = this.shapeStore?.read(id);
+      if (shape) baseShapes.set(id, cloneShape(shape));
+    });
+    if (!baseShapes.size) return;
+    this.svg.setPointerCapture(pointerId);
+    let baseSelectionRotation = 0;
+    if (ids.length === 1) {
+      const only = baseShapes.get(ids[0]);
+      if (only && (only.type === 'rect' || only.type === 'ellipse')) {
+        baseSelectionRotation = Number(only.rotation) || 0;
+      }
+    }
+    const normOrigin = originRaw ?? origin;
+    const centerPx = {
+      x: center.x * this.view.width,
+      y: center.y * this.view.height
+    };
+    const originPx = {
+      x: (normOrigin?.x ?? origin.x) * this.view.width,
+      y: (normOrigin?.y ?? origin.y) * this.view.height
+    };
+    const startAngle = Math.atan2(originPx.y - centerPx.y, originPx.x - centerPx.x);
+    this.session = {
+      type: 'selection-rotate',
+      pointerId,
+      origin: { ...origin },
+      originRaw: originRaw ? { ...originRaw } : { ...origin },
+      center: { ...center },
+      centerPx,
+      baseShapes,
+      baseSelectionRotation,
+      startAngle,
+      deltaAngle: 0
+    };
+  }
+
   updateSelectionScale(session, point) {
     if (!session || session.type !== "selection-scale") return;
     const { baseShapes, anchor, initialHandle } = session;
@@ -817,13 +975,75 @@ class Editor {
     this.renderShapes();
   }
 
+  updateSelectionRotate(session, point, rawPoint) {
+    if (!session || session.type !== 'selection-rotate') return;
+    const { center, centerPx, startAngle, baseShapes } = session;
+    if (!center || !centerPx || !baseShapes) return;
+    const normPoint = rawPoint ?? point;
+    if (!normPoint) return;
+    const pointerPx = {
+      x: normPoint.x * this.view.width,
+      y: normPoint.y * this.view.height
+    };
+    const currentAngle = Math.atan2(pointerPx.y - centerPx.y, pointerPx.x - centerPx.x);
+    const delta = currentAngle - startAngle;
+    session.deltaAngle = delta;
+    baseShapes.forEach((base, id) => {
+      const next = cloneShape(base);
+      if (next.type === 'rect' || next.type === 'ellipse') {
+        const width = next.width || 0;
+        const height = next.height || 0;
+        const baseCxPx = (base.x + width / 2) * this.view.width;
+        const baseCyPx = (base.y + height / 2) * this.view.height;
+        const rotatedPx = rotateAround({ x: baseCxPx, y: baseCyPx }, centerPx, delta);
+        const newCenter = {
+          x: rotatedPx.x / this.view.width,
+          y: rotatedPx.y / this.view.height
+        };
+        next.x = newCenter.x - width / 2;
+        next.y = newCenter.y - height / 2;
+        next.rotation = (Number(base.rotation) || 0) + delta;
+      } else if (next.type === 'line' || next.type === 'path') {
+        next.points = base.points.map((p) => {
+          const rotatedPx = rotateAround({
+            x: p.x * this.view.width,
+            y: p.y * this.view.height
+          }, centerPx, delta);
+          return {
+            x: rotatedPx.x / this.view.width,
+            y: rotatedPx.y / this.view.height
+          };
+        });
+      }
+      this.shapeStore?.write(next);
+    });
+    this.renderShapes();
+  }
+
   finishSelectionScale() {
     if (!this.session || this.session.type !== "selection-scale") return;
     this.notifyShapesChanged();
+    // Commit history at the end of a scale gesture
+    this.commitHistory("scale-selection");
+  }
+
+  finishSelectionRotate() {
+    if (!this.session || this.session.type !== 'selection-rotate') return;
+    this.notifyShapesChanged();
+    this.commitHistory('rotate-selection');
   }
 
   cancelSelectionScale() {
     if (!this.session || this.session.type !== "selection-scale") return;
+    const baseMap = this.session.baseShapes;
+    if (baseMap) {
+      baseMap.forEach((shape) => this.shapeStore?.write(cloneShape(shape)));
+      this.renderShapes();
+    }
+  }
+
+  cancelSelectionRotate() {
+    if (!this.session || this.session.type !== 'selection-rotate') return;
     const baseMap = this.session.baseShapes;
     if (baseMap) {
       baseMap.forEach((shape) => this.shapeStore?.write(cloneShape(shape)));
@@ -851,6 +1071,8 @@ class Editor {
   finishSelectionDrag() {
     if (!this.session || this.session.type !== "selection-drag") return;
     this.notifyShapesChanged();
+    // Commit history at the end of a move gesture
+    this.commitHistory("move-selection");
   }
 
   cancelSelectionDrag() {
@@ -900,6 +1122,8 @@ class Editor {
   finishShapeDrag() {
     if (!this.session || this.session.type !== "shape-drag") return;
     this.notifyShapesChanged();
+    // Commit history for single-shape move
+    this.commitHistory("move-shape");
   }
 
   cancelShapeDrag() {
@@ -999,6 +1223,12 @@ class Editor {
     if (["input", "textarea", "select"].includes(activeTag)) return;
     const key = event.key.toLowerCase();
     if (event.metaKey || event.ctrlKey) {
+      if (key === "z") {
+        // Undo / Redo
+        event.preventDefault();
+        if (event.shiftKey) this.redo(); else this.undo();
+        return;
+      }
       if (key === "e") {
         event.preventDefault();
         this.toggleToolbarVisibility();
@@ -1089,6 +1319,8 @@ class Editor {
     this.render();
     this.notifyShapesChanged();
     this.notifySelectionChanged();
+    // Commit deletion as a single undoable action
+    this.commitHistory("delete-selection");
   }
 
   beginDrawing(tool, point, pointerId) {
@@ -1257,6 +1489,8 @@ class Editor {
     this.render();
     this.notifyShapesChanged();
     this.notifySelectionChanged();
+    // Commit the completed drawing as an undoable step
+    this.commitHistory("draw");
     if (!(tool === "line" && event?.shiftKey) && !this.state.toolLocked && AUTO_REVERT_TOOLS.has(this.state.tool)) {
       this.setTool("select");
     }
@@ -1374,6 +1608,8 @@ class Editor {
     this.removeShape(shapeId);
     this.render();
     this.notifyShapesChanged();
+    // Make single deletions undoable
+    this.commitHistory("delete-shape");
   }
 
   updateShape(shapeId, mutator) {
@@ -1448,6 +1684,27 @@ class Editor {
     
     // Create frame group
   const frameGroup = createSvgElement('g', { class: 'selection-frame' });
+
+    // Determine selection center and rotation for frame display
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    let frameRotation = 0;
+    // If rotating, display the in-progress rotation
+    if (this.session && this.session.type === 'selection-rotate') {
+      frameRotation = (this.session.baseSelectionRotation || 0) + (this.session.deltaAngle || 0);
+    } else if (selectedIds.length === 1) {
+      // If a single rect/ellipse is selected, use its rotation for the frame
+      const only = this.shapeStore?.read(selectedIds[0]);
+      if (only && (only.type === 'rect' || only.type === 'ellipse')) {
+        frameRotation = Number(only.rotation) || 0;
+      }
+    }
+    if (frameRotation) {
+      const deg = (frameRotation * 180) / Math.PI;
+      const tcx = cx * this.view.width;
+      const tcy = cy * this.view.height;
+      frameGroup.setAttribute('transform', `rotate(${deg}, ${tcx}, ${tcy})`);
+    }
     
     // Create bounding box rectangle
     const rect = createSvgElement('rect', {
@@ -1498,6 +1755,35 @@ class Editor {
       frameGroup.appendChild(handle);
     });
     
+    // Rotation handle and stalk
+    const topCenterX = (minX + maxX) / 2;
+    const topY = minY;
+    const handleOffsetPx = 28; // pixels above top edge
+    const stalk = createSvgElement('line', {
+      x1: topCenterX * this.view.width,
+      y1: topY * this.view.height,
+      x2: topCenterX * this.view.width,
+      y2: topY * this.view.height - handleOffsetPx,
+      stroke: '#ffffff',
+      'stroke-opacity': '0.9',
+      'stroke-width': '2',
+      'pointer-events': 'none'
+    });
+    frameGroup.appendChild(stalk);
+    const rotHandle = createSvgElement('circle', {
+      cx: topCenterX * this.view.width,
+      cy: topY * this.view.height - handleOffsetPx,
+      r: 8,
+      fill: '#ffffff',
+      stroke: '#000000',
+      'stroke-opacity': '0.5',
+      'stroke-width': '1',
+      'pointer-events': 'all',
+      'data-rotate': 'true',
+      style: 'cursor: grab'
+    });
+    frameGroup.appendChild(rotHandle);
+
     // Append to SVG
     this.svg.appendChild(frameGroup);
   }
