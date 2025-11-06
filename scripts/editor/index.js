@@ -126,7 +126,9 @@ class Editor {
       mode: "edit",
       tool: "select",
       toolLocked: false,
-      selectedShapeIds: new Set() // Changed from single selectedShapeId to Set for multi-select
+      selectedShapeIds: new Set(), // Changed from single selectedShapeId to Set for multi-select
+      curveEditShapeId: null, // Track which shape is in curve-edit mode
+      curveEditPoints: [] // Array of {index, x, y} for the points being edited
     };
     this.shapeStore = null;
     this.session = null;
@@ -558,6 +560,45 @@ class Editor {
     const shapeId = target?.closest?.("[data-shape-id]")?.dataset?.shapeId || null;
   const resizeHandle = target?.closest?.('.selection-frame [data-handle]');
   const rotateHandle = target?.closest?.('.selection-frame [data-rotate]');
+  const curveEditHandle = target?.closest?.('.curve-edit-handle');
+
+    // If in curve-edit mode, handle control point dragging
+    if (this.state.curveEditShapeId) {
+      if (curveEditHandle) {
+        const pointIndex = parseInt(curveEditHandle.getAttribute('data-point-index'), 10);
+        
+        // Cmd+click on control point to remove it
+        if (event.metaKey || event.ctrlKey) {
+          this.removeCurvePoint(pointIndex);
+          event.preventDefault();
+          return;
+        }
+        
+        // Normal click to drag
+        this.startCurvePointDrag({
+          pointerId: event.pointerId,
+          pointIndex,
+          origin: point,
+          originRaw: rawPoint
+        });
+        event.preventDefault();
+        return;
+      }
+      
+      // Shift+click on the shape to add a point
+      if (event.shiftKey && shapeId === this.state.curveEditShapeId) {
+        this.addCurvePoint(point);
+        event.preventDefault();
+        return;
+      }
+      
+      // Click outside control points exits curve-edit mode
+      if (!shapeId || shapeId !== this.state.curveEditShapeId) {
+        this.exitCurveEdit();
+        event.preventDefault();
+        return; // Exit early after leaving curve-edit mode
+      }
+    }
 
     // Always allow rotation handle to start rotation, regardless of current tool
     if (rotateHandle) {
@@ -622,6 +663,14 @@ class Editor {
       if (shapeId) {
         const shape = this.shapeStore?.read(shapeId);
         if (!shape) return;
+        
+        // Cmd/Ctrl+click on line/path to enter curve-edit mode
+        if ((event.metaKey || event.ctrlKey) && (shape.type === 'line' || shape.type === 'path')) {
+          this.enterCurveEdit(shapeId);
+          event.preventDefault();
+          return;
+        }
+        
         if (event.altKey) {
           if (!this.state.selectedShapeIds.has(shapeId)) {
             this.state.selectedShapeIds.clear();
@@ -726,6 +775,11 @@ class Editor {
         event.preventDefault();
         this.updateDrawing(point);
         break;
+      case "curve-point-drag": {
+        event.preventDefault();
+        this.updateCurvePointDrag(this.session, point);
+        break;
+      }
       case "shape-drag": {
         event.preventDefault();
         const dx = (rawPoint?.x ?? point.x) - this.session.originRaw.x;
@@ -775,6 +829,9 @@ class Editor {
         case "draw":
           this.finalizeDrawing(event);
           break;
+        case "curve-point-drag":
+          this.finishCurvePointDrag();
+          break;
         case "shape-drag":
           this.finishShapeDrag();
           break;
@@ -814,6 +871,9 @@ class Editor {
       switch (this.session.type) {
         case "draw":
           this.abortDrawing();
+          break;
+        case "curve-point-drag":
+          this.cancelCurvePointDrag();
           break;
         case "shape-drag":
           this.cancelShapeDrag();
@@ -1134,6 +1194,177 @@ class Editor {
     }
   }
 
+  // ===== Curve Edit Mode =====
+  enterCurveEdit(shapeId) {
+    const shape = this.shapeStore?.read(shapeId);
+    if (!shape || (shape.type !== 'line' && shape.type !== 'path')) return;
+    
+    // Exit any existing curve edit
+    if (this.state.curveEditShapeId) {
+      this.exitCurveEdit();
+    }
+    
+    // Clear regular selection and enter curve-edit mode
+    this.state.selectedShapeIds.clear();
+    this.state.curveEditShapeId = shapeId;
+    this.state.curveEditPoints = (shape.points || []).map((pt, i) => ({
+      index: i,
+      x: pt.x,
+      y: pt.y
+    }));
+    
+    this.render();
+    this.notifySelectionChanged();
+  }
+
+  exitCurveEdit() {
+    if (!this.state.curveEditShapeId) return;
+    
+    const shapeId = this.state.curveEditShapeId;
+    this.state.curveEditShapeId = null;
+    this.state.curveEditPoints = [];
+    
+    // Re-select the shape after exiting curve edit
+    this.state.selectedShapeIds.clear();
+    this.state.selectedShapeIds.add(shapeId);
+    
+    this.render();
+    this.notifySelectionChanged();
+    this.notifyShapesChanged();
+    this.commitHistory('edit-curve');
+  }
+
+  startCurvePointDrag({ pointerId, pointIndex, origin, originRaw }) {
+    if (!this.state.curveEditShapeId) return;
+    const shape = this.shapeStore?.read(this.state.curveEditShapeId);
+    if (!shape) return;
+    
+    this.svg.setPointerCapture(pointerId);
+    this.session = {
+      type: 'curve-point-drag',
+      pointerId,
+      shapeId: this.state.curveEditShapeId,
+      pointIndex,
+      origin: { ...origin },
+      originRaw: originRaw ? { ...originRaw } : { ...origin },
+      baseShape: cloneShape(shape)
+    };
+  }
+
+  updateCurvePointDrag(session, point) {
+    if (!session || session.type !== 'curve-point-drag') return;
+    const shape = this.shapeStore?.read(session.shapeId);
+    if (!shape || !shape.points || session.pointIndex >= shape.points.length) return;
+    
+    // Update the point
+    shape.points[session.pointIndex] = {
+      x: clampUnit(point.x),
+      y: clampUnit(point.y)
+    };
+    
+    // Update the curve edit points state
+    if (this.state.curveEditShapeId === session.shapeId) {
+      this.state.curveEditPoints[session.pointIndex] = {
+        index: session.pointIndex,
+        x: shape.points[session.pointIndex].x,
+        y: shape.points[session.pointIndex].y
+      };
+    }
+    
+    this.shapeStore?.write(shape);
+    this.renderShapes();
+  }
+
+  finishCurvePointDrag() {
+    if (!this.session || this.session.type !== 'curve-point-drag') return;
+    // Point updates already applied during drag
+    // No commit here; will commit when exiting curve-edit mode
+  }
+
+  cancelCurvePointDrag() {
+    if (!this.session || this.session.type !== 'curve-point-drag') return;
+    if (this.session.baseShape) {
+      this.shapeStore?.write(cloneShape(this.session.baseShape));
+      // Restore curve edit points
+      if (this.state.curveEditShapeId === this.session.shapeId) {
+        const shape = this.session.baseShape;
+        this.state.curveEditPoints = (shape.points || []).map((pt, i) => ({
+          index: i,
+          x: pt.x,
+          y: pt.y
+        }));
+      }
+      this.renderShapes();
+    }
+  }
+
+  addCurvePoint(clickPoint) {
+    if (!this.state.curveEditShapeId) return;
+    const shape = this.shapeStore?.read(this.state.curveEditShapeId);
+    if (!shape || !shape.points || shape.points.length < 2) return;
+    
+    // Find the closest segment to insert the point
+    let closestSegment = 0;
+    let minDist = Infinity;
+    
+    for (let i = 0; i < shape.points.length - 1; i++) {
+      const a = shape.points[i];
+      const b = shape.points[i + 1];
+      const dist = getSqSegDist(clickPoint, a, b);
+      if (dist < minDist) {
+        minDist = dist;
+        closestSegment = i;
+      }
+    }
+    
+    // If closed, also check the segment from last to first
+    if (shape.closed && shape.points.length > 2) {
+      const a = shape.points[shape.points.length - 1];
+      const b = shape.points[0];
+      const dist = getSqSegDist(clickPoint, a, b);
+      if (dist < minDist) {
+        closestSegment = shape.points.length - 1;
+      }
+    }
+    
+    // Insert the new point after closestSegment
+    const newPoint = {
+      x: clampUnit(clickPoint.x),
+      y: clampUnit(clickPoint.y)
+    };
+    
+    shape.points.splice(closestSegment + 1, 0, newPoint);
+    
+    // Update state
+    this.state.curveEditPoints = shape.points.map((pt, i) => ({
+      index: i,
+      x: pt.x,
+      y: pt.y
+    }));
+    
+    this.shapeStore?.write(shape);
+    this.renderShapes();
+  }
+
+  removeCurvePoint(pointIndex) {
+    if (!this.state.curveEditShapeId) return;
+    const shape = this.shapeStore?.read(this.state.curveEditShapeId);
+    if (!shape || !shape.points || shape.points.length <= 2) return; // Need at least 2 points
+    
+    // Remove the point
+    shape.points.splice(pointIndex, 1);
+    
+    // Update state
+    this.state.curveEditPoints = shape.points.map((pt, i) => ({
+      index: i,
+      x: pt.x,
+      y: pt.y
+    }));
+    
+    this.shapeStore?.write(shape);
+    this.renderShapes();
+  }
+
   renderBoxSelection() {
     if (!this.session || this.session.type !== "box-select") return;
     // Remove existing box
@@ -1291,7 +1522,10 @@ class Editor {
         event.preventDefault();
         break;
       case "escape":
-        if (this.session?.type === "draw") {
+        if (this.state.curveEditShapeId) {
+          this.exitCurveEdit();
+          event.preventDefault();
+        } else if (this.session?.type === "draw") {
           this.abortDrawing();
           this.session = null;
           event.preventDefault();
@@ -1652,13 +1886,28 @@ class Editor {
       node.classList.toggle("is-selected", selectedIds.has(shapeId));
     });
     
-    // Render selection frame if shapes are selected
+    // Remove curve-edit overlay if not in curve-edit mode
+    if (!this.state.curveEditShapeId) {
+      const existing = this.svg.querySelector('.curve-edit-points');
+      if (existing) existing.remove();
+    }
+    
+    // Always call renderSelectionFrame to handle cleanup
+    // (it will exit early if in curve-edit mode)
     this.renderSelectionFrame();
+    
+    // Render curve edit control points if in curve-edit mode
+    if (this.state.curveEditShapeId) {
+      this.renderCurveEditPoints();
+    }
   }
   
   renderSelectionFrame() {
     const existingFrame = this.svg.querySelector('.selection-frame');
     if (existingFrame) existingFrame.remove();
+
+    // Don't show selection frame in curve-edit mode
+    if (this.state.curveEditShapeId) return;
 
     const selectedIds = Array.from(this.state.selectedShapeIds);
     if (!selectedIds.length) return;
@@ -1801,6 +2050,62 @@ class Editor {
     frameGroup.appendChild(rotHandle);
 
     this.svg.appendChild(frameGroup);
+  }
+
+  renderCurveEditPoints() {
+    // Remove existing control points
+    const existing = this.svg.querySelector('.curve-edit-points');
+    if (existing) existing.remove();
+    
+    if (!this.state.curveEditShapeId || !this.state.curveEditPoints.length) return;
+    
+    const shape = this.shapeStore?.read(this.state.curveEditShapeId);
+    if (!shape || !shape.points) return;
+    
+    // Get the shape's stroke color
+    const strokeColor = shape.style?.stroke || DEFAULT_STYLE.stroke;
+    
+    const group = createSvgElement('g', { class: 'curve-edit-points' });
+    
+    // Draw lines connecting the points (the "skeleton")
+    if (shape.points.length > 1) {
+      const linePoints = shape.points.map(pt => 
+        `${pt.x * this.view.width},${pt.y * this.view.height}`
+      ).join(' ');
+      const polyline = createSvgElement('polyline', {
+        points: linePoints,
+        fill: 'none',
+        stroke: strokeColor,
+        'stroke-opacity': '0.3',
+        'stroke-width': '1',
+        'stroke-dasharray': '4,4',
+        'pointer-events': 'none'
+      });
+      group.appendChild(polyline);
+    }
+    
+    // Draw control point handles
+    const handleRadius = 5;
+    shape.points.forEach((pt, index) => {
+      const cx = pt.x * this.view.width;
+      const cy = pt.y * this.view.height;
+      
+      const handle = createSvgElement('circle', {
+        cx,
+        cy,
+        r: handleRadius,
+        fill: 'none',
+        stroke: strokeColor,
+        'stroke-width': '2',
+        'pointer-events': 'all',
+        'data-point-index': index,
+        class: 'curve-edit-handle',
+        style: 'cursor: move'
+      });
+      group.appendChild(handle);
+    });
+    
+    this.svg.appendChild(group);
   }
   
   getShapeBounds(shape) {
