@@ -473,8 +473,50 @@ class Editor {
     const tool = this.state.tool;
     const target = event.target;
     const shapeId = target?.closest?.("[data-shape-id]")?.dataset?.shapeId || null;
+    const resizeHandle = target?.closest?.('.selection-frame [data-handle]');
 
     if (tool === "select") {
+      // If clicking a selection handle, start scaling
+      if (resizeHandle) {
+        const handleId = resizeHandle.getAttribute('data-handle');
+        const bounds = this.getCurrentSelectionBounds();
+        if (bounds) {
+          let anchor = null;
+          let initialHandle = null;
+          const minX = bounds.x, minY = bounds.y, maxX = bounds.x + bounds.width, maxY = bounds.y + bounds.height;
+          switch (handleId) {
+            case 'tl':
+              anchor = { x: maxX, y: maxY };
+              initialHandle = { x: minX, y: minY };
+              break;
+            case 'tr':
+              anchor = { x: minX, y: maxY };
+              initialHandle = { x: maxX, y: minY };
+              break;
+            case 'br':
+              anchor = { x: minX, y: minY };
+              initialHandle = { x: maxX, y: maxY };
+              break;
+            case 'bl':
+              anchor = { x: maxX, y: minY };
+              initialHandle = { x: minX, y: maxY };
+              break;
+            default:
+              break;
+          }
+          if (anchor && initialHandle) {
+            this.startSelectionScale({
+              pointerId: event.pointerId,
+              origin: point,
+              originRaw: rawPoint,
+              anchor,
+              initialHandle
+            });
+            event.preventDefault();
+            return;
+          }
+        }
+      }
       if (shapeId) {
         const shape = this.shapeStore?.read(shapeId);
         if (!shape) return;
@@ -596,6 +638,11 @@ class Editor {
         this.updateSelectionDrag(this.session, dx, dy);
         break;
       }
+      case "selection-scale": {
+        event.preventDefault();
+        this.updateSelectionScale(this.session, point);
+        break;
+      }
       case "box-select": {
         event.preventDefault();
         this.session.end = point;
@@ -627,6 +674,9 @@ class Editor {
         case "selection-drag":
           this.finishSelectionDrag();
           break;
+        case "selection-scale":
+          this.finishSelectionScale();
+          break;
         case "box-select":
           this.finishBoxSelection();
           break;
@@ -656,6 +706,9 @@ class Editor {
           break;
         case "selection-drag":
           this.cancelSelectionDrag();
+          break;
+        case "selection-scale":
+          this.cancelSelectionScale();
           break;
         case "box-select":
           this.cancelBoxSelection();
@@ -707,6 +760,75 @@ class Editor {
       originRaw: { ...originRaw },
       baseShapes: baseMap
     };
+  }
+
+  startSelectionScale({ pointerId, origin, originRaw, anchor, initialHandle }) {
+    const ids = Array.from(this.state.selectedShapeIds);
+    if (!ids.length) return;
+    const baseMap = new Map();
+    ids.forEach((id) => {
+      const shape = this.shapeStore?.read(id);
+      if (shape) baseMap.set(id, cloneShape(shape));
+    });
+    if (!baseMap.size) return;
+    this.svg.setPointerCapture(pointerId);
+    this.session = {
+      type: "selection-scale",
+      pointerId,
+      origin: { ...origin },
+      originRaw: { ...originRaw },
+      baseShapes: baseMap,
+      anchor: { ...anchor },
+      initialHandle: { ...initialHandle }
+    };
+  }
+
+  updateSelectionScale(session, point) {
+    if (!session || session.type !== "selection-scale") return;
+    const { baseShapes, anchor, initialHandle } = session;
+    if (!baseShapes || !anchor || !initialHandle) return;
+    const v0x = initialHandle.x - anchor.x;
+    const v0y = initialHandle.y - anchor.y;
+    // Guard against zero-size initial bounds
+    const minScale = 0.05;
+    const vx = point.x - anchor.x;
+    const vy = point.y - anchor.y;
+    let sx = v0x !== 0 ? vx / v0x : 1;
+    let sy = v0y !== 0 ? vy / v0y : 1;
+    // Prevent collapsing to zero or flipping for now (can allow flipping later)
+    sx = Math.sign(sx) * Math.max(minScale, Math.abs(sx));
+    sy = Math.sign(sy) * Math.max(minScale, Math.abs(sy));
+
+    baseShapes.forEach((base, id) => {
+      const next = cloneShape(base);
+      if (next.type === "rect" || next.type === "ellipse") {
+        next.x = anchor.x + (base.x - anchor.x) * sx;
+        next.y = anchor.y + (base.y - anchor.y) * sy;
+        next.width = Math.max(MIN_SHAPE_DIMENSION, base.width * Math.abs(sx));
+        next.height = Math.max(MIN_SHAPE_DIMENSION, base.height * Math.abs(sy));
+      } else if (next.type === "line" || next.type === "path") {
+        next.points = base.points.map((p) => ({
+          x: anchor.x + (p.x - anchor.x) * sx,
+          y: anchor.y + (p.y - anchor.y) * sy
+        }));
+      }
+      this.shapeStore?.write(next);
+    });
+    this.renderShapes();
+  }
+
+  finishSelectionScale() {
+    if (!this.session || this.session.type !== "selection-scale") return;
+    this.notifyShapesChanged();
+  }
+
+  cancelSelectionScale() {
+    if (!this.session || this.session.type !== "selection-scale") return;
+    const baseMap = this.session.baseShapes;
+    if (baseMap) {
+      baseMap.forEach((shape) => this.shapeStore?.write(cloneShape(shape)));
+      this.renderShapes();
+    }
   }
 
   updateSelectionDrag(session, dx, dy) {
@@ -1329,7 +1451,14 @@ class Editor {
       { x: minX, y: maxY }  // bottom-left
     ];
     
-    corners.forEach(corner => {
+    const handleMeta = [
+      { id: 'tl', x: minX, y: minY, cursor: 'nwse-resize' },
+      { id: 'tr', x: maxX, y: minY, cursor: 'nesw-resize' },
+      { id: 'br', x: maxX, y: maxY, cursor: 'nwse-resize' },
+      { id: 'bl', x: minX, y: maxY, cursor: 'nesw-resize' }
+    ];
+
+    handleMeta.forEach(corner => {
       const handle = createSvgElement('rect', {
         x: corner.x * this.view.width - handleSize / 2,
         y: corner.y * this.view.height - handleSize / 2,
@@ -1339,7 +1468,9 @@ class Editor {
         stroke: '#000000',
         'stroke-opacity': '0.5',
         'stroke-width': '1',
-        'pointer-events': 'none'
+        'pointer-events': 'all',
+        'data-handle': corner.id,
+        style: `cursor:${corner.cursor}`
       });
       frameGroup.appendChild(handle);
     });
