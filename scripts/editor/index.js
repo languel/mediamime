@@ -141,6 +141,7 @@ class Editor {
     this.session = null;
     this.events = new Map();
     this.pendingLine = null;
+    this.spacebarPressed = false; // Track spacebar state for pan override
     this.lockButton = document.getElementById("gesture-tool-lock") || this.toolbar.querySelector("#gesture-tool-lock");
     this.modeToggle = document.getElementById("gesture-mode-toggle") || this.toolbar.querySelector("#gesture-mode-toggle");
     this.clearButton = document.getElementById("gesture-clear") || this.toolbar.querySelector("#gesture-clear");
@@ -360,6 +361,7 @@ class Editor {
     this.svg.addEventListener("keydown", this.handleKeyDown);
     this.svg.addEventListener("wheel", this.handleWheel, { passive: false });
     window.addEventListener("keydown", this.handleKeyDown);
+    window.addEventListener("keyup", this.handleKeyUp);
   }
 
   setTool(tool, { toggleLock = false } = {}) {
@@ -575,8 +577,8 @@ class Editor {
     // Use un-clamped world coords so canvas is effectively infinite
     const point = { x: rawPoint.x, y: rawPoint.y };
     
-    // Shift + two-finger (or middle button) pan override
-    if (event.shiftKey && (event.pointerType === 'touch' || event.button === 1)) {
+    // Spacebar + drag for pan override (any tool)
+    if (event.type === 'pointerdown' && this.spacebarPressed) {
       this.svg.setPointerCapture(event.pointerId);
       this.session = {
         type: "pan",
@@ -802,21 +804,6 @@ class Editor {
   };
 
   handlePointerMove = (event) => {
-    // Detect shift + two-finger during move and upgrade to pan if not already in a session
-    if (!this.session && event.shiftKey && event.pointerType === 'touch') {
-      const rawPoint = this.getNormalizedPoint(event, { clamp: false });
-      if (rawPoint) {
-        this.svg.setPointerCapture(event.pointerId);
-        this.session = {
-          type: "pan",
-          pointerId: event.pointerId,
-          startCamera: { ...this.camera },
-          startClient: { x: event.clientX, y: event.clientY }
-        };
-        event.preventDefault();
-      }
-    }
-    
     if (this.session && event.pointerId !== this.session.pointerId) return;
     const rawPoint = this.getNormalizedPoint(event, { clamp: false });
     if (!rawPoint) return;
@@ -1548,6 +1535,15 @@ class Editor {
     const activeTag = document.activeElement?.tagName?.toLowerCase() || "";
     if (["input", "textarea", "select"].includes(activeTag)) return;
     const key = event.key.toLowerCase();
+    
+    // Track spacebar for pan override
+    if (key === " " && !this.spacebarPressed) {
+      this.spacebarPressed = true;
+      this.svg.style.cursor = 'grab';
+      event.preventDefault();
+      return;
+    }
+    
     if (event.metaKey || event.ctrlKey) {
       if (key === "z") {
         // Undo / Redo
@@ -1676,6 +1672,17 @@ class Editor {
         break;
       default:
         break;
+    }
+  };
+
+  handleKeyUp = (event) => {
+    const key = event.key.toLowerCase();
+    
+    // Release spacebar pan override
+    if (key === " " && this.spacebarPressed) {
+      this.spacebarPressed = false;
+      this.svg.style.cursor = '';
+      event.preventDefault();
     }
   };
 
