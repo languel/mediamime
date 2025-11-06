@@ -41,6 +41,11 @@ Key flows:
 - Make the Interaction Mapping modal draggable via its top handle so it can relocate without covering the video feed.
 - Persist the score directly inside the SVG DOM. Every shape lives as a `<g data-shape-id>` with `data-shape-*` attributes for geometry, style, and metadata so exporting the `<svg>` yields a complete, portable score.
 - Treat the SVG DOM as the canonical source of truth: transformation sessions read from the DOM, compute new geometry, and write the updates back as native attributes instead of rebuilding nodes from a detached JS model.
+- **Infinite canvas**: Pan with spacebar+drag, zoom with pinch/scroll. Grid modes (off/line/dot) toggle with G key. Shapes can be drawn anywhere beyond the initial viewport boundaries.
+- **Snapping**: Hold Shift for grid snap (50px cells) or Cmd for element snap (15px threshold to nearest vertices/centers). Visual crosshair indicator shows snap target.
+- **Color system**: RGBA color picker controls stroke color with full opacity control. Fill is automatically calculated as 50% relative opacity of stroke color. Colors apply immediately to new shapes.
+- **Curve editing**: Alt-click to remove control points, click to add. Auto-detects closed curves when first and last points match, enabling fill rendering.
+- **Export formats**: JSON snapshots for full mapping data, SVG export with auto-calculated bounding box and black background for sharing graphics.
 
 ### 4.3 MIDI Routing
 - Global port selector with broadcast option and refresh.
