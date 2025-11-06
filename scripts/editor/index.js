@@ -1657,61 +1657,85 @@ class Editor {
   }
   
   renderSelectionFrame() {
-    // Remove existing frame
     const existingFrame = this.svg.querySelector('.selection-frame');
-    if (existingFrame) {
-      existingFrame.remove();
-    }
-    
-    const selectedIds = Array.from(this.state.selectedShapeIds);
-    if (selectedIds.length === 0) return;
-    
-    // Compute bounding box
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const shapeId of selectedIds) {
-      const shape = this.shapeStore?.read(shapeId);
-      if (!shape) continue;
-      const bounds = this.getShapeBounds(shape);
-      if (bounds) {
-        minX = Math.min(minX, bounds.x);
-        minY = Math.min(minY, bounds.y);
-        maxX = Math.max(maxX, bounds.x + bounds.width);
-        maxY = Math.max(maxY, bounds.y + bounds.height);
-      }
-    }
-    
-    if (minX === Infinity) return;
-    
-    // Create frame group
-  const frameGroup = createSvgElement('g', { class: 'selection-frame' });
+    if (existingFrame) existingFrame.remove();
 
-    // Determine selection center and rotation for frame display
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
+    const selectedIds = Array.from(this.state.selectedShapeIds);
+    if (!selectedIds.length) return;
+
+    const shapes = selectedIds.map((id) => this.shapeStore?.read(id)).filter(Boolean);
+    if (!shapes.length) return;
+
+    // Collect all world points in PIXELS
+    const allPointsPx = [];
+    shapes.forEach((shape) => {
+      const pts = getShapePoints(shape);
+      if (pts && pts.length) {
+        pts.forEach((pt) => allPointsPx.push({ x: pt.x * this.view.width, y: pt.y * this.view.height }));
+      }
+    });
+    if (!allPointsPx.length) return;
+
+    // Determine frame rotation and pivot in PIXELS
     let frameRotation = 0;
-    // If rotating, display the in-progress rotation
+    let centerPx = null;
     if (this.session && this.session.type === 'selection-rotate') {
       frameRotation = (this.session.baseSelectionRotation || 0) + (this.session.deltaAngle || 0);
+      centerPx = this.session.centerPx || {
+        x: this.session.center.x * this.view.width,
+        y: this.session.center.y * this.view.height
+      };
     } else if (selectedIds.length === 1) {
-      // If a single rect/ellipse is selected, use its rotation for the frame
-      const only = this.shapeStore?.read(selectedIds[0]);
+      const only = shapes[0];
       if (only && (only.type === 'rect' || only.type === 'ellipse')) {
         frameRotation = Number(only.rotation) || 0;
+        centerPx = {
+          x: (only.x + (only.width || 0) / 2) * this.view.width,
+          y: (only.y + (only.height || 0) / 2) * this.view.height
+        };
       }
     }
+
+    if (!centerPx) {
+      let minXw = Infinity, minYw = Infinity, maxXw = -Infinity, maxYw = -Infinity;
+      allPointsPx.forEach((p) => {
+        minXw = Math.min(minXw, p.x);
+        minYw = Math.min(minYw, p.y);
+        maxXw = Math.max(maxXw, p.x);
+        maxYw = Math.max(maxYw, p.y);
+      });
+      centerPx = { x: (minXw + maxXw) / 2, y: (minYw + maxYw) / 2 };
+    }
+
+    // Unrotate all points around pivot (in px) to compute axis-aligned bounds in local frame
+    const boundsPointsPx = frameRotation
+      ? allPointsPx.map((pt) => rotateAround(pt, centerPx, -frameRotation))
+      : allPointsPx;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    boundsPointsPx.forEach((pt) => {
+      minX = Math.min(minX, pt.x);
+      minY = Math.min(minY, pt.y);
+      maxX = Math.max(maxX, pt.x);
+      maxY = Math.max(maxY, pt.y);
+    });
+    if (!Number.isFinite(minX)) return;
+
+    const width = Math.max(0, maxX - minX);
+    const height = Math.max(0, maxY - minY);
+
+    const frameGroup = createSvgElement('g', { class: 'selection-frame' });
     if (frameRotation) {
       const deg = (frameRotation * 180) / Math.PI;
-      const tcx = cx * this.view.width;
-      const tcy = cy * this.view.height;
-      frameGroup.setAttribute('transform', `rotate(${deg}, ${tcx}, ${tcy})`);
+      frameGroup.setAttribute('transform', `rotate(${deg}, ${centerPx.x}, ${centerPx.y})`);
     }
-    
-    // Create bounding box rectangle
+
+    // Frame rect in px
     const rect = createSvgElement('rect', {
-      x: minX * this.view.width,
-      y: minY * this.view.height,
-      width: (maxX - minX) * this.view.width,
-      height: (maxY - minY) * this.view.height,
+      x: minX,
+      y: minY,
+      width,
+      height,
       fill: '#ffffff',
       'fill-opacity': '0.12',
       stroke: '#ffffff',
@@ -1721,27 +1745,19 @@ class Editor {
       'pointer-events': 'none'
     });
     frameGroup.appendChild(rect);
-    
-    // Add corner handles
-  const handleSize = 8;
-    const corners = [
-      { x: minX, y: minY }, // top-left
-      { x: maxX, y: minY }, // top-right
-      { x: maxX, y: maxY }, // bottom-right
-      { x: minX, y: maxY }  // bottom-left
-    ];
-    
+
+    // Handles in px
+    const handleSize = 8;
     const handleMeta = [
       { id: 'tl', x: minX, y: minY, cursor: 'nwse-resize' },
       { id: 'tr', x: maxX, y: minY, cursor: 'nesw-resize' },
       { id: 'br', x: maxX, y: maxY, cursor: 'nwse-resize' },
       { id: 'bl', x: minX, y: maxY, cursor: 'nesw-resize' }
     ];
-
-    handleMeta.forEach(corner => {
+    handleMeta.forEach((corner) => {
       const handle = createSvgElement('rect', {
-        x: corner.x * this.view.width - handleSize / 2,
-        y: corner.y * this.view.height - handleSize / 2,
+        x: corner.x - handleSize / 2,
+        y: corner.y - handleSize / 2,
         width: handleSize,
         height: handleSize,
         fill: '#ffffff',
@@ -1754,16 +1770,16 @@ class Editor {
       });
       frameGroup.appendChild(handle);
     });
-    
-    // Rotation handle and stalk
+
+    // Rotation handle in px
     const topCenterX = (minX + maxX) / 2;
     const topY = minY;
-    const handleOffsetPx = 28; // pixels above top edge
+    const handleOffsetPx = 28;
     const stalk = createSvgElement('line', {
-      x1: topCenterX * this.view.width,
-      y1: topY * this.view.height,
-      x2: topCenterX * this.view.width,
-      y2: topY * this.view.height - handleOffsetPx,
+      x1: topCenterX,
+      y1: topY,
+      x2: topCenterX,
+      y2: topY - handleOffsetPx,
       stroke: '#ffffff',
       'stroke-opacity': '0.9',
       'stroke-width': '2',
@@ -1771,8 +1787,8 @@ class Editor {
     });
     frameGroup.appendChild(stalk);
     const rotHandle = createSvgElement('circle', {
-      cx: topCenterX * this.view.width,
-      cy: topY * this.view.height - handleOffsetPx,
+      cx: topCenterX,
+      cy: topY - handleOffsetPx,
       r: 8,
       fill: '#ffffff',
       stroke: '#000000',
@@ -1784,7 +1800,6 @@ class Editor {
     });
     frameGroup.appendChild(rotHandle);
 
-    // Append to SVG
     this.svg.appendChild(frameGroup);
   }
   
