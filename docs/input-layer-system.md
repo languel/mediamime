@@ -1,26 +1,27 @@
 # Input Layer System - Implementation Notes
 
 ## Overview
-Started implementing a multi-input layer system inspired by the v0 branch, where each input (camera/video) is treated as a transformed rectangle with position, scale, rotation, and opacity controls.
+Started implementing a multi-input layer system inspired by the v0 branch. Simplified scope: each input (camera/video) now only stores crop (normalized rectangle) and flip (horizontal/vertical) metadata. All spatial transforms (position, scale, rotation, opacity) will be applied later when the input is placed as a shape on the canvas.
 
 ## Architecture
 
 ### Data Structure
-Each input source has:
+Each input source has (current simplified model):
 ```javascript
 {
   id: string,              // Unique identifier
   name: string,            // Display name
   type: 'camera' | 'video', // Source type
   stream: MediaStream,     // Video stream
-  transform: {
-    x: number,            // Position X (normalized 0-1)
-    y: number,            // Position Y (normalized 0-1)
-    width: number,        // Scale width
-    height: number,       // Scale height
-    rotation: number,     // Rotation in degrees
-    opacity: number,      // Opacity 0-1
-    mirror: boolean       // Mirror/flip horizontally
+  crop: {                 // Normalized crop rectangle
+    x: number,            // Left (0-1)
+    y: number,            // Top (0-1)
+    w: number,            // Width (0-1)
+    h: number             // Height (0-1)
+  },
+  flip: {
+    horizontal: boolean,  // Flip horizontally
+    vertical: boolean     // Flip vertically
   }
 }
 ```
@@ -35,9 +36,8 @@ Each input source has:
   - Name input
   - Type indicator (camera/video)
   - Video preview (16:9 aspect ratio)
-  - Transform controls (x, y, width, height, rotation)
-  - Opacity slider
-  - Mirror toggle
+  - Crop controls (x, y, w, h normalized 0–1)
+  - Flip toggles (horizontal, vertical)
   - Delete button
 
 ### Styling (`style.css`)
@@ -60,7 +60,7 @@ Added styles for:
 - `addCameraInput()` - Request camera access via getUserMedia
 - `addVideoInput()` - File picker for video files, creates video element with captureStream()
 - `deleteInput()` - Cleanup stream/video and remove from list
-- `updateInputTransform()` - Update transform properties
+- `updateInputMeta()` - Update crop or flip metadata
 - `updateUI()` - Re-render list and detail panel
 - `syncDetailForm()` - Populate detail form from active input
 
@@ -80,11 +80,11 @@ Added styles for:
 
 ## Next Steps
 
-### Rendering Layer
+### Rendering Layer (Deferred Transforms)
 1. Create canvas rendering system for video inputs
-2. Apply transform matrix (translate, scale, rotate)
-3. Apply opacity via globalAlpha
-4. Support mirror/flip via scale(-1, 1)
+2. When placing input as a shape, apply transform matrix (translate, scale, rotate, opacity)
+3. Crop first, then flip, then spatial transform for consistent ordering
+4. Support flip via scale(-1,1) or vertical via scale(1,-1) after crop
 5. Layer ordering system
 
 ### MediaPipe Integration
@@ -93,7 +93,7 @@ Added styles for:
 3. Blend/composite multiple landmark sets
 
 ### Persistence
-1. Add to JSON export (save source type, name, transform)
+1. Add to JSON export (save source type, name, crop, flip)
 2. Restore camera inputs on import (request permission)
 3. Video inputs: save file path/reference (browser limitations)
 
@@ -124,8 +124,8 @@ Added styles for:
 ## Design Notes
 
 - Mirrors Map panel UX: list + detail view pattern
-- Transform controls use normalized coordinates (0-1) for consistency with drawing system
-- Preview helps users verify camera/video before adding to main canvas
-- Opacity/mirror controls match existing patterns in app
+- Normalized crop (0–1) simplifies resolution-agnostic composition
+- Flip stored separately avoids premature pixel manipulation
+- All heavy transforms postponed to canvas composition stage for performance & clarity
 
 This implementation provides the foundation for a flexible multi-input layer system while maintaining the app's existing UX patterns.

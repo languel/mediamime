@@ -1,19 +1,12 @@
 /**
  * Input Layer System
- * Manages multiple camera and video inputs with transforms (position, scale, rotation, opacity)
+ * Manages multiple camera and video inputs – now only crop & flip metadata.
  */
 
 const createId = () => `input-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
-const DEFAULT_TRANSFORM = {
-  x: 0,
-  y: 0,
-  width: 1,
-  height: 1,
-  rotation: 0,
-  opacity: 1,
-  mirror: false
-};
+const DEFAULT_CROP = { x: 0, y: 0, w: 1, h: 1 };
+const DEFAULT_FLIP = { horizontal: false, vertical: false };
 
 export function initInput({ editor }) {
   console.log('[mediamime] Initializing Input layer system');
@@ -29,19 +22,19 @@ export function initInput({ editor }) {
   const inputSourceName = document.getElementById('input-source-name');
   const inputSourceType = document.getElementById('input-source-type');
   const inputPreviewVideo = document.getElementById('input-preview-video');
-  const inputSourceX = document.getElementById('input-source-x');
-  const inputSourceY = document.getElementById('input-source-y');
-  const inputSourceWidth = document.getElementById('input-source-width');
-  const inputSourceHeight = document.getElementById('input-source-height');
-  const inputSourceRotation = document.getElementById('input-source-rotation');
-  const inputSourceOpacity = document.getElementById('input-source-opacity');
-  const inputSourceOpacityValue = document.getElementById('input-source-opacity-value');
-  const inputSourceMirror = document.getElementById('input-source-mirror');
+  const inputPreviewCanvas = document.getElementById('input-preview-canvas');
+  const previewCtx = inputPreviewCanvas ? inputPreviewCanvas.getContext('2d') : null;
+  const cropX = document.getElementById('input-crop-x');
+  const cropY = document.getElementById('input-crop-y');
+  const cropW = document.getElementById('input-crop-w');
+  const cropH = document.getElementById('input-crop-h');
+  const flipH = document.getElementById('input-flip-horizontal');
+  const flipV = document.getElementById('input-flip-vertical');
   const deleteSourceButton = document.getElementById('input-delete-source');
 
   // State
   const state = {
-    inputs: [], // Array of {id, name, type: 'camera'|'video', stream, transform: {x,y,width,height,rotation,opacity,mirror}}
+  inputs: [], // Array of {id, name, type, stream, crop:{x,y,w,h}, flip:{horizontal,vertical}}
     activeInputId: null,
     isSyncing: false
   };
@@ -76,7 +69,12 @@ export function initInput({ editor }) {
             <span class="material-icons-outlined">${icon}</span>
             <span class="input-label-text">${input.name}</span>
           </span>
-          <span class="input-meta">${Math.round(input.transform.opacity * 100)}%</span>
+          <span class="input-meta" aria-hidden="true"></span>
+          <span class="input-actions">
+            <span class="input-source-delete-btn" role="button" tabindex="0" data-action="delete-input" data-input-id="${input.id}" title="Delete source" aria-label="Delete source">
+              <span class="material-icons-outlined" aria-hidden="true">delete</span>
+            </span>
+          </span>
         </button>
       `;
     }).join('');
@@ -100,21 +98,28 @@ export function initInput({ editor }) {
 
     inputSourceName.value = input.name || '';
     inputSourceType.textContent = input.type === 'camera' ? 'Camera' : 'Video';
-    inputSourceX.value = input.transform.x.toFixed(2);
-    inputSourceY.value = input.transform.y.toFixed(2);
-    inputSourceWidth.value = input.transform.width.toFixed(2);
-    inputSourceHeight.value = input.transform.height.toFixed(2);
-    inputSourceRotation.value = Math.round(input.transform.rotation);
-    inputSourceOpacity.value = input.transform.opacity;
-    inputSourceOpacityValue.textContent = `${Math.round(input.transform.opacity * 100)}%`;
-    inputSourceMirror.checked = input.transform.mirror;
+  if (cropX) cropX.value = input.crop.x.toFixed(2);
+  if (cropY) cropY.value = input.crop.y.toFixed(2);
+  if (cropW) cropW.value = input.crop.w.toFixed(2);
+  if (cropH) cropH.value = input.crop.h.toFixed(2);
+  if (flipH) flipH.checked = !!input.flip.horizontal;
+  if (flipV) flipV.checked = !!input.flip.vertical;
 
     // Update preview if stream exists
     if (input.stream && inputPreviewVideo) {
       if (inputPreviewVideo.srcObject !== input.stream) {
         inputPreviewVideo.srcObject = input.stream;
       }
+      // Ensure playback for drawImage
+      inputPreviewVideo.play().catch(() => {});
     }
+
+    // Reflect flips by applying CSS transform to both video and canvas overlay
+    const scaleX = input.flip?.horizontal ? -1 : 1;
+    const scaleY = input.flip?.vertical ? -1 : 1;
+    const transform = `scale(${scaleX}, ${scaleY})`;
+    if (inputPreviewVideo) inputPreviewVideo.style.transform = transform;
+    if (inputPreviewCanvas) inputPreviewCanvas.style.transform = transform;
 
     state.isSyncing = false;
   };
@@ -132,7 +137,8 @@ export function initInput({ editor }) {
         name: generateInputName('camera'),
         type: 'camera',
         stream,
-        transform: { ...DEFAULT_TRANSFORM }
+        crop: { ...DEFAULT_CROP },
+        flip: { ...DEFAULT_FLIP }
       };
 
       state.inputs.push(input);
@@ -171,7 +177,8 @@ export function initInput({ editor }) {
         type: 'video',
         stream,
         videoElement: video, // Keep reference to video element
-        transform: { ...DEFAULT_TRANSFORM }
+        crop: { ...DEFAULT_CROP },
+        flip: { ...DEFAULT_FLIP }
       };
 
       state.inputs.push(input);
@@ -217,11 +224,11 @@ export function initInput({ editor }) {
   };
 
   // Update input transform
-  const updateInputTransform = (inputId, transform) => {
+  const updateInputMeta = (inputId, patch) => {
     const input = state.inputs.find(i => i.id === inputId);
     if (!input) return;
-
-    Object.assign(input.transform, transform);
+    if (patch.crop) Object.assign(input.crop, patch.crop);
+    if (patch.flip) Object.assign(input.flip, patch.flip);
     updateUI();
     // TODO: Emit event for rendering layer
   };
@@ -237,9 +244,18 @@ export function initInput({ editor }) {
 
   if (inputList) {
     inputList.addEventListener('click', (e) => {
+      const del = e.target.closest('[data-action="delete-input"]');
+      if (del) {
+        e.stopPropagation();
+        const id = del.dataset.inputId;
+        if (!id) return;
+        // Set active to the one being deleted to reuse deleteInput
+        state.activeInputId = id;
+        deleteInput();
+        return;
+      }
       const button = e.target.closest('[data-input-id]');
       if (!button) return;
-
       state.activeInputId = button.dataset.inputId;
       updateUI();
     });
@@ -261,44 +277,94 @@ export function initInput({ editor }) {
     });
   }
 
-  const createTransformHandler = (key, parse = parseFloat) => (e) => {
+  const createCropHandler = (key) => (e) => {
     if (!state.activeInputId || state.isSyncing) return;
-    const value = parse(e.target.value);
+    const value = parseFloat(e.target.value);
     if (!isFinite(value)) return;
-    updateInputTransform(state.activeInputId, { [key]: value });
+    updateInputMeta(state.activeInputId, { crop: { [key]: Math.min(1, Math.max(0, value)) } });
+  };
+  if (cropX) cropX.addEventListener('input', createCropHandler('x'));
+  if (cropY) cropY.addEventListener('input', createCropHandler('y'));
+  if (cropW) cropW.addEventListener('input', createCropHandler('w'));
+  if (cropH) cropH.addEventListener('input', createCropHandler('h'));
+  if (flipH) flipH.addEventListener('change', (e) => {
+    if (!state.activeInputId || state.isSyncing) return;
+    updateInputMeta(state.activeInputId, { flip: { horizontal: e.target.checked } });
+  });
+  if (flipV) flipV.addEventListener('change', (e) => {
+    if (!state.activeInputId || state.isSyncing) return;
+    updateInputMeta(state.activeInputId, { flip: { vertical: e.target.checked } });
+  });
+
+  // Preview render loop
+  const resizePreview = () => {
+    if (!inputPreviewCanvas) return;
+    const rect = inputPreviewCanvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    inputPreviewCanvas.width = Math.max(1, Math.floor(rect.width * dpr));
+    inputPreviewCanvas.height = Math.max(1, Math.floor(rect.height * dpr));
+  };
+  const renderPreview = () => {
+    if (!previewCtx || !inputPreviewCanvas) return;
+    const active = state.inputs.find(i => i.id === state.activeInputId);
+    const video = inputPreviewVideo;
+    const w = inputPreviewCanvas.width;
+    const h = inputPreviewCanvas.height;
+    previewCtx.clearRect(0, 0, w, h);
+    if (!active || !video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
+      // Draw placeholder if no video
+      previewCtx.save();
+      previewCtx.fillStyle = '#3a3232';
+      previewCtx.fillRect(0, 0, w, h);
+      previewCtx.restore();
+      requestAnimationFrame(renderPreview);
+      return;
+    }
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  // Compute letterbox scale only for overlay math; video is drawn by the video element
+  const scale = Math.min(w / vw, h / vh);
+  const padX = (w - vw * scale) / 2;
+  const padY = (h - vh * scale) / 2;
+    // Draw crop rectangle overlay
+    const cropX = Math.max(0, Math.min(1, active.crop.x));
+    const cropY = Math.max(0, Math.min(1, active.crop.y));
+    const cropW = Math.max(0.01, Math.min(1 - cropX, active.crop.w));
+    const cropH = Math.max(0.01, Math.min(1 - cropY, active.crop.h));
+    const rectX = padX + cropX * vw * scale;
+    const rectY = padY + cropY * vh * scale;
+    const rectW = cropW * vw * scale;
+    const rectH = cropH * vh * scale;
+  previewCtx.save();
+  // Dim outside crop area
+  previewCtx.fillStyle = 'rgba(0,0,0,0.35)';
+  // Left
+  previewCtx.fillRect(0, 0, rectX, h);
+  // Right
+  previewCtx.fillRect(rectX + rectW, 0, w - (rectX + rectW), h);
+  // Top
+  previewCtx.fillRect(rectX, 0, rectW, rectY);
+  // Bottom
+  previewCtx.fillRect(rectX, rectY + rectH, rectW, h - (rectY + rectH));
+  // Crop border
+  previewCtx.strokeStyle = '#00e0ff';
+  previewCtx.lineWidth = Math.max(1, 2 * (window.devicePixelRatio || 1));
+  previewCtx.setLineDash([8, 6]);
+  previewCtx.strokeRect(rectX, rectY, rectW, rectH);
+  previewCtx.restore();
+    requestAnimationFrame(renderPreview);
   };
 
-  if (inputSourceX) inputSourceX.addEventListener('input', createTransformHandler('x'));
-  if (inputSourceY) inputSourceY.addEventListener('input', createTransformHandler('y'));
-  if (inputSourceWidth) inputSourceWidth.addEventListener('input', createTransformHandler('width'));
-  if (inputSourceHeight) inputSourceHeight.addEventListener('input', createTransformHandler('height'));
-  if (inputSourceRotation) inputSourceRotation.addEventListener('input', createTransformHandler('rotation'));
-
-  if (inputSourceOpacity) {
-    inputSourceOpacity.addEventListener('input', (e) => {
-      const value = parseFloat(e.target.value);
-      if (!isFinite(value)) return;
-      if (inputSourceOpacityValue) {
-        inputSourceOpacityValue.textContent = `${Math.round(value * 100)}%`;
-      }
-      if (!state.activeInputId || state.isSyncing) return;
-      updateInputTransform(state.activeInputId, { opacity: value });
-    });
-  }
-
-  if (inputSourceMirror) {
-    inputSourceMirror.addEventListener('change', (e) => {
-      if (!state.activeInputId || state.isSyncing) return;
-      updateInputTransform(state.activeInputId, { mirror: e.target.checked });
-    });
-  }
+  window.addEventListener('resize', resizePreview);
+  resizePreview();
 
   // Initialize
   updateUI();
+  requestAnimationFrame(renderPreview);
 
   // Public API
   return {
-    getInputs: () => state.inputs.map(i => ({ ...i })),
+  getInputs: () => state.inputs.map(i => ({ ...i })),
     getActiveInput: () => {
       if (!state.activeInputId) return null;
       const input = state.inputs.find(i => i.id === state.activeInputId);

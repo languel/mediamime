@@ -93,55 +93,44 @@
                   <label>Preview</label>
                   <div class="input-preview-wrapper">
                     <video id="input-preview-video" class="input-preview-video" autoplay muted playsinline></video>
+                    <canvas id="input-preview-canvas" width="320" height="180" aria-label="Input preview"></canvas>
                   </div>
                 </div>
                 <div class="assignment-row">
-                  <label>Transform</label>
+                  <label>Crop</label>
                   <div class="assignment-field-group assignment-field-group--compact">
                     <div class="field-compact small">
                       <span>X</span>
-                      <input type="number" id="input-source-x" step="0.01" value="0">
+                      <input type="number" id="input-crop-x" step="0.01" value="0" min="0" max="1">
                     </div>
                     <div class="field-compact small">
                       <span>Y</span>
-                      <input type="number" id="input-source-y" step="0.01" value="0">
+                      <input type="number" id="input-crop-y" step="0.01" value="0" min="0" max="1">
                     </div>
-                  </div>
-                </div>
-                <div class="assignment-row">
-                  <label>Scale</label>
-                  <div class="assignment-field-group assignment-field-group--compact">
                     <div class="field-compact small">
                       <span>W</span>
-                      <input type="number" id="input-source-width" step="0.01" value="1" min="0.01">
+                      <input type="number" id="input-crop-w" step="0.01" value="1" min="0" max="1">
                     </div>
                     <div class="field-compact small">
                       <span>H</span>
-                      <input type="number" id="input-source-height" step="0.01" value="1" min="0.01">
+                      <input type="number" id="input-crop-h" step="0.01" value="1" min="0" max="1">
                     </div>
                   </div>
                 </div>
                 <div class="assignment-row">
-                  <label>Rotation</label>
-                  <input type="number" id="input-source-rotation" step="1" value="0" min="-180" max="180">
-                </div>
-                <div class="assignment-row">
-                  <label>Opacity</label>
-                  <div class="assignment-field-group">
-                    <input type="range" id="input-source-opacity" min="0" max="1" step="0.05" value="1">
-                    <span id="input-source-opacity-value" style="min-width: 3ch;">100%</span>
+                  <label>Flip</label>
+                  <div class="assignment-field-group assignment-field-group--compact">
+                    <label class="stream-toggle" title="Flip horizontal">
+                      <input type="checkbox" id="input-flip-horizontal" aria-label="Flip horizontal">
+                      <span class="material-icons-outlined" aria-hidden="true">sync_alt</span>
+                    </label>
+                    <label class="stream-toggle" title="Flip vertical">
+                      <input type="checkbox" id="input-flip-vertical" aria-label="Flip vertical">
+                      <span class="material-icons-outlined" aria-hidden="true">swap_vert</span>
+                    </label>
                   </div>
                 </div>
-                <div class="assignment-row">
-                  <label>Mirror</label>
-                  <label class="stream-toggle">
-                    <input type="checkbox" id="input-source-mirror" aria-label="Mirror input">
-                    <span class="material-icons-outlined" aria-hidden="true">flip_camera_android</span>
-                  </label>
-                </div>
-                <div class="editor-detail-actions">
-                  <button id="input-delete-source" type="button" class="danger">Delete</button>
-                </div>
+                <!-- Delete action moved to the input list row as an icon button -->
               </div>
             </div>
           </div>
