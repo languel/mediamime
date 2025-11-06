@@ -6,9 +6,45 @@ const ERASER_TOLERANCE = 0.02;
 const FREEHAND_SIMPLIFY_TOLERANCE = 0.004; // Applied only on mouse release
 const SNAP_GRID_SIZE = 50; // Grid snap size in pixels (matches grid rendering)
 const SNAP_ELEMENT_THRESHOLD = 15; // Pixel distance threshold for snapping to elements
+
+// Helper to get current color from editor color picker
+function getCurrentStyle() {
+  const pickerRoot = document.querySelector('[data-rgba-picker="editor"]');
+  if (!pickerRoot) {
+    return {
+      stroke: "rgba(255, 255, 255, 1)",
+      fill: "rgba(255, 255, 255, 0.5)",
+      strokeWidth: 2
+    };
+  }
+  
+  // Get the CSS variable that stores the current rgba color
+  const rgba = getComputedStyle(pickerRoot).getPropertyValue('--rgba-color').trim() || "rgba(255, 255, 255, 1)";
+  
+  // Parse rgba to extract alpha for calculating 50% relative opacity for fill
+  const match = rgba.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+  if (!match) {
+    return {
+      stroke: rgba,
+      fill: rgba.replace(/[\d.]+\)$/, '0.5)'),
+      strokeWidth: 2
+    };
+  }
+  
+  const [, r, g, b, a = '1'] = match;
+  const alpha = parseFloat(a);
+  const fillAlpha = alpha * 0.5; // 50% relative opacity
+  
+  return {
+    stroke: rgba,
+    fill: `rgba(${r}, ${g}, ${b}, ${fillAlpha})`,
+    strokeWidth: 2
+  };
+}
+
 const DEFAULT_STYLE = {
-  stroke: "#ffffff",
-  fill: "rgba(255, 255, 255, 0.25)",
+  stroke: "rgba(255, 255, 255, 1)",
+  fill: "rgba(255, 255, 255, 0.5)",
   strokeWidth: 2
 };
 
@@ -1741,7 +1777,7 @@ class Editor {
       this.beginLineDrawing(point, pointerId);
       return;
     }
-    const shape = createShape(tool, point, DEFAULT_STYLE);
+    const shape = createShape(tool, point, getCurrentStyle());
     this.shapeStore?.write(shape);
     this.renderShapes();
     this.session = {
@@ -1782,7 +1818,7 @@ class Editor {
       }
     }
     if (!continuing || !shape) {
-      shape = createShape("line", point, DEFAULT_STYLE);
+      shape = createShape("line", point, getCurrentStyle());
       shape.points[1] = { x: point.x, y: point.y };
     }
     store.write(shape);

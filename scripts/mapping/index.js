@@ -775,6 +775,7 @@ export function initMapping({ editor }) {
   const snapshotImportButton = document.getElementById("snapshot-import-button");
   const snapshotAppendButton = document.getElementById("snapshot-append-button");
   const snapshotExportButton = document.getElementById("snapshot-export-button");
+  const snapshotExportSvgButton = document.getElementById("snapshot-export-svg-button");
   // Local storage: autosave/restore last score
   const LAST_SCORE_STORAGE_KEY = "mediamime:last-score";
   let saveDebounce = null;
@@ -2171,6 +2172,98 @@ export function initMapping({ editor }) {
     downloadJson(payload, filename);
   };
 
+  const handleSnapshotExportSvg = () => {
+    try {
+      const svg = document.getElementById("gesture-svg");
+      if (!svg) {
+        console.warn("[mediamime] SVG element not found");
+        return;
+      }
+      
+      // Get the shapes layer from the original SVG (not clone)
+      const shapesLayer = svg.querySelector('[data-layer="shapes"]');
+      if (!shapesLayer) {
+        console.warn("[mediamime] Shapes layer not found");
+        return;
+      }
+      
+      // Calculate bounding box of all shapes
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      const padding = 50; // Add some padding around the content
+      
+      shapesLayer.querySelectorAll('[data-shape-id]').forEach(shapeGroup => {
+        try {
+          const bbox = shapeGroup.getBBox();
+          minX = Math.min(minX, bbox.x);
+          minY = Math.min(minY, bbox.y);
+          maxX = Math.max(maxX, bbox.x + bbox.width);
+          maxY = Math.max(maxY, bbox.y + bbox.height);
+        } catch (e) {
+          // Skip shapes that can't compute bbox
+        }
+      });
+      
+      // Fallback to original viewBox if no shapes found
+      if (!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)) {
+        const originalViewBox = svg.getAttribute("viewBox") || "0 0 1920 1080";
+        minX = 0;
+        minY = 0;
+        const parts = originalViewBox.split(/\s+/);
+        maxX = parseFloat(parts[2]) || 1920;
+        maxY = parseFloat(parts[3]) || 1080;
+      }
+      
+      // Add padding
+      minX -= padding;
+      minY -= padding;
+      maxX += padding;
+      maxY += padding;
+      
+      const width = maxX - minX;
+      const height = maxY - minY;
+      
+      // Create a clean SVG with just the shapes
+      const cleanSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      cleanSvg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      cleanSvg.setAttribute("viewBox", `${minX} ${minY} ${width} ${height}`);
+      cleanSvg.setAttribute("width", `${width}`);
+      cleanSvg.setAttribute("height", `${height}`);
+      
+      // Add background
+      const background = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      background.setAttribute("x", minX);
+      background.setAttribute("y", minY);
+      background.setAttribute("width", width);
+      background.setAttribute("height", height);
+      background.setAttribute("fill", "#000000");
+      cleanSvg.appendChild(background);
+      
+      // Copy shapes (exclude UI elements)
+      shapesLayer.querySelectorAll('[data-shape-id]').forEach(shapeGroup => {
+        const clone = shapeGroup.cloneNode(true);
+        cleanSvg.appendChild(clone);
+      });
+      
+      // Serialize to string
+      const serializer = new XMLSerializer();
+      const svgString = serializer.serializeToString(cleanSvg);
+      
+      // Download
+      const blob = new Blob([svgString], { type: "image/svg+xml" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const ts = new Date().toISOString().replace(/[:.]/g, "-");
+      a.href = url;
+      a.download = `mediamime-score-${ts}.svg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.warn("[mediamime] Failed to export SVG", error);
+    }
+  };
+
   const safeParseJson = async (file) => {
     try {
       const text = await file.text();
@@ -2864,6 +2957,7 @@ export function initMapping({ editor }) {
   addListener(editorLandmarkSelect, "change", handleEditorLandmarkChange);
   // Import/Export listeners
   addListener(snapshotExportButton, "click", handleSnapshotExport);
+  addListener(snapshotExportSvgButton, "click", handleSnapshotExportSvg);
   addListener(snapshotImportButton, "click", () => {
     importMode = "replace";
     if (snapshotImportInput) snapshotImportInput.click();
