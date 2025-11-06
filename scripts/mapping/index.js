@@ -1831,7 +1831,8 @@ export function initMapping({ editor }) {
   const handleSelectionChange = (payload) => {
     const previousId = state.activeShapeId;
     const selection = Array.isArray(payload?.selection) ? payload.selection : [];
-    const nextId = selection[0] || null;
+    // For multi-selection, use the first selected shape as the active one for detail panel
+    const nextId = selection.length > 0 ? selection[0] : null;
     const selectionChanged = nextId !== previousId;
     state.activeShapeId = nextId;
     updateOpenButtonState();

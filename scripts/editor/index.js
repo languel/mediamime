@@ -126,7 +126,7 @@ class Editor {
       mode: "edit",
       tool: "select",
       toolLocked: false,
-      selectedShapeId: null
+      selectedShapeIds: new Set() // Changed from single selectedShapeId to Set for multi-select
     };
     this.shapeStore = null;
     this.session = null;
@@ -180,7 +180,7 @@ class Editor {
         tool: this.state.tool,
         toolLocked: this.state.toolLocked,
         shapes: (this.shapeStore ? this.shapeStore.list() : []).map(cloneShape),
-        selection: this.state.selectedShapeId ? [this.state.selectedShapeId] : []
+        selection: Array.from(this.state.selectedShapeIds)
       }),
       // Add basic shape management APIs for import/export workflows
       addShape: (shape) => this.addShape(shape),
@@ -382,7 +382,7 @@ class Editor {
   clearShapes() {
     if (!this.shapeStore || !this.shapeStore.order.length) return;
     this.shapeStore.clear();
-    this.state.selectedShapeId = null;
+    this.state.selectedShapeIds.clear();
     this.pendingLine = null;
     this.render();
     this.notifyShapesChanged();
@@ -413,7 +413,7 @@ class Editor {
       const normalized = this.normalizeImportedShape(shape);
       if (normalized) this.shapeStore.write(normalized);
     });
-    this.state.selectedShapeId = null;
+    this.state.selectedShapeIds.clear();
     this.pendingLine = null;
     this.render();
     this.notifyShapesChanged();
@@ -479,8 +479,9 @@ class Editor {
         const shape = this.shapeStore?.read(shapeId);
         if (!shape) return;
         if (event.altKey) {
-          if (this.state.selectedShapeId !== shapeId) {
-            this.state.selectedShapeId = shapeId;
+          if (!this.state.selectedShapeIds.has(shapeId)) {
+            this.state.selectedShapeIds.clear();
+            this.state.selectedShapeIds.add(shapeId);
             this.render();
             this.notifySelectionChanged();
           }
@@ -488,10 +489,17 @@ class Editor {
           event.preventDefault();
           return;
         }
-        if (this.state.selectedShapeId !== shapeId) {
-          this.state.selectedShapeId = shapeId;
-          this.render();
-          this.notifySelectionChanged();
+        
+        // Shift-click for multi-select
+        if (event.shiftKey) {
+          this.selectShape(shapeId, { toggle: true });
+          event.preventDefault();
+          return;
+        }
+        
+        // Normal click - select single shape and start drag
+        if (!this.state.selectedShapeIds.has(shapeId)) {
+          this.selectShape(shapeId);
         }
         this.startShapeDrag({
           shapeId,
@@ -500,10 +508,39 @@ class Editor {
           originRaw: rawPoint
         });
         event.preventDefault();
-      } else if (this.state.selectedShapeId) {
-        this.state.selectedShapeId = null;
-        this.render();
-        this.notifySelectionChanged();
+      } else {
+        // Click is not on a shape. If inside current selection bounds, start selection drag.
+        const bounds = this.getCurrentSelectionBounds();
+        const insideSelection = bounds && point.x >= bounds.x && point.x <= bounds.x + bounds.width && point.y >= bounds.y && point.y <= bounds.y + bounds.height;
+        if (insideSelection) {
+          this.startSelectionDrag({
+            pointerId: event.pointerId,
+            origin: point,
+            originRaw: rawPoint
+          });
+          event.preventDefault();
+          return;
+        }
+
+        // Otherwise start box selection
+        if (!event.shiftKey) {
+          // Clear selection if no shift key
+          if (this.state.selectedShapeIds.size > 0) {
+            this.state.selectedShapeIds.clear();
+            this.render();
+            this.notifySelectionChanged();
+          }
+        }
+        this.svg.setPointerCapture(event.pointerId);
+        this.session = {
+          type: "box-select",
+          pointerId: event.pointerId,
+          start: point,
+          end: point,
+          shiftKey: event.shiftKey
+        };
+        this.renderBoxSelection();
+        event.preventDefault();
       }
       return;
     }
@@ -552,6 +589,19 @@ class Editor {
         this.updateShapeDrag(this.session, dx, dy);
         break;
       }
+      case "selection-drag": {
+        event.preventDefault();
+        const dx = (rawPoint?.x ?? point.x) - this.session.originRaw.x;
+        const dy = (rawPoint?.y ?? point.y) - this.session.originRaw.y;
+        this.updateSelectionDrag(this.session, dx, dy);
+        break;
+      }
+      case "box-select": {
+        event.preventDefault();
+        this.session.end = point;
+        this.renderBoxSelection();
+        break;
+      }
       case "erase": {
         event.preventDefault();
         const erasedId = this.eraseAtPoint(point, { tolerance: ERASER_TOLERANCE, skip: this.session.erased });
@@ -573,6 +623,12 @@ class Editor {
           break;
         case "shape-drag":
           this.finishShapeDrag();
+          break;
+        case "selection-drag":
+          this.finishSelectionDrag();
+          break;
+        case "box-select":
+          this.finishBoxSelection();
           break;
         case "erase":
           if (!this.state.toolLocked) {
@@ -597,6 +653,12 @@ class Editor {
           break;
         case "shape-drag":
           this.cancelShapeDrag();
+          break;
+        case "selection-drag":
+          this.cancelSelectionDrag();
+          break;
+        case "box-select":
+          this.cancelBoxSelection();
           break;
         case "erase":
           if (!this.state.toolLocked) {
@@ -628,6 +690,74 @@ class Editor {
     };
   }
 
+  startSelectionDrag({ pointerId, origin, originRaw }) {
+    const ids = Array.from(this.state.selectedShapeIds);
+    if (!ids.length) return;
+    const baseMap = new Map();
+    ids.forEach((id) => {
+      const shape = this.shapeStore?.read(id);
+      if (shape) baseMap.set(id, cloneShape(shape));
+    });
+    if (!baseMap.size) return;
+    this.svg.setPointerCapture(pointerId);
+    this.session = {
+      type: "selection-drag",
+      pointerId,
+      origin: { ...origin },
+      originRaw: { ...originRaw },
+      baseShapes: baseMap
+    };
+  }
+
+  updateSelectionDrag(session, dx, dy) {
+    if (!session || session.type !== "selection-drag") return;
+    const baseMap = session.baseShapes;
+    if (!baseMap) return;
+    baseMap.forEach((base, id) => {
+      const next = cloneShape(base);
+      if (next.type === "rect" || next.type === "ellipse") {
+        next.x = base.x + dx;
+        next.y = base.y + dy;
+      } else if (next.type === "line" || next.type === "path") {
+        next.points = base.points.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+      }
+      this.shapeStore?.write(next);
+    });
+    this.renderShapes();
+  }
+
+  finishSelectionDrag() {
+    if (!this.session || this.session.type !== "selection-drag") return;
+    this.notifyShapesChanged();
+  }
+
+  cancelSelectionDrag() {
+    if (!this.session || this.session.type !== "selection-drag") return;
+    const baseMap = this.session.baseShapes;
+    if (baseMap) {
+      baseMap.forEach((shape) => this.shapeStore?.write(cloneShape(shape)));
+      this.renderShapes();
+    }
+  }
+
+  getCurrentSelectionBounds() {
+    const ids = Array.from(this.state.selectedShapeIds);
+    if (!ids.length) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    ids.forEach((id) => {
+      const shape = this.shapeStore?.read(id);
+      if (!shape) return;
+      const b = this.getShapeBounds(shape);
+      if (!b) return;
+      minX = Math.min(minX, b.x);
+      minY = Math.min(minY, b.y);
+      maxX = Math.max(maxX, b.x + b.width);
+      maxY = Math.max(maxY, b.y + b.height);
+    });
+    if (minX === Infinity) return null;
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  }
+
   updateShapeDrag(session, dx, dy) {
     if (!session?.baseShape) return;
     const base = session.baseShape;
@@ -655,6 +785,89 @@ class Editor {
     if (this.session.baseShape) {
       this.shapeStore?.write(cloneShape(this.session.baseShape));
       this.renderShapes();
+    }
+  }
+
+  renderBoxSelection() {
+    if (!this.session || this.session.type !== "box-select") return;
+    // Remove existing box
+    const existingBox = this.svg.querySelector('.box-selection');
+    if (existingBox) {
+      existingBox.remove();
+    }
+    const { start, end } = this.session;
+    const minX = Math.min(start.x, end.x);
+    const minY = Math.min(start.y, end.y);
+    const maxX = Math.max(start.x, end.x);
+    const maxY = Math.max(start.y, end.y);
+    const rect = createSvgElement('rect', {
+      class: 'box-selection',
+      x: minX * this.view.width,
+      y: minY * this.view.height,
+      width: (maxX - minX) * this.view.width,
+      height: (maxY - minY) * this.view.height,
+      fill: '#ffffff',
+      'fill-opacity': '0.12',
+      stroke: '#ffffff',
+      'stroke-opacity': '0.8',
+      'stroke-width': '1',
+      'stroke-dasharray': '6,6',
+      'pointer-events': 'none'
+    });
+    this.svg.appendChild(rect);
+  }
+
+  finishBoxSelection() {
+    if (!this.session || this.session.type !== "box-select") return;
+    const { start, end, shiftKey } = this.session;
+    const minX = Math.min(start.x, end.x);
+    const minY = Math.min(start.y, end.y);
+    const maxX = Math.max(start.x, end.x);
+    const maxY = Math.max(start.y, end.y);
+    // Find all shapes that intersect with the box
+    const selectedIds = [];
+    if (this.shapeStore) {
+      for (const shapeId of this.shapeStore.order) {
+        const shape = this.shapeStore.read(shapeId);
+        if (!shape) continue;
+        const bounds = this.getShapeBounds(shape);
+        if (!bounds) continue;
+        // Check if shape bounds intersect with selection box
+        const shapeMinX = bounds.x;
+        const shapeMinY = bounds.y;
+        const shapeMaxX = bounds.x + bounds.width;
+        const shapeMaxY = bounds.y + bounds.height;
+        const intersects = !(shapeMaxX < minX || shapeMinX > maxX || 
+                            shapeMaxY < minY || shapeMinY > maxY);
+        if (intersects) {
+          selectedIds.push(shapeId);
+        }
+      }
+    }
+    // Update selection based on shift key
+    if (shiftKey) {
+      // Add to existing selection
+      selectedIds.forEach(id => this.state.selectedShapeIds.add(id));
+    } else {
+      // Replace selection
+      this.state.selectedShapeIds.clear();
+      selectedIds.forEach(id => this.state.selectedShapeIds.add(id));
+    }
+    // Remove box visual
+    const existingBox = this.svg.querySelector('.box-selection');
+    if (existingBox) {
+      existingBox.remove();
+    }
+    this.render();
+    this.notifySelectionChanged();
+  }
+
+  cancelBoxSelection() {
+    if (!this.session || this.session.type !== "box-select") return;
+    // Remove box visual
+    const existingBox = this.svg.querySelector('.box-selection');
+    if (existingBox) {
+      existingBox.remove();
     }
   }
 
@@ -721,8 +934,8 @@ class Editor {
           this.abortDrawing();
           this.session = null;
           event.preventDefault();
-        } else if (this.state.selectedShapeId) {
-          this.state.selectedShapeId = null;
+        } else if (this.state.selectedShapeIds.size > 0) {
+          this.state.selectedShapeIds.clear();
           this.render();
           this.notifySelectionChanged();
           event.preventDefault();
@@ -751,10 +964,11 @@ class Editor {
       lastPoint: { ...point }
     };
     if (!(this.state.toolLocked && DRAWING_TOOLS.has(tool))) {
-      this.state.selectedShapeId = shape.id;
+      this.state.selectedShapeIds.clear();
+      this.state.selectedShapeIds.add(shape.id);
       this.notifySelectionChanged();
     } else {
-      this.state.selectedShapeId = null;
+      this.state.selectedShapeIds.clear();
       this.notifySelectionChanged();
     }
   }
@@ -795,10 +1009,11 @@ class Editor {
       continuing
     };
     if (!(this.state.toolLocked && DRAWING_TOOLS.has("line"))) {
-      this.state.selectedShapeId = shape.id;
+      this.state.selectedShapeIds.clear();
+      this.state.selectedShapeIds.add(shape.id);
       this.notifySelectionChanged();
     } else {
-      this.state.selectedShapeId = null;
+      this.state.selectedShapeIds.clear();
       this.notifySelectionChanged();
     }
   }
@@ -888,7 +1103,12 @@ class Editor {
       this.pendingLine = null;
     }
     const shouldAutoSelect = !(this.state.toolLocked && DRAWING_TOOLS.has(tool));
-    this.state.selectedShapeId = shouldAutoSelect ? shape.id : null;
+    if (shouldAutoSelect) {
+      this.state.selectedShapeIds.clear();
+      this.state.selectedShapeIds.add(shape.id);
+    } else {
+      this.state.selectedShapeIds.clear();
+    }
     this.render();
     this.notifyShapesChanged();
     this.notifySelectionChanged();
@@ -910,8 +1130,8 @@ class Editor {
 
   removeShape(shapeId) {
     this.shapeStore?.remove(shapeId);
-    if (this.state.selectedShapeId === shapeId) {
-      this.state.selectedShapeId = null;
+    if (this.state.selectedShapeIds.has(shapeId)) {
+      this.state.selectedShapeIds.delete(shapeId);
       this.notifySelectionChanged();
     }
     if (this.pendingLine?.shapeId === shapeId) {
@@ -925,31 +1145,82 @@ class Editor {
   }
 
   notifySelectionChanged() {
-    const id = this.state.selectedShapeId;
-    const selectedShape = id ? cloneShape(this.shapeStore?.read(id)) : null;
+    const ids = Array.from(this.state.selectedShapeIds);
+    const selectedShapes = ids.map(id => cloneShape(this.shapeStore?.read(id))).filter(Boolean);
+    
+    // Compute bounding frame for selected shapes
+    let frame = null;
+    if (selectedShapes.length > 0) {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const shape of selectedShapes) {
+        const bounds = this.getShapeBounds(shape);
+        if (bounds) {
+          minX = Math.min(minX, bounds.x);
+          minY = Math.min(minY, bounds.y);
+          maxX = Math.max(maxX, bounds.x + bounds.width);
+          maxY = Math.max(maxY, bounds.y + bounds.height);
+        }
+      }
+      if (minX !== Infinity) {
+        frame = {
+          x: minX,
+          y: minY,
+          width: maxX - minX,
+          height: maxY - minY
+        };
+      }
+    }
+    
     this.emit("selectionchange", {
-      selection: id ? [id] : [],
-      shapes: selectedShape ? [selectedShape] : [],
+      selection: ids,
+      shapes: selectedShapes,
       rotation: 0,
-      frame: null
+      frame: frame
     });
   }
 
-  selectShape(shapeId) {
+  selectShape(shapeId, options = {}) {
+    const { addToSelection = false, toggle = false } = options;
+    
     if (!shapeId) {
-      if (this.state.selectedShapeId !== null) {
-        this.state.selectedShapeId = null;
+      // Clear selection
+      if (this.state.selectedShapeIds.size > 0) {
+        this.state.selectedShapeIds.clear();
         this.render();
         this.notifySelectionChanged();
       }
       return;
     }
+    
     const exists = this.shapeStore?.read(shapeId);
     if (!exists) return;
-    if (this.state.selectedShapeId === shapeId) return;
-    this.state.selectedShapeId = shapeId;
-    this.render();
-    this.notifySelectionChanged();
+    
+    if (toggle) {
+      // Toggle shape in selection
+      if (this.state.selectedShapeIds.has(shapeId)) {
+        this.state.selectedShapeIds.delete(shapeId);
+      } else {
+        this.state.selectedShapeIds.add(shapeId);
+      }
+      this.render();
+      this.notifySelectionChanged();
+    } else if (addToSelection) {
+      // Add to existing selection
+      if (!this.state.selectedShapeIds.has(shapeId)) {
+        this.state.selectedShapeIds.add(shapeId);
+        this.render();
+        this.notifySelectionChanged();
+      }
+    } else {
+      // Replace selection with single shape
+      if (this.state.selectedShapeIds.size === 1 && this.state.selectedShapeIds.has(shapeId)) {
+        return; // Already selected, no change
+      }
+      this.state.selectedShapeIds.clear();
+      this.state.selectedShapeIds.add(shapeId);
+      this.render();
+      this.notifySelectionChanged();
+    }
   }
 
   deleteShape(shapeId) {
@@ -985,7 +1256,7 @@ class Editor {
   renderShapes() {
     if (!this.shapeStore) return;
     this.shapeStore.setView(this.view);
-    const selectedId = this.state.selectedShapeId;
+    const selectedIds = this.state.selectedShapeIds;
     this.shapeStore.order.forEach((shapeId) => {
       const shape = this.shapeStore.read(shapeId);
       if (!shape) return;
@@ -997,8 +1268,116 @@ class Editor {
       } else {
         this.shapesLayer.appendChild(node);
       }
-      node.classList.toggle("is-selected", selectedId === shapeId);
+      node.classList.toggle("is-selected", selectedIds.has(shapeId));
     });
+    
+    // Render selection frame if shapes are selected
+    this.renderSelectionFrame();
+  }
+  
+  renderSelectionFrame() {
+    // Remove existing frame
+    const existingFrame = this.svg.querySelector('.selection-frame');
+    if (existingFrame) {
+      existingFrame.remove();
+    }
+    
+    const selectedIds = Array.from(this.state.selectedShapeIds);
+    if (selectedIds.length === 0) return;
+    
+    // Compute bounding box
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const shapeId of selectedIds) {
+      const shape = this.shapeStore?.read(shapeId);
+      if (!shape) continue;
+      const bounds = this.getShapeBounds(shape);
+      if (bounds) {
+        minX = Math.min(minX, bounds.x);
+        minY = Math.min(minY, bounds.y);
+        maxX = Math.max(maxX, bounds.x + bounds.width);
+        maxY = Math.max(maxY, bounds.y + bounds.height);
+      }
+    }
+    
+    if (minX === Infinity) return;
+    
+    // Create frame group
+  const frameGroup = createSvgElement('g', { class: 'selection-frame' });
+    
+    // Create bounding box rectangle
+    const rect = createSvgElement('rect', {
+      x: minX * this.view.width,
+      y: minY * this.view.height,
+      width: (maxX - minX) * this.view.width,
+      height: (maxY - minY) * this.view.height,
+      fill: '#ffffff',
+      'fill-opacity': '0.12',
+      stroke: '#ffffff',
+      'stroke-opacity': '0.9',
+      'stroke-width': '2',
+      'stroke-dasharray': '6,6',
+      'pointer-events': 'none'
+    });
+    frameGroup.appendChild(rect);
+    
+    // Add corner handles
+  const handleSize = 8;
+    const corners = [
+      { x: minX, y: minY }, // top-left
+      { x: maxX, y: minY }, // top-right
+      { x: maxX, y: maxY }, // bottom-right
+      { x: minX, y: maxY }  // bottom-left
+    ];
+    
+    corners.forEach(corner => {
+      const handle = createSvgElement('rect', {
+        x: corner.x * this.view.width - handleSize / 2,
+        y: corner.y * this.view.height - handleSize / 2,
+        width: handleSize,
+        height: handleSize,
+        fill: '#ffffff',
+        stroke: '#000000',
+        'stroke-opacity': '0.5',
+        'stroke-width': '1',
+        'pointer-events': 'none'
+      });
+      frameGroup.appendChild(handle);
+    });
+    
+    // Append to SVG
+    this.svg.appendChild(frameGroup);
+  }
+  
+  getShapeBounds(shape) {
+    if (!shape) return null;
+    
+    if (shape.type === 'rect' || shape.type === 'ellipse') {
+      return {
+        x: shape.x,
+        y: shape.y,
+        width: shape.width,
+        height: shape.height
+      };
+    }
+    
+    if (shape.type === 'line' || shape.type === 'path') {
+      if (!shape.points || shape.points.length === 0) return null;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      shape.points.forEach(p => {
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x);
+        maxY = Math.max(maxY, p.y);
+      });
+      return {
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY
+      };
+    }
+    
+    return null;
   }
 
   getNormalizedPoint(event, { clamp = true } = {}) {
