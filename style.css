@@ -1155,7 +1155,7 @@ html, body {
       flex: 1 1 auto;
       min-width: 0;
       aspect-ratio: 1 / 1;
-      border-radius: 8px;
+      border-radius: 4px;
       overflow: hidden;
       background: hsl(var(--rgba-hue, 0) 100% 50%);
       cursor: crosshair;
@@ -1193,7 +1193,7 @@ html, body {
     .rgba-picker-slider {
       position: relative;
       flex: 1 1 0;
-      border-radius: 999px;
+      border-radius: 4px;
       overflow: hidden;
       cursor: pointer;
       background: rgba(255, 255, 255, 0.08);
@@ -1221,12 +1221,12 @@ html, body {
       background: linear-gradient(
         0deg,
         #ff0000 0%,
-        #ff00ff 17%,
-        #8000ff 33%,
-        #0040ff 50%,
-        #00ffff 67%,
-        #00ff00 83%,
-        #ffff00 100%
+        #ffff00 17%,
+        #00ff00 33%,
+        #00ffff 50%,
+        #0000ff 67%,
+        #ff00ff 83%,
+        #ff0000 100%
       );
     }
     .rgba-picker-slider--alpha .rgba-picker-slider-track {

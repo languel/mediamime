@@ -1321,6 +1321,20 @@ class Editor {
     if (!this.state.curveEditShapeId) return;
     
     const shapeId = this.state.curveEditShapeId;
+    const shape = this.shapeStore?.read(shapeId);
+    
+    // Auto-detect closed curve: if first and last points are the same, mark as closed
+    if (shape && shape.points && shape.points.length >= 3) {
+      const first = shape.points[0];
+      const last = shape.points[shape.points.length - 1];
+      const distance = Math.hypot(last.x - first.x, last.y - first.y);
+      
+      if (distance < 0.001) { // Very close threshold (normalized units)
+        shape.closed = true;
+        this.shapeStore?.write(shape);
+      }
+    }
+    
     this.state.curveEditShapeId = null;
     this.state.curveEditPoints = [];
     

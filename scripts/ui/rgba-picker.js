@@ -355,6 +355,7 @@ export function createRgbaPicker({ root, initialHex = "#ffffff", initialAlpha = 
     }
     if (!activePointer || activePointer.type !== "hue") return;
     const { y } = getRelativePosition(hueSlider, event);
+    // Map from bottom (0°) to top (360°) to match gradient
     state.h = (1 - y) * 360;
     const isCommit = event.type === "pointerup" || event.type === "pointercancel";
     updateFromHsv(state.h, state.s, state.v, { emit: true, source: isCommit ? "change" : "input" });
