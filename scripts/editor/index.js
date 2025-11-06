@@ -4,6 +4,8 @@ const MIN_DRAW_DISTANCE = 0.004; // Slightly larger to reduce point count during
 const LINE_CLOSE_THRESHOLD = 0.02;
 const ERASER_TOLERANCE = 0.02;
 const FREEHAND_SIMPLIFY_TOLERANCE = 0.004; // Applied only on mouse release
+const SNAP_GRID_SIZE = 50; // Grid snap size in pixels (matches grid rendering)
+const SNAP_ELEMENT_THRESHOLD = 15; // Pixel distance threshold for snapping to elements
 const DEFAULT_STYLE = {
   stroke: "#ffffff",
   fill: "rgba(255, 255, 255, 0.25)",
@@ -602,14 +604,14 @@ class Editor {
       if (curveEditHandle) {
         const pointIndex = parseInt(curveEditHandle.getAttribute('data-point-index'), 10);
         
-        // Cmd+click on control point to remove it
-        if (event.metaKey || event.ctrlKey) {
+        // Alt/Opt-click on control point to remove it
+        if (event.altKey) {
           this.removeCurvePoint(pointIndex);
           event.preventDefault();
           return;
         }
         
-        // Normal click to drag
+        // Normal click to drag (Shift for grid snap, Cmd for element snap work fine)
         this.startCurvePointDrag({
           pointerId: event.pointerId,
           pointIndex,
@@ -620,8 +622,8 @@ class Editor {
         return;
       }
       
-      // Shift+click on the shape to add a point
-      if (event.shiftKey && shapeId === this.state.curveEditShapeId) {
+      // Click on the shape to add a point (allow modifiers for snap)
+      if (shapeId === this.state.curveEditShapeId) {
         this.addCurvePoint(point);
         event.preventDefault();
         return;
@@ -807,7 +809,21 @@ class Editor {
     if (this.session && event.pointerId !== this.session.pointerId) return;
     const rawPoint = this.getNormalizedPoint(event, { clamp: false });
     if (!rawPoint) return;
-    const point = { x: rawPoint.x, y: rawPoint.y };
+    let point = { x: rawPoint.x, y: rawPoint.y };
+    
+    // Apply snapping based on modifier keys
+    const snapToGrid = event.shiftKey;
+    const snapToElement = event.metaKey || event.ctrlKey;
+    if (snapToGrid || snapToElement) {
+      const snapped = this.applySnapping(point, { snapToGrid, snapToElement });
+      // Show snap indicator if point was actually snapped
+      if (snapped.x !== point.x || snapped.y !== point.y) {
+        this.showSnapIndicator(snapped);
+      }
+      point = snapped;
+    } else {
+      this.hideSnapIndicator();
+    }
 
     if (!this.session) return;
     switch (this.session.type) {
@@ -873,6 +889,9 @@ class Editor {
   };
 
   handlePointerUp = (event) => {
+    // Hide snap indicator on pointer up
+    this.hideSnapIndicator();
+    
     if (this.session && event.pointerId === this.session.pointerId) {
       switch (this.session.type) {
         case "draw":
@@ -2400,6 +2419,119 @@ class Editor {
       maxY = Math.max(maxY, p.y);
     });
     return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  }
+
+  applySnapping(point, { snapToGrid = false, snapToElement = false } = {}) {
+    let snapped = { ...point };
+    
+    // Snap to grid (in pixel space)
+    if (snapToGrid) {
+      const px = point.x * this.view.width;
+      const py = point.y * this.view.height;
+      const snappedPx = Math.round(px / SNAP_GRID_SIZE) * SNAP_GRID_SIZE;
+      const snappedPy = Math.round(py / SNAP_GRID_SIZE) * SNAP_GRID_SIZE;
+      snapped.x = snappedPx / this.view.width;
+      snapped.y = snappedPy / this.view.height;
+    }
+    
+    // Snap to nearest element points (vertices, centers)
+    if (snapToElement) {
+      const candidatePoints = [];
+      
+      // Gather all snap points from shapes
+      if (this.shapeStore) {
+        for (const id of this.shapeStore.order) {
+          // Skip the shape being drawn if it exists
+          if (this.session?.shape?.id === id) continue;
+          
+          const shape = this.shapeStore.read(id);
+          if (!shape) continue;
+          
+          // Get shape points (vertices)
+          const pts = getShapePoints(shape);
+          if (pts) {
+            candidatePoints.push(...pts);
+          }
+          
+          // Add center point for rect/ellipse
+          if (shape.type === 'rect' || shape.type === 'ellipse') {
+            candidatePoints.push({
+              x: shape.x + shape.width / 2,
+              y: shape.y + shape.height / 2
+            });
+          }
+        }
+      }
+      
+      // Find nearest point within threshold
+      const thresholdNorm = SNAP_ELEMENT_THRESHOLD / this.view.width; // Convert to normalized
+      let minDist = thresholdNorm;
+      let nearestPoint = null;
+      
+      for (const candidate of candidatePoints) {
+        const dist = Math.hypot(candidate.x - snapped.x, candidate.y - snapped.y);
+        if (dist < minDist) {
+          minDist = dist;
+          nearestPoint = candidate;
+        }
+      }
+      
+      if (nearestPoint) {
+        snapped.x = nearestPoint.x;
+        snapped.y = nearestPoint.y;
+      }
+    }
+    
+    return snapped;
+  }
+
+  showSnapIndicator(point) {
+    // Remove existing indicator
+    let indicator = this.svg.querySelector('.snap-indicator');
+    if (!indicator) {
+      indicator = createSvgElement('g', { class: 'snap-indicator' });
+      // Append to shapes layer so it follows camera transform
+      this.shapesLayer.appendChild(indicator);
+    } else {
+      while (indicator.firstChild) indicator.removeChild(indicator.firstChild);
+    }
+    
+    // Draw a small crosshair at the snap point (in normalized world coordinates)
+    const px = point.x * this.view.width;
+    const py = point.y * this.view.height;
+    const size = 5;
+    
+    const hLine = createSvgElement('line', {
+      x1: px - size,
+      y1: py,
+      x2: px + size,
+      y2: py,
+      stroke: '#ffffff',
+      'stroke-width': '1.5',
+      'stroke-opacity': '0.5',
+      'pointer-events': 'none'
+    });
+    
+    const vLine = createSvgElement('line', {
+      x1: px,
+      y1: py - size,
+      x2: px,
+      y2: py + size,
+      stroke: '#ffffff',
+      'stroke-width': '1.5',
+      'stroke-opacity': '0.5',
+      'pointer-events': 'none'
+    });
+    
+    indicator.appendChild(hLine);
+    indicator.appendChild(vLine);
+  }
+
+  hideSnapIndicator() {
+    const indicator = this.svg.querySelector('.snap-indicator');
+    if (indicator) {
+      indicator.remove();
+    }
   }
 
   getNormalizedPoint(event, { clamp = true } = {}) {
