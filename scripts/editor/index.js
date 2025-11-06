@@ -1689,10 +1689,7 @@ class Editor {
       const only = shapes[0];
       if (only && (only.type === 'rect' || only.type === 'ellipse')) {
         frameRotation = Number(only.rotation) || 0;
-        centerPx = {
-          x: (only.x + (only.width || 0) / 2) * this.view.width,
-          y: (only.y + (only.height || 0) / 2) * this.view.height
-        };
+        // centerPx will be computed from allPointsPx AABB below to remain consistent with rendering
       }
     }
 
@@ -1741,7 +1738,7 @@ class Editor {
       stroke: '#ffffff',
       'stroke-opacity': '0.9',
       'stroke-width': '2',
-      'stroke-dasharray': '6,6',
+      'stroke-dasharray': '2,3',
       'pointer-events': 'none'
     });
     frameGroup.appendChild(rect);
@@ -1760,10 +1757,11 @@ class Editor {
         y: corner.y - handleSize / 2,
         width: handleSize,
         height: handleSize,
-        fill: '#ffffff',
-        stroke: '#000000',
-        'stroke-opacity': '0.5',
-        'stroke-width': '1',
+        fill: 'none',
+        stroke: '#ffffff',
+        'stroke-opacity': '0.9',
+        'stroke-width': '2',
+        'stroke-dasharray': '2,3',
         'pointer-events': 'all',
         'data-handle': corner.id,
         style: `cursor:${corner.cursor}`
@@ -1774,7 +1772,7 @@ class Editor {
     // Rotation handle in px
     const topCenterX = (minX + maxX) / 2;
     const topY = minY;
-    const handleOffsetPx = 28;
+    const handleOffsetPx = 14;
     const stalk = createSvgElement('line', {
       x1: topCenterX,
       y1: topY,
@@ -1783,17 +1781,19 @@ class Editor {
       stroke: '#ffffff',
       'stroke-opacity': '0.9',
       'stroke-width': '2',
+      'stroke-dasharray': '2,3',
       'pointer-events': 'none'
     });
     frameGroup.appendChild(stalk);
     const rotHandle = createSvgElement('circle', {
       cx: topCenterX,
       cy: topY - handleOffsetPx,
-      r: 8,
-      fill: '#ffffff',
-      stroke: '#000000',
-      'stroke-opacity': '0.5',
-      'stroke-width': '1',
+      r: handleSize / 2,
+      fill: 'none',
+      stroke: '#ffffff',
+      'stroke-opacity': '0.9',
+      'stroke-width': '2',
+      'stroke-dasharray': '2,3',
       'pointer-events': 'all',
       'data-rotate': 'true',
       style: 'cursor: grab'
@@ -1805,34 +1805,17 @@ class Editor {
   
   getShapeBounds(shape) {
     if (!shape) return null;
-    
-    if (shape.type === 'rect' || shape.type === 'ellipse') {
-      return {
-        x: shape.x,
-        y: shape.y,
-        width: shape.width,
-        height: shape.height
-      };
-    }
-    
-    if (shape.type === 'line' || shape.type === 'path') {
-      if (!shape.points || shape.points.length === 0) return null;
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      shape.points.forEach(p => {
-        minX = Math.min(minX, p.x);
-        minY = Math.min(minY, p.y);
-        maxX = Math.max(maxX, p.x);
-        maxY = Math.max(maxY, p.y);
-      });
-      return {
-        x: minX,
-        y: minY,
-        width: maxX - minX,
-        height: maxY - minY
-      };
-    }
-    
-    return null;
+    // Use oriented points for all shapes (including rotated rect/ellipse)
+    const pts = getShapePoints(shape);
+    if (!pts || !pts.length) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    pts.forEach((p) => {
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x);
+      maxY = Math.max(maxY, p.y);
+    });
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
   }
 
   getNormalizedPoint(event, { clamp = true } = {}) {
@@ -1952,7 +1935,9 @@ function getShapeCenter(shape) {
 
 function getShapePoints(shape) {
   if (shape.type === "rect") {
-    const { x, y, width, height } = shape;
+    const { x, y } = shape;
+    const width = Math.max(MIN_SHAPE_DIMENSION, shape.width || 0);
+    const height = Math.max(MIN_SHAPE_DIMENSION, shape.height || 0);
     const cx = x + width / 2;
     const cy = y + height / 2;
     const hw = width / 2;
@@ -1970,7 +1955,9 @@ function getShapePoints(shape) {
     });
   }
   if (shape.type === "ellipse") {
-    const { x, y, width, height } = shape;
+    const { x, y } = shape;
+    const width = Math.max(MIN_SHAPE_DIMENSION, shape.width || 0);
+    const height = Math.max(MIN_SHAPE_DIMENSION, shape.height || 0);
     const cx = x + width / 2;
     const cy = y + height / 2;
     const hw = width / 2;
