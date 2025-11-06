@@ -1,9 +1,9 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
 const MIN_SHAPE_DIMENSION = 0.01; // Normalised units (0–1)
-const MIN_DRAW_DISTANCE = 0.0025;
+const MIN_DRAW_DISTANCE = 0.004; // Slightly larger to reduce point count during drawing
 const LINE_CLOSE_THRESHOLD = 0.02;
 const ERASER_TOLERANCE = 0.02;
-const FREEHAND_SIMPLIFY_TOLERANCE = 0.0015;
+const FREEHAND_SIMPLIFY_TOLERANCE = 0.004; // Applied only on mouse release
 const DEFAULT_STYLE = {
   stroke: "#ffffff",
   fill: "rgba(255, 255, 255, 0.25)",
@@ -1649,11 +1649,14 @@ class Editor {
       const last = this.session.lastPoint;
       if (distanceBetween(last, point) >= MIN_DRAW_DISTANCE) {
         shape.points.push({ x: clampUnit(point.x), y: clampUnit(point.y) });
+        this.session.lastPoint = { ...point };
+        // Only update DOM if we actually added a point
+        this.shapeStore?.write(shape);
       }
+    } else {
+      this.session.lastPoint = { ...point };
+      this.shapeStore?.write(shape);
     }
-    this.session.lastPoint = { ...point };
-    this.shapeStore?.write(shape);
-    this.renderShapes();
   }
 
   finalizeDrawing(event) {
@@ -1691,7 +1694,8 @@ class Editor {
         keep = false;
       } else {
         shape.points = simplifyPolyline(shape.points, FREEHAND_SIMPLIFY_TOLERANCE);
-        shape.points = smoothPolylinePoints(shape.points, 1, Boolean(shape.closed));
+        // Remove smoothPolylinePoints - we already use Catmull-Rom splines for rendering
+        // which provides smooth curves without adding extra points
         keep = shape.points.length >= 2;
       }
     }
