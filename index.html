@@ -60,20 +60,90 @@
             <span class="material-icons-outlined" aria-hidden="true">drag_indicator</span>
           </div>
           <div class="panel-actions">
+            <button id="input-add-camera" type="button" class="icon-button" title="Add camera input" aria-label="Add camera input">
+              <span class="material-icons-outlined" aria-hidden="true">videocam</span>
+            </button>
+            <button id="input-add-video" type="button" class="icon-button" title="Add video input" aria-label="Add video input">
+              <span class="material-icons-outlined" aria-hidden="true">video_library</span>
+            </button>
             <button type="button" class="icon-button panel-close" data-modal-close="input" title="Hide Input panel" aria-label="Hide Input panel">
               <span class="material-icons-outlined" aria-hidden="true">close</span>
             </button>
           </div>
         </div>
-        <div class="floating-modal-body">
-          <div class="stream-controls">
-            <label class="stream-toggle" title="Mirror camera">
-              <input type="checkbox" id="mediamime-mirror" checked aria-label="Mirror camera">
-              <span class="material-icons-outlined" aria-hidden="true">flip_camera_android</span>
-            </label>
-            <button id="mediamime-toggle-source" class="icon-button" title="Toggle media source" aria-label="Toggle media source">
-              <span class="material-icons-outlined" aria-hidden="true">switch_video</span>
-            </button>
+        <div class="panel-content">
+          <div class="panel-section is-active" data-panel-section="inputs" id="panel-inputs" role="tabpanel" aria-label="Input sources">
+            <div class="input-source-list" id="input-source-list" role="list" aria-label="Input sources">
+              <!-- Input sources will be dynamically added here -->
+            </div>
+            <div class="input-empty" id="input-empty">
+              Click <strong>+</strong> to add a camera or video input
+            </div>
+            <div class="input-detail" id="input-detail" style="display: none;">
+              <div class="input-detail-form">
+                <div class="assignment-row">
+                  <label>Name</label>
+                  <input type="text" id="input-source-name" placeholder="Input name">
+                </div>
+                <div class="assignment-row">
+                  <label>Type</label>
+                  <span class="status-chip" id="input-source-type">Camera</span>
+                </div>
+                <div class="assignment-row assignment-row--name">
+                  <label>Preview</label>
+                  <div class="input-preview-wrapper">
+                    <video id="input-preview-video" class="input-preview-video" autoplay muted playsinline></video>
+                  </div>
+                </div>
+                <div class="assignment-row">
+                  <label>Transform</label>
+                  <div class="assignment-field-group assignment-field-group--compact">
+                    <div class="field-compact small">
+                      <span>X</span>
+                      <input type="number" id="input-source-x" step="0.01" value="0">
+                    </div>
+                    <div class="field-compact small">
+                      <span>Y</span>
+                      <input type="number" id="input-source-y" step="0.01" value="0">
+                    </div>
+                  </div>
+                </div>
+                <div class="assignment-row">
+                  <label>Scale</label>
+                  <div class="assignment-field-group assignment-field-group--compact">
+                    <div class="field-compact small">
+                      <span>W</span>
+                      <input type="number" id="input-source-width" step="0.01" value="1" min="0.01">
+                    </div>
+                    <div class="field-compact small">
+                      <span>H</span>
+                      <input type="number" id="input-source-height" step="0.01" value="1" min="0.01">
+                    </div>
+                  </div>
+                </div>
+                <div class="assignment-row">
+                  <label>Rotation</label>
+                  <input type="number" id="input-source-rotation" step="1" value="0" min="-180" max="180">
+                </div>
+                <div class="assignment-row">
+                  <label>Opacity</label>
+                  <div class="assignment-field-group">
+                    <input type="range" id="input-source-opacity" min="0" max="1" step="0.05" value="1">
+                    <span id="input-source-opacity-value" style="min-width: 3ch;">100%</span>
+                  </div>
+                </div>
+                <div class="assignment-row">
+                  <label>Mirror</label>
+                  <label class="stream-toggle">
+                    <input type="checkbox" id="input-source-mirror" aria-label="Mirror input">
+                    <span class="material-icons-outlined" aria-hidden="true">flip_camera_android</span>
+                  </label>
+                </div>
+                <div class="editor-detail-actions">
+                  <button id="input-delete-source" type="button" class="danger">Delete</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>

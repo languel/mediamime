@@ -13,12 +13,14 @@ const init = async () => {
     { initMediaPipeline },
     { initMapping },
     { initDrawing },
+    { initInput },
     { initLayout }
   ] = await Promise.all([
     import("./editor/index.js"),
     import("./mediapipe/index.js"),
     import("./mapping/index.js"),
     import("./drawing/index.js"),
+    import("./input/index.js"),
     import("./ui/layout.js")
   ]);
 
@@ -30,6 +32,7 @@ const init = async () => {
   initMediaPipeline({ editor: editorApi });
   initMapping({ editor: editorApi });
   initDrawing({ editor: editorApi });
+  initInput({ editor: editorApi });
 };
 
 if (document.readyState === "loading") {

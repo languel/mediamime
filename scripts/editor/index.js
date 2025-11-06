@@ -26,7 +26,7 @@ function getCurrentStyle() {
   if (!match) {
     return {
       stroke: rgba,
-      fill: rgba.replace(/[\d.]+\)$/, '0.5)'),
+      fill: rgba.replace(/,\s*[\d.]+\)$/, ', 0.5)'),
       strokeWidth: 2
     };
   }
