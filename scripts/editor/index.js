@@ -128,7 +128,14 @@ class Editor {
       toolLocked: false,
       selectedShapeIds: new Set(), // Changed from single selectedShapeId to Set for multi-select
       curveEditShapeId: null, // Track which shape is in curve-edit mode
-      curveEditPoints: [] // Array of {index, x, y} for the points being edited
+      curveEditPoints: [], // Array of {index, x, y} for the points being edited
+      gridMode: 'off' // 'off', 'line', 'dot'
+    };
+    // Camera transform for infinite canvas
+    this.camera = {
+      x: 0, // Pan offset X
+      y: 0, // Pan offset Y
+      zoom: 1 // Zoom level (1 = 100%)
     };
     this.shapeStore = null;
     this.session = null;
@@ -163,9 +170,12 @@ class Editor {
     const ctm = this.svg.getScreenCTM();
     if (!ctm) return null;
     const mapped = point.matrixTransform(ctm.inverse());
+    // Apply camera transform (pan and zoom)
+    const worldX = (mapped.x - this.camera.x) / this.camera.zoom;
+    const worldY = (mapped.y - this.camera.y) / this.camera.zoom;
     const normalized = {
-      x: mapped.x / this.view.width,
-      y: mapped.y / this.view.height
+      x: worldX / this.view.width,
+      y: worldY / this.view.height
     };
     if (clamp) {
       normalized.x = clampUnit(normalized.x);
@@ -309,9 +319,19 @@ class Editor {
     }
     this.shapesLayer = shapesLayer;
     this.shapeStore = new SvgShapeStore(this.shapesLayer, this.view);
+      this.updateCameraTransform();
   }
 
-  bindToolbar() {
+  updateCameraTransform() {
+    if (!this.shapesLayer) return;
+    const transform = `translate(${this.camera.x}, ${this.camera.y}) scale(${this.camera.zoom})`;
+    this.shapesLayer.setAttribute('transform', transform);
+  
+    // Update grid if visible
+    if (this.state.gridMode !== 'off') {
+      this.renderGrid();
+    }
+  }  bindToolbar() {
     this.toolbar.querySelectorAll("[data-tool]").forEach((button) => {
       button.addEventListener("click", (event) => {
         const tool = button.dataset.tool;
@@ -338,6 +358,7 @@ class Editor {
     this.svg.addEventListener("pointerup", this.handlePointerUp);
     this.svg.addEventListener("pointercancel", this.handlePointerCancel);
     this.svg.addEventListener("keydown", this.handleKeyDown);
+    this.svg.addEventListener("wheel", this.handleWheel, { passive: false });
     window.addEventListener("keydown", this.handleKeyDown);
   }
 
@@ -551,10 +572,22 @@ class Editor {
     if (this.state.mode === "perform") return;
     const rawPoint = this.getNormalizedPoint(event, { clamp: false });
     if (!rawPoint) return;
-    const point = {
-      x: clampUnit(rawPoint.x),
-      y: clampUnit(rawPoint.y)
-    };
+    // Use un-clamped world coords so canvas is effectively infinite
+    const point = { x: rawPoint.x, y: rawPoint.y };
+    
+    // Shift + two-finger (or middle button) pan override
+    if (event.shiftKey && (event.pointerType === 'touch' || event.button === 1)) {
+      this.svg.setPointerCapture(event.pointerId);
+      this.session = {
+        type: "pan",
+        pointerId: event.pointerId,
+        startCamera: { ...this.camera },
+        startClient: { x: event.clientX, y: event.clientY }
+      };
+      event.preventDefault();
+      return;
+    }
+    
     const tool = this.state.tool;
     const target = event.target;
     const shapeId = target?.closest?.("[data-shape-id]")?.dataset?.shapeId || null;
@@ -715,7 +748,7 @@ class Editor {
           return;
         }
 
-        // Otherwise start box selection
+  // Otherwise start box selection
         if (!event.shiftKey) {
           // Clear selection if no shift key
           if (this.state.selectedShapeIds.size > 0) {
@@ -728,8 +761,8 @@ class Editor {
         this.session = {
           type: "box-select",
           pointerId: event.pointerId,
-          start: point,
-          end: point,
+          start: rawPoint,
+          end: rawPoint,
           shiftKey: event.shiftKey
         };
         this.renderBoxSelection();
@@ -739,7 +772,15 @@ class Editor {
     }
 
     if (tool === "hand") {
-      // Future: implement pan/zoom
+      // Pan with hand tool
+      this.svg.setPointerCapture(event.pointerId);
+      this.session = {
+        type: "pan",
+        pointerId: event.pointerId,
+        startCamera: { ...this.camera },
+        startClient: { x: event.clientX, y: event.clientY }
+      };
+      event.preventDefault();
       return;
     }
 
@@ -761,13 +802,25 @@ class Editor {
   };
 
   handlePointerMove = (event) => {
+    // Detect shift + two-finger during move and upgrade to pan if not already in a session
+    if (!this.session && event.shiftKey && event.pointerType === 'touch') {
+      const rawPoint = this.getNormalizedPoint(event, { clamp: false });
+      if (rawPoint) {
+        this.svg.setPointerCapture(event.pointerId);
+        this.session = {
+          type: "pan",
+          pointerId: event.pointerId,
+          startCamera: { ...this.camera },
+          startClient: { x: event.clientX, y: event.clientY }
+        };
+        event.preventDefault();
+      }
+    }
+    
     if (this.session && event.pointerId !== this.session.pointerId) return;
     const rawPoint = this.getNormalizedPoint(event, { clamp: false });
     if (!rawPoint) return;
-    const point = {
-      x: clampUnit(rawPoint.x),
-      y: clampUnit(rawPoint.y)
-    };
+    const point = { x: rawPoint.x, y: rawPoint.y };
 
     if (!this.session) return;
     switch (this.session.type) {
@@ -806,10 +859,19 @@ class Editor {
       }
       case "box-select": {
         event.preventDefault();
-        this.session.end = point;
+        this.session.end = rawPoint;
         this.renderBoxSelection();
         break;
       }
+        case "pan": {
+          event.preventDefault();
+          const dx = event.clientX - this.session.startClient.x;
+          const dy = event.clientY - this.session.startClient.y;
+          this.camera.x = this.session.startCamera.x + dx;
+          this.camera.y = this.session.startCamera.y + dy;
+          this.updateCameraTransform();
+          break;
+        }
       case "erase": {
         event.preventDefault();
         const erasedId = this.eraseAtPoint(point, { tolerance: ERASER_TOLERANCE, skip: this.session.erased });
@@ -904,6 +966,38 @@ class Editor {
       this.svg.releasePointerCapture(event.pointerId);
     }
   };
+
+    handleWheel = (event) => {
+      // Only zoom when not in perform mode
+      if (this.state.mode === "perform") return;
+    
+      event.preventDefault();
+    
+      const delta = -event.deltaY;
+      const zoomFactor = delta > 0 ? 1.1 : 0.9;
+      const newZoom = Math.max(0.1, Math.min(10, this.camera.zoom * zoomFactor));
+    
+      // Zoom toward cursor position
+      const point = this.svg.createSVGPoint();
+      point.x = event.clientX;
+      point.y = event.clientY;
+      const ctm = this.svg.getScreenCTM();
+      if (ctm) {
+        const mapped = point.matrixTransform(ctm.inverse());
+        const worldBeforeX = (mapped.x - this.camera.x) / this.camera.zoom;
+        const worldBeforeY = (mapped.y - this.camera.y) / this.camera.zoom;
+      
+        this.camera.zoom = newZoom;
+      
+        const worldAfterX = (mapped.x - this.camera.x) / this.camera.zoom;
+        const worldAfterY = (mapped.y - this.camera.y) / this.camera.zoom;
+      
+        this.camera.x += (worldAfterX - worldBeforeX) * this.camera.zoom;
+        this.camera.y += (worldAfterY - worldBeforeY) * this.camera.zoom;
+      
+        this.updateCameraTransform();
+      }
+    };
 
   startShapeDrag({ shapeId, pointerId, origin, originRaw }) {
     const shape = this.shapeStore?.read(shapeId);
@@ -1258,8 +1352,8 @@ class Editor {
     
     // Update the point
     shape.points[session.pointIndex] = {
-      x: clampUnit(point.x),
-      y: clampUnit(point.y)
+      x: point.x,
+      y: point.y
     };
     
     // Update the curve edit points state
@@ -1329,8 +1423,8 @@ class Editor {
     
     // Insert the new point after closestSegment
     const newPoint = {
-      x: clampUnit(clickPoint.x),
-      y: clampUnit(clickPoint.y)
+      x: clickPoint.x,
+      y: clickPoint.y
     };
     
     shape.points.splice(closestSegment + 1, 0, newPoint);
@@ -1391,7 +1485,8 @@ class Editor {
       'stroke-dasharray': '6,6',
       'pointer-events': 'none'
     });
-    this.svg.appendChild(rect);
+    // Append within shapes layer so it follows camera transform
+    this.shapesLayer.appendChild(rect);
   }
 
   finishBoxSelection() {
@@ -1521,6 +1616,49 @@ class Editor {
         this.toggleToolLock();
         event.preventDefault();
         break;
+        case "=":
+        case "+":
+          // Zoom in
+          this.camera.zoom = Math.min(10, this.camera.zoom * 1.2);
+          this.updateCameraTransform();
+          event.preventDefault();
+          break;
+        case "-":
+        case "_":
+          // Zoom out
+          this.camera.zoom = Math.max(0.1, this.camera.zoom / 1.2);
+          this.updateCameraTransform();
+          event.preventDefault();
+          break;
+        case "0":
+          // Reset zoom
+          this.camera.zoom = 1;
+          this.camera.x = 0;
+          this.camera.y = 0;
+          this.updateCameraTransform();
+          event.preventDefault();
+          break;
+        case "g":
+          // Toggle grid: off -> line -> dot -> off
+          if (this.state.gridMode === 'off') {
+            this.state.gridMode = 'line';
+          } else if (this.state.gridMode === 'line') {
+            this.state.gridMode = 'dot';
+          } else {
+            this.state.gridMode = 'off';
+          }
+          this.renderGrid();
+          event.preventDefault();
+          break;
+        case "f":
+          // Frame selection (F) or frame all (Shift+F)
+          if (event.shiftKey) {
+            this.frameAll();
+          } else {
+            this.frameSelectionOrAll();
+          }
+          event.preventDefault();
+          break;
       case "escape":
         if (this.state.curveEditShapeId) {
           this.exitCurveEdit();
@@ -1595,8 +1733,8 @@ class Editor {
         shape = cloneShape(existing);
         const last = shape.points[shape.points.length - 1] || { x: point.x, y: point.y };
         const start = {
-          x: clampUnit(last.x),
-          y: clampUnit(last.y)
+          x: last.x,
+          y: last.y
         };
         shape.points.push({ ...start });
       } else {
@@ -1605,7 +1743,7 @@ class Editor {
     }
     if (!continuing || !shape) {
       shape = createShape("line", point, DEFAULT_STYLE);
-      shape.points[1] = { x: clampUnit(point.x), y: clampUnit(point.y) };
+      shape.points[1] = { x: point.x, y: point.y };
     }
     store.write(shape);
     this.renderShapes();
@@ -1642,13 +1780,17 @@ class Editor {
       shape.width = normalizedWidth;
       shape.height = normalizedHeight;
       shape.rotation = 0;
+      // Write the single node directly for smooth interactive feedback
+      this.shapeStore?.write(shape);
     } else if (tool === "line") {
       const lastIndex = shape.points.length - 1;
-      shape.points[lastIndex] = { x: clampUnit(point.x), y: clampUnit(point.y) };
+      shape.points[lastIndex] = { x: point.x, y: point.y };
+      // Update the DOM for the in-progress line
+      this.shapeStore?.write(shape);
     } else if (tool === "freehand") {
       const last = this.session.lastPoint;
       if (distanceBetween(last, point) >= MIN_DRAW_DISTANCE) {
-        shape.points.push({ x: clampUnit(point.x), y: clampUnit(point.y) });
+        shape.points.push({ x: point.x, y: point.y });
         this.session.lastPoint = { ...point };
         // Only update DOM if we actually added a point
         this.shapeStore?.write(shape);
@@ -1666,10 +1808,8 @@ class Editor {
     if (shape.type === "rect" || shape.type === "ellipse") {
       keep = shape.width >= MIN_SHAPE_DIMENSION && shape.height >= MIN_SHAPE_DIMENSION;
     } else if (shape.type === "line") {
-      shape.points = shape.points.map((point) => ({
-        x: clampUnit(point.x),
-        y: clampUnit(point.y)
-      }));
+      // Keep world coordinates as-is for infinite canvas
+      shape.points = shape.points.map((point) => ({ x: point.x, y: point.y }));
       if (shape.points.length < 2) {
         keep = false;
       } else {
@@ -2053,7 +2193,8 @@ class Editor {
     });
     frameGroup.appendChild(rotHandle);
 
-    this.svg.appendChild(frameGroup);
+    // Append within shapes layer so it inherits camera transform and stays aligned
+    this.shapesLayer.appendChild(frameGroup);
   }
 
   renderCurveEditPoints() {
@@ -2109,9 +2250,136 @@ class Editor {
       group.appendChild(handle);
     });
     
-    this.svg.appendChild(group);
+    // Append within shapes layer so it follows camera transform
+    this.shapesLayer.appendChild(group);
   }
   
+  renderGrid() {
+    // Remove existing grid
+    const existing = this.svg.querySelector('.editor-grid');
+    if (existing) existing.remove();
+  
+    if (this.state.gridMode === 'off') return;
+  
+    const gridSize = 50; // Grid cell size in pixels at zoom=1
+    const effectiveGridSize = gridSize * this.camera.zoom;
+  
+    // Calculate visible area in world coordinates
+    const minX = -this.camera.x / this.camera.zoom;
+    const minY = -this.camera.y / this.camera.zoom;
+    const maxX = (this.view.width - this.camera.x) / this.camera.zoom;
+    const maxY = (this.view.height - this.camera.y) / this.camera.zoom;
+  
+    const gridGroup = createSvgElement('g', { class: 'editor-grid' });
+    const transform = `translate(${this.camera.x}, ${this.camera.y}) scale(${this.camera.zoom})`;
+    gridGroup.setAttribute('transform', transform);
+  
+    const opacity = '0.05'; // Reduced from 0.1
+  
+    if (this.state.gridMode === 'line') {
+      // Draw vertical lines
+      const startX = Math.floor(minX / gridSize) * gridSize;
+      const endX = Math.ceil(maxX / gridSize) * gridSize;
+      for (let x = startX; x <= endX; x += gridSize) {
+        const line = createSvgElement('line', {
+          x1: x,
+          y1: minY,
+          x2: x,
+          y2: maxY,
+          stroke: '#ffffff',
+          'stroke-opacity': opacity,
+          'stroke-width': 1 / this.camera.zoom,
+          'pointer-events': 'none'
+        });
+        gridGroup.appendChild(line);
+      }
+    
+      // Draw horizontal lines
+      const startY = Math.floor(minY / gridSize) * gridSize;
+      const endY = Math.ceil(maxY / gridSize) * gridSize;
+      for (let y = startY; y <= endY; y += gridSize) {
+        const line = createSvgElement('line', {
+          x1: minX,
+          y1: y,
+          x2: maxX,
+          y2: y,
+          stroke: '#ffffff',
+          'stroke-opacity': opacity,
+          'stroke-width': 1 / this.camera.zoom,
+          'pointer-events': 'none'
+        });
+        gridGroup.appendChild(line);
+      }
+    } else if (this.state.gridMode === 'dot') {
+      // Draw dots at grid intersections
+      const startX = Math.floor(minX / gridSize) * gridSize;
+      const endX = Math.ceil(maxX / gridSize) * gridSize;
+      const startY = Math.floor(minY / gridSize) * gridSize;
+      const endY = Math.ceil(maxY / gridSize) * gridSize;
+      const dotRadius = 1.5 / this.camera.zoom;
+      
+      for (let x = startX; x <= endX; x += gridSize) {
+        for (let y = startY; y <= endY; y += gridSize) {
+          const dot = createSvgElement('circle', {
+            cx: x,
+            cy: y,
+            r: dotRadius,
+            fill: '#ffffff',
+            'fill-opacity': opacity,
+            'pointer-events': 'none'
+          });
+          gridGroup.appendChild(dot);
+        }
+      }
+    }
+  
+    // Insert grid before shapes layer
+    this.svg.insertBefore(gridGroup, this.shapesLayer);
+  }  // Fit camera to a world-space rect (normalized units)
+  fitCameraToRect(rect, padding = 40) {
+    if (!rect) return;
+    const viewW = this.view.width;
+    const viewH = this.view.height;
+    const rectPxW = Math.max(rect.width * viewW, 1);
+    const rectPxH = Math.max(rect.height * viewH, 1);
+    const availW = Math.max(viewW - padding * 2, 1);
+    const availH = Math.max(viewH - padding * 2, 1);
+    const zoom = Math.min(10, Math.max(0.1, Math.min(availW / rectPxW, availH / rectPxH)));
+    const cxPx = (rect.x + rect.width / 2) * viewW;
+    const cyPx = (rect.y + rect.height / 2) * viewH;
+    this.camera.zoom = zoom;
+    this.camera.x = viewW / 2 - cxPx * zoom;
+    this.camera.y = viewH / 2 - cyPx * zoom;
+    this.updateCameraTransform();
+  }
+
+  frameSelectionOrAll() {
+    const bounds = this.getCurrentSelectionBounds();
+    if (bounds) {
+      this.fitCameraToRect(bounds);
+    } else {
+      this.frameAll();
+    }
+  }
+
+  frameAll() {
+    if (!this.shapeStore || !this.shapeStore.order.length) return;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const id of this.shapeStore.order) {
+      const shape = this.shapeStore.read(id);
+      if (!shape) continue;
+      const b = this.getShapeBounds(shape);
+      if (!b) continue;
+      minX = Math.min(minX, b.x);
+      minY = Math.min(minY, b.y);
+      maxX = Math.max(maxX, b.x + b.width);
+      maxY = Math.max(maxY, b.y + b.height);
+    }
+    if (!Number.isFinite(minX)) return;
+    const rect = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+    this.fitCameraToRect(rect);
+  }
+
   getShapeBounds(shape) {
     if (!shape) return null;
     // Use oriented points for all shapes (including rotated rect/ellipse)
@@ -2128,15 +2396,18 @@ class Editor {
   }
 
   getNormalizedPoint(event, { clamp = true } = {}) {
+    // Map client -> SVG -> world (apply inverse camera)
     const point = this.svg.createSVGPoint();
     point.x = event.clientX;
     point.y = event.clientY;
     const ctm = this.svg.getScreenCTM();
     if (!ctm) return null;
     const mapped = point.matrixTransform(ctm.inverse());
+    const worldX = (mapped.x - this.camera.x) / this.camera.zoom;
+    const worldY = (mapped.y - this.camera.y) / this.camera.zoom;
     const normalized = {
-      x: mapped.x / this.view.width,
-      y: mapped.y / this.view.height
+      x: worldX / this.view.width,
+      y: worldY / this.view.height
     };
     if (clamp) {
       normalized.x = clampUnit(normalized.x);
