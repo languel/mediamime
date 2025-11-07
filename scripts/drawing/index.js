@@ -203,6 +203,7 @@ export function initDrawing({ editor }) {
 
     state.streams.forEach((stream) => {
       if (!stream.enabled) return;
+      if (stream.preview === false) return;
       if (!stream.sourceId) return;
       const results = state.resultsBySource.get(stream.sourceId);
       if (!results) return;

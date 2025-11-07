@@ -508,9 +508,9 @@ export function initInput({ editor }) {
           </span>
           <span class="input-meta" aria-hidden="true">${statusChip}</span>
           <span class="input-actions">
-            <span class="input-source-delete-btn" role="button" tabindex="0" data-action="delete-input" data-input-id="${input.id}" title="Delete source" aria-label="Delete source">
+            <button type="button" class="icon-button" data-action="delete-input" data-input-id="${input.id}" title="Delete source" aria-label="Delete source">
               <span class="material-icons-outlined" aria-hidden="true">delete</span>
-            </span>
+            </button>
           </span>
         </button>
       `;

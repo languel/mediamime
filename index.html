@@ -175,13 +175,19 @@
           </div>
         </div>
       </section>
-      <section id="modal-layers" class="panel floating-modal is-open is-hidden" role="dialog" aria-modal="false" aria-label="Layers panel" aria-hidden="true" data-modal="layers" tabindex="-1">
+  <section id="modal-layers" class="panel floating-modal is-open is-hidden" role="dialog" aria-modal="false" aria-label="Layers panel" aria-hidden="true" data-modal="layers" data-resizable="true" tabindex="-1">
         <div class="modal-chrome">
           <div class="modal-handle" data-modal-handle aria-label="Move Layers panel" tabindex="0">
             <span class="material-icons-outlined" aria-hidden="true">drag_indicator</span>
           </div>
           <div class="panel-actions">
-            <button id="mediamime-reset" class="icon-button" title="Reset overlays" aria-label="Reset overlays">
+              <button type="button" class="icon-button" id="layer-add-stream" title="Add stream" aria-label="Add stream">
+                <span class="material-icons-outlined" aria-hidden="true">add</span>
+              </button>
+              <button type="button" class="icon-button" id="layer-duplicate-stream" disabled title="Duplicate stream" aria-label="Duplicate stream">
+                <span class="material-icons-outlined" aria-hidden="true">content_copy</span>
+              </button>
+              <button id="mediamime-reset" class="icon-button" title="Reset overlays" aria-label="Reset overlays">
               <span class="material-icons-outlined" aria-hidden="true">refresh</span>
             </button>
             <button type="button" class="icon-button panel-close" data-modal-close="layers" title="Hide Layers panel" aria-label="Hide Layers panel">
@@ -191,54 +197,74 @@
         </div>
         <div class="panel-content">
           <div class="panel-section is-active" data-panel-section="streams" id="panel-streams" role="tabpanel" aria-label="Stream controls">
-            <div class="background-opacity-control">
-              <label for="background-opacity">Background opacity</label>
-              <div class="background-opacity-input">
-                <input type="range" id="background-opacity" min="0" max="1" step="0.05" value="1">
-                <span id="background-opacity-value">100%</span>
-              </div>
-            </div>
-            <div class="stream-option-row">
-              <label for="toggle-trails">
-                <input type="checkbox" id="toggle-trails">
-                <span>Persistent trails</span>
-              </label>
-            </div>
             <div class="layers-panel" id="layers-panel">
-              <div class="layers-panel-header">
-                <div class="layers-panel-actions">
-                  <button type="button" class="pill-button" id="layer-add-stream">
-                    <span class="material-icons-outlined" aria-hidden="true">add</span>
-                    <span>Add stream</span>
-                  </button>
-                  <button type="button" class="pill-button" id="layer-duplicate-stream" disabled>
-                    <span class="material-icons-outlined" aria-hidden="true">content_copy</span>
-                    <span>Duplicate</span>
-                  </button>
-                  <button type="button" class="pill-button is-danger" id="layer-delete-stream" disabled>
-                    <span class="material-icons-outlined" aria-hidden="true">delete</span>
-                    <span>Delete</span>
-                  </button>
-                </div>
-                <div class="layers-panel-hint">
-                  Streams blend inputs, MediaPipe processors, and viewports.
-                </div>
-              </div>
               <div class="layers-panel-body">
                 <div class="layers-stream-list" id="layer-stream-list" role="listbox" aria-label="Streams"></div>
                 <div class="layers-empty" id="layer-empty">
                   Add a stream to forward a camera or video input through processing layers. Duplicate streams to reuse the same source in different score regions.
                 </div>
                 <form class="layers-detail" id="layer-detail" autocomplete="off" aria-live="polite">
-                  <div class="assignment-row">
-                    <label for="layer-stream-name">Name</label>
-                    <input type="text" id="layer-stream-name" placeholder="Stream name">
-                  </div>
-                  <div class="assignment-row layers-toggle-row">
-                    <label class="layers-switch" for="layer-stream-enabled">
-                      <input type="checkbox" id="layer-stream-enabled" checked>
-                      <span>Enabled</span>
+                  <div class="assignment-row assignment-row--name">
+                    <label for="layer-stream-name">
+                      Name
+                      <button type="button" id="layer-stream-enabled-toggle" class="icon-button" aria-pressed="true" title="Disable stream" aria-label="Disable stream">
+                        <span class="material-icons-outlined" aria-hidden="true">toggle_on</span>
+                      </button>
+                      <button type="button" id="layer-stream-preview-toggle" class="icon-button is-active" aria-pressed="true" title="Hide in Preview" aria-label="Hide in preview panel">
+                        <span class="material-icons-outlined" aria-hidden="true">visibility</span>
+                      </button>
                     </label>
+                    <div class="assignment-field-group assignment-field-group--name">
+                      <input type="text" id="layer-stream-name" placeholder="Stream name">
+                      <div class="color-chip-wrapper" data-color-picker="layers">
+                        <button type="button" class="color-chip" id="layer-color-chip" data-color-toggle="layers" aria-haspopup="true" aria-expanded="false" aria-label="Pick stream color"></button>
+                        <div class="color-picker-panel" id="layer-color-panel" data-color-panel="layers" hidden>
+                              <div class="rgba-picker" data-rgba-picker="layers">
+                                <div class="rgba-picker-preview" aria-live="polite">
+                                  <span class="rgba-picker-preview-swatch" aria-hidden="true"></span>
+                                  <output class="rgba-picker-preview-value" data-rgba-output>rgba(255, 255, 255, 0)</output>
+                                </div>
+                                <div class="rgba-picker-workspace">
+                                  <div class="rgba-picker-spectrum" data-rgba-spectrum>
+                                    <div class="rgba-picker-spectrum-cursor" data-rgba-spectrum-cursor aria-hidden="true"></div>
+                                  </div>
+                                  <div class="rgba-picker-slider-stack">
+                                    <div class="rgba-picker-slider" data-rgba-hue role="slider" aria-label="Hue" aria-valuemin="0" aria-valuemax="360" aria-valuenow="0">
+                                      <div class="rgba-picker-slider-track"></div>
+                                      <div class="rgba-picker-slider-thumb"></div>
+                                    </div>
+                                    <div class="rgba-picker-slider rgba-picker-slider--alpha" data-rgba-alpha role="slider" aria-label="Alpha" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                      <div class="rgba-picker-slider-track"></div>
+                                      <div class="rgba-picker-slider-thumb"></div>
+                                    </div>
+                                  </div>
+                                </div>
+                            <div class="rgba-picker-inputs">
+                              <label class="rgba-picker-field">
+                                <span>R</span>
+                                <input type="number" min="0" max="255" data-rgba-channel="r" inputmode="numeric" aria-label="Red value">
+                              </label>
+                              <label class="rgba-picker-field">
+                                <span>G</span>
+                                <input type="number" min="0" max="255" data-rgba-channel="g" inputmode="numeric" aria-label="Green value">
+                              </label>
+                              <label class="rgba-picker-field">
+                                <span>B</span>
+                                <input type="number" min="0" max="255" data-rgba-channel="b" inputmode="numeric" aria-label="Blue value">
+                              </label>
+                              <label class="rgba-picker-field">
+                                <span>A%</span>
+                                <input type="number" min="0" max="100" data-rgba-channel="a" inputmode="numeric" aria-label="Alpha percentage">
+                              </label>
+                              <label class="rgba-picker-field rgba-picker-field--hex">
+                                <span>Hex</span>
+                                <input type="text" data-rgba-hex inputmode="text" aria-label="Hex color">
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   <div class="assignment-row">
                     <label for="layer-stream-source">Source</label>
@@ -249,57 +275,6 @@
                   <div class="assignment-row">
                     <label for="layer-stream-process">Process</label>
                     <select id="layer-stream-process"></select>
-                  </div>
-                  <div class="assignment-row">
-                    <label>Color</label>
-                    <div class="color-chip-wrapper" data-color-picker="layers">
-                      <button type="button" class="color-chip" id="layer-color-chip" data-color-toggle="layers" aria-haspopup="true" aria-expanded="false" aria-label="Pick stream color"></button>
-                      <div class="color-picker-panel" id="layer-color-panel" data-color-panel="layers" hidden>
-                            <div class="rgba-picker" data-rgba-picker="layers">
-                              <div class="rgba-picker-preview" aria-live="polite">
-                                <span class="rgba-picker-preview-swatch" aria-hidden="true"></span>
-                                <output class="rgba-picker-preview-value" data-rgba-output>rgba(255, 255, 255, 0)</output>
-                              </div>
-                              <div class="rgba-picker-workspace">
-                                <div class="rgba-picker-spectrum" data-rgba-spectrum>
-                                  <div class="rgba-picker-spectrum-cursor" data-rgba-spectrum-cursor aria-hidden="true"></div>
-                                </div>
-                                <div class="rgba-picker-slider-stack">
-                                  <div class="rgba-picker-slider" data-rgba-hue role="slider" aria-label="Hue" aria-valuemin="0" aria-valuemax="360" aria-valuenow="0">
-                                    <div class="rgba-picker-slider-track"></div>
-                                    <div class="rgba-picker-slider-thumb"></div>
-                                  </div>
-                                  <div class="rgba-picker-slider rgba-picker-slider--alpha" data-rgba-alpha role="slider" aria-label="Alpha" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-                                    <div class="rgba-picker-slider-track"></div>
-                                    <div class="rgba-picker-slider-thumb"></div>
-                                  </div>
-                                </div>
-                              </div>
-                          <div class="rgba-picker-inputs">
-                            <label class="rgba-picker-field">
-                              <span>R</span>
-                              <input type="number" min="0" max="255" data-rgba-channel="r" inputmode="numeric" aria-label="Red value">
-                            </label>
-                            <label class="rgba-picker-field">
-                              <span>G</span>
-                              <input type="number" min="0" max="255" data-rgba-channel="g" inputmode="numeric" aria-label="Green value">
-                            </label>
-                            <label class="rgba-picker-field">
-                              <span>B</span>
-                              <input type="number" min="0" max="255" data-rgba-channel="b" inputmode="numeric" aria-label="Blue value">
-                            </label>
-                            <label class="rgba-picker-field">
-                              <span>A%</span>
-                              <input type="number" min="0" max="100" data-rgba-channel="a" inputmode="numeric" aria-label="Alpha percentage">
-                            </label>
-                            <label class="rgba-picker-field rgba-picker-field--hex">
-                              <span>Hex</span>
-                              <input type="text" data-rgba-hex inputmode="text" aria-label="Hex color">
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
                   </div>
                   <div class="assignment-row">
                     <label>Viewport</label>
@@ -322,25 +297,19 @@
                       </div>
                     </div>
                     <div class="layers-viewport-controls">
-                      <label class="layers-switch layers-switch--inline" for="layer-viewport-fit">
-                        <input type="checkbox" id="layer-viewport-fit" checked>
-                        <span>Fit score viewport</span>
-                      </label>
-                      <button type="button" class="pill-button" id="layer-fit-viewport">
+                      <input type="checkbox" id="layer-viewport-fit" class="sr-only" checked aria-hidden="true" tabindex="-1">
+                      <button type="button" class="icon-button" id="layer-viewport-fit-toggle" title="Fit to score viewport" aria-label="Fit to score viewport" aria-pressed="true">
+                        <span class="material-icons-outlined" aria-hidden="true">crop_free</span>
+                      </button>
+                      <button type="button" class="icon-button" id="layer-fit-viewport" title="Reset viewport" aria-label="Reset viewport">
                         <span class="material-icons-outlined" aria-hidden="true">center_focus_strong</span>
-                        <span>Reset viewport</span>
                       </button>
                     </div>
                   </div>
                 </form>
               </div>
             </div>
-            <div class="panel-footnote">
-              <span id="mediamime-status" class="status-chip">Initializing…</span>
-              <div class="tip">
-                Use streams to decide which inputs are processed, how they are coloured, and where they land on the score. Duplicate streams to reuse MediaPipe results across regions.
-              </div>
-            </div>
+            
             </div>
           </div>
       </section>

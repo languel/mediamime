@@ -96,6 +96,7 @@ const createStream = (overrides = {}, inputs = []) => {
     id: createId(),
     name: overrides.name || `Stream ${Math.floor(Math.random() * 90) + 10}`,
     enabled: overrides.enabled ?? true,
+    preview: overrides.preview ?? true,
     sourceId: firstSource,
     process: overrides.process || PROCESS_OPTIONS[0].id,
     color: {
@@ -131,6 +132,7 @@ const persistStreams = (streams) => {
       id: stream.id,
       name: stream.name,
       enabled: Boolean(stream.enabled),
+      preview: Boolean(stream.preview),
       sourceId: stream.sourceId || null,
       process: stream.process,
       color: {
@@ -162,6 +164,7 @@ const loadStoredStreams = () => {
       id: entry.id || createId(),
       name: entry.name || `Stream ${index + 1}`,
       enabled: entry.enabled !== false,
+      preview: entry.preview !== false,
       sourceId: entry.sourceId || null,
       process: PROCESS_OPTIONS.some((option) => option.id === entry.process) ? entry.process : PROCESS_OPTIONS[0].id,
       color: {
@@ -183,10 +186,12 @@ export function initLayers({ editor }) {
   const emptyEl = document.getElementById("layer-empty");
   const detailForm = document.getElementById("layer-detail");
   const nameInput = document.getElementById("layer-stream-name");
-  const enabledInput = document.getElementById("layer-stream-enabled");
+  const enabledToggleBtn = document.getElementById("layer-stream-enabled-toggle");
+  const previewToggleBtn = document.getElementById("layer-stream-preview-toggle");
   const sourceSelect = document.getElementById("layer-stream-source");
   const processSelect = document.getElementById("layer-stream-process");
   const fitToggle = document.getElementById("layer-viewport-fit");
+  const fitToggleBtn = document.getElementById("layer-viewport-fit-toggle");
   const viewportInputs = {
     x: document.getElementById("layer-viewport-x"),
     y: document.getElementById("layer-viewport-y"),
@@ -196,7 +201,6 @@ export function initLayers({ editor }) {
   const fitButton = document.getElementById("layer-fit-viewport");
   const addButton = document.getElementById("layer-add-stream");
   const duplicateButton = document.getElementById("layer-duplicate-stream");
-  const deleteButton = document.getElementById("layer-delete-stream");
   const colorChip = document.getElementById("layer-color-chip");
   const colorPanel = document.getElementById("layer-color-panel");
   const colorPickerRoot = document.querySelector('[data-rgba-picker="layers"]');
@@ -259,8 +263,8 @@ export function initLayers({ editor }) {
   const updateActionButtons = () => {
     const hasActive = Boolean(getActiveStream());
     if (duplicateButton) duplicateButton.disabled = !hasActive;
-    if (deleteButton) deleteButton.disabled = !hasActive;
     if (fitButton) fitButton.disabled = !hasActive;
+    if (fitToggleBtn) fitToggleBtn.disabled = !hasActive;
   };
 
   const updateEmptyState = () => {
@@ -333,7 +337,24 @@ export function initLayers({ editor }) {
     }
     state.isSyncing = true;
     if (nameInput) nameInput.value = stream.name || "";
-    if (enabledInput) enabledInput.checked = Boolean(stream.enabled);
+    if (enabledToggleBtn) {
+      const on = Boolean(stream.enabled);
+      enabledToggleBtn.setAttribute("aria-pressed", String(on));
+      enabledToggleBtn.classList.toggle("is-active", on);
+      const iconEl = enabledToggleBtn.querySelector(".material-icons-outlined");
+      if (iconEl) iconEl.textContent = on ? "toggle_on" : "toggle_off";
+      enabledToggleBtn.title = on ? "Disable stream" : "Enable stream";
+      enabledToggleBtn.setAttribute("aria-label", on ? "Disable stream" : "Enable stream");
+    }
+    if (previewToggleBtn) {
+      const show = stream.preview !== false;
+      previewToggleBtn.setAttribute("aria-pressed", String(show));
+      previewToggleBtn.classList.toggle("is-active", show);
+      const iconEl = previewToggleBtn.querySelector(".material-icons-outlined");
+      if (iconEl) iconEl.textContent = show ? "visibility" : "visibility_off";
+      previewToggleBtn.title = show ? "Hide in Preview" : "Show in Preview";
+      previewToggleBtn.setAttribute("aria-label", show ? "Hide in preview panel" : "Show in preview panel");
+    }
     populateSourceOptions(stream);
     if (processSelect) {
       processSelect.disabled = false;
@@ -346,6 +367,10 @@ export function initLayers({ editor }) {
       fitToggle.checked = isFit;
       fitToggle.disabled = false;
       setViewportInputsDisabled(isFit);
+      if (fitToggleBtn) {
+        fitToggleBtn.setAttribute("aria-pressed", String(isFit));
+        fitToggleBtn.classList.toggle("is-active", isFit);
+      }
     }
     if (viewportInputs.x) viewportInputs.x.value = formatUnit(stream.viewport.x);
     if (viewportInputs.y) viewportInputs.y.value = formatUnit(stream.viewport.y);
@@ -369,17 +394,28 @@ export function initLayers({ editor }) {
         const processLabel = getProcessLabel(stream.process);
         const metaLabel =
           sourceLabel && processLabel ? `${sourceLabel} • ${processLabel}` : sourceLabel || processLabel || "Unassigned";
+        const enabledIcon = stream.enabled ? "toggle_on" : "toggle_off";
+        const previewOn = stream.preview !== false;
+        const previewIcon = previewOn ? "visibility" : "visibility_off";
         return `
           <button type="button" role="option" aria-selected="${isActive ? "true" : "false"}" class="layers-stream-item ${isActive ? "is-active" : ""} ${
             stream.enabled ? "" : "is-disabled"
           }" data-stream-id="${stream.id}">
-            <span class="layers-stream-name">
-              <span class="layers-stream-color" style="--layer-color:${stream.color.hex}; --layer-alpha:${stream.color.alpha};"></span>
-              <span>${escapeHtml(stream.name)}</span>
+            <span class="layers-stream-label">
+              <span class="layers-stream-color" style="--layer-color:${stream.color.hex}; --layer-alpha:${stream.color.alpha};" aria-hidden="true"></span>
+              <span class="layers-stream-label-text">${escapeHtml(stream.name)}</span>
             </span>
-            <span class="layers-stream-meta">
-              <span class="layers-stream-source">${escapeHtml(metaLabel)}</span>
-              <span class="layers-stream-status ${statusClass}">${stream.enabled ? "On" : "Off"}</span>
+            <span class="layers-stream-meta">${escapeHtml(metaLabel)}</span>
+            <span class="layers-stream-actions">
+              <button type="button" class="icon-button ${previewOn ? "is-active" : ""}" data-action="toggle-preview" data-stream-id="${stream.id}" title="${previewOn ? "Hide in Preview" : "Show in Preview"}" aria-label="${previewOn ? "Hide in preview panel" : "Show in preview panel"}" aria-pressed="${String(previewOn)}">
+                <span class="material-icons-outlined" aria-hidden="true">${previewIcon}</span>
+              </button>
+              <button type="button" class="icon-button ${stream.enabled ? "is-active" : ""}" data-action="toggle-enabled" data-stream-id="${stream.id}" title="${stream.enabled ? "Disable stream" : "Enable stream"}" aria-label="${stream.enabled ? "Disable stream" : "Enable stream"}" aria-pressed="${String(stream.enabled)}">
+                <span class="material-icons-outlined" aria-hidden="true">${enabledIcon}</span>
+              </button>
+              <button type="button" class="icon-button" data-action="delete-stream" data-stream-id="${stream.id}" title="Delete stream" aria-label="Delete stream">
+                <span class="material-icons-outlined" aria-hidden="true">delete</span>
+              </button>
             </span>
           </button>
         `;
@@ -516,6 +552,52 @@ export function initLayers({ editor }) {
 
   // Event bindings
   addListener(listEl, "click", (event) => {
+    // Handle preview toggle
+    const previewBtn = event.target.closest('[data-action="toggle-preview"]');
+    if (previewBtn) {
+      event.stopPropagation();
+      const id = previewBtn.dataset.streamId;
+      const stream = state.streams.find((s) => s.id === id);
+      if (stream) {
+        stream.preview = !(stream.preview !== false);
+        updateUI();
+      }
+      return;
+    }
+
+    // Handle enabled toggle
+    const enabledBtn = event.target.closest('[data-action="toggle-enabled"]');
+    if (enabledBtn) {
+      event.stopPropagation();
+      const id = enabledBtn.dataset.streamId;
+      const stream = state.streams.find((s) => s.id === id);
+      if (stream) {
+        stream.enabled = !stream.enabled;
+        updateUI();
+      }
+      return;
+    }
+    // Handle delete button
+    const deleteBtn = event.target.closest('[data-action="delete-stream"]');
+    if (deleteBtn) {
+      event.stopPropagation();
+      const id = deleteBtn.dataset.streamId;
+      if (id) {
+        const stream = state.streams.find(s => s.id === id);
+        if (stream) {
+          state.streams = state.streams.filter(s => s.id !== id);
+          if (state.activeId === id) {
+            ensureActiveStream();
+          }
+          updateUI();
+          persistStreams(state.streams);
+          dispatchLayersEvent(state.streams);
+        }
+      }
+      return;
+    }
+
+    // Handle stream selection
     const button = event.target.closest("[data-stream-id]");
     if (!button) return;
     const id = button.dataset.streamId;
@@ -526,7 +608,6 @@ export function initLayers({ editor }) {
 
   addListener(addButton, "click", () => addStream());
   addListener(duplicateButton, "click", () => duplicateStream());
-  addListener(deleteButton, "click", () => deleteStream());
 
   addListener(nameInput, "input", (event) => {
     if (state.isSyncing) return;
@@ -538,9 +619,20 @@ export function initLayers({ editor }) {
     dispatchLayersEvent(state.streams);
   });
 
-  addListener(enabledInput, "change", (event) => {
+  addListener(enabledToggleBtn, "click", () => {
     if (state.isSyncing) return;
-    toggleEnabled(event.target.checked);
+    const stream = getActiveStream();
+    if (!stream) return;
+    stream.enabled = !stream.enabled;
+    updateUI();
+  });
+
+  addListener(previewToggleBtn, "click", () => {
+    if (state.isSyncing) return;
+    const stream = getActiveStream();
+    if (!stream) return;
+    stream.preview = !(stream.preview !== false);
+    updateUI();
   });
 
   addListener(sourceSelect, "change", (event) => {
@@ -565,6 +657,12 @@ export function initLayers({ editor }) {
 
   addListener(fitButton, "click", () => resetViewport());
   addListener(fitToggle, "change", (event) => handleFitToggle(event.target.checked));
+  addListener(fitToggleBtn, "click", () => {
+    if (!fitToggle) return;
+    const next = !fitToggle.checked;
+    fitToggle.checked = next;
+    handleFitToggle(next);
+  });
 
   if (colorChip && colorPanel) {
     registerColorPopover(colorChip, colorPanel);
