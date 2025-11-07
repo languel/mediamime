@@ -179,8 +179,7 @@ export function initDrawing({ editor }) {
 
   const state = {
     streams: [],
-    holistic: null,
-    sourceId: null,
+    resultsBySource: new Map(),
     pendingRender: false,
     resizeObserver: null
   };
@@ -200,11 +199,13 @@ export function initDrawing({ editor }) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = DEFAULT_BG;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    if (!state.streams.length || !state.holistic) return;
+    if (!state.streams.length || state.resultsBySource.size === 0) return;
 
     state.streams.forEach((stream) => {
       if (!stream.enabled) return;
-      if (stream.sourceId && state.sourceId && stream.sourceId !== state.sourceId) return;
+      if (!stream.sourceId) return;
+      const results = state.resultsBySource.get(stream.sourceId);
+      if (!results) return;
       const viewportPx = getViewportPx(stream.viewport);
       const strokeColor = toRgba(stream.color?.hex, 1);
       const fillAlpha = Math.min(1, Math.max(0, stream.color?.alpha ?? 0));
@@ -212,20 +213,20 @@ export function initDrawing({ editor }) {
       ctx.save();
       switch (stream.process) {
         case "pose":
-          drawConnectorList(ctx, state.holistic.poseLandmarks, getPoseConnections(), viewportPx, strokeColor);
-          drawLandmarks(ctx, state.holistic.poseLandmarks, viewportPx, strokeColor, 3);
+          drawConnectorList(ctx, results.poseLandmarks, getPoseConnections(), viewportPx, strokeColor);
+          drawLandmarks(ctx, results.poseLandmarks, viewportPx, strokeColor, 3);
           break;
         case "hands":
-          drawConnectorList(ctx, state.holistic.leftHandLandmarks, getHandConnections(), viewportPx, strokeColor);
-          drawConnectorList(ctx, state.holistic.rightHandLandmarks, getHandConnections(), viewportPx, strokeColor);
-          drawLandmarks(ctx, state.holistic.leftHandLandmarks, viewportPx, strokeColor, 3);
-          drawLandmarks(ctx, state.holistic.rightHandLandmarks, viewportPx, strokeColor, 3);
+          drawConnectorList(ctx, results.leftHandLandmarks, getHandConnections(), viewportPx, strokeColor);
+          drawConnectorList(ctx, results.rightHandLandmarks, getHandConnections(), viewportPx, strokeColor);
+          drawLandmarks(ctx, results.leftHandLandmarks, viewportPx, strokeColor, 3);
+          drawLandmarks(ctx, results.rightHandLandmarks, viewportPx, strokeColor, 3);
           break;
         case "face":
-          drawLandmarks(ctx, state.holistic.faceLandmarks, viewportPx, strokeColor, 2);
+          drawLandmarks(ctx, results.faceLandmarks, viewportPx, strokeColor, 2);
           break;
         case "segmentation":
-          drawSegmentation(ctx, state.holistic.segmentationMask, viewportPx, fillColor, fillAlpha);
+          drawSegmentation(ctx, results.segmentationMask, viewportPx, fillColor, fillAlpha);
           break;
         case "depth":
           drawViewportBounds(ctx, viewportPx, strokeColor, fillAlpha, fillColor);
@@ -276,9 +277,18 @@ export function initDrawing({ editor }) {
   };
 
   const handleHolisticResults = (event) => {
-    const results = event?.detail || {};
-    state.holistic = results.results || null;
-    state.sourceId = results.source?.id || null;
+    const sourceId = event?.detail?.source?.id;
+    const results = event?.detail?.results || null;
+    if (!sourceId) {
+      state.resultsBySource.clear();
+      requestRender();
+      return;
+    }
+    if (!results) {
+      state.resultsBySource.delete(sourceId);
+    } else {
+      state.resultsBySource.set(sourceId, results);
+    }
     requestRender();
   };
 

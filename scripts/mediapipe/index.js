@@ -1,7 +1,11 @@
-const ACTIVE_INPUT_EVENT = "mediamime:active-input-changed";
+const INPUT_LIST_EVENT = "mediamime:input-list-changed";
+const LAYERS_EVENT = "mediamime:layers-changed";
 const PIPELINE_STATE_EVENT = "mediamime:pipeline-state";
 const HOLISTIC_RESULTS_EVENT = "mediamime:holistic-results";
 const HOLISTIC_CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/holistic/";
+
+const DEFAULT_CROP = { x: 0, y: 0, w: 1, h: 1 };
+const DEFAULT_FLIP = { horizontal: false, vertical: false };
 
 const hasHolisticSupport = () => typeof window !== "undefined" && typeof window.Holistic === "function";
 
@@ -16,197 +20,243 @@ const createProcessingVideo = () => {
   video.muted = true;
   video.playsInline = true;
   video.setAttribute("data-role", "processing-source");
-  // No need to attach to DOM; it simply needs to exist for capture.
   return video;
+};
+
+const createHolisticInstance = (onResults) => {
+  if (!hasHolisticSupport()) return null;
+  const holistic = new window.Holistic({
+    locateFile: (file) => `${HOLISTIC_CDN}${file}`
+  });
+  holistic.setOptions({
+    modelComplexity: 1,
+    smoothLandmarks: true,
+    enableSegmentation: true,
+    smoothSegmentation: true,
+    refineFaceLandmarks: true,
+    minDetectionConfidence: 0.5,
+    minTrackingConfidence: 0.5
+  });
+  holistic.onResults(onResults);
+  return holistic;
 };
 
 export function initMediaPipeline({ editor }) {
   void editor;
-  const state = {
-    holistic: null,
-    activeInput: null,
-    processingVideo: null,
-    rafId: null,
-    pending: null,
-    running: false,
-    lastResults: null
+  const inputsById = new Map();
+  const processors = new Map();
+  let requiredSources = new Set();
+
+  const buildSourceMeta = (sourceId) => {
+    const input = inputsById.get(sourceId);
+    if (!input) {
+      return sourceId ? { id: sourceId } : null;
+    }
+    return {
+      id: input.id,
+      name: input.name,
+      type: input.type
+    };
   };
 
-  const reportPipelineState = () => {
+  const emitPipelineState = () => {
     dispatchCustomEvent(PIPELINE_STATE_EVENT, {
-      running: state.running && Boolean(state.activeInput?.stream) && Boolean(state.holistic),
-      activeInput: state.activeInput
-        ? {
-            id: state.activeInput.id,
-            name: state.activeInput.name,
-            type: state.activeInput.type
-          }
-        : null
+      running: processors.size > 0,
+      sources: Array.from(processors.keys())
     });
   };
 
-  const handleResults = (results) => {
-    state.lastResults = results || null;
+  const emitResults = (sourceId, results) => {
     dispatchCustomEvent(HOLISTIC_RESULTS_EVENT, {
       results,
-      source: state.activeInput
-        ? {
-            id: state.activeInput.id,
-            name: state.activeInput.name,
-            type: state.activeInput.type
-          }
-        : null,
+      source: buildSourceMeta(sourceId),
       updatedAt: typeof performance !== "undefined" && performance.now ? performance.now() : Date.now()
     });
   };
 
-  const ensureHolistic = () => {
-    if (state.holistic) return state.holistic;
-    if (!hasHolisticSupport()) return null;
-    const holistic = new window.Holistic({
-      locateFile: (file) => `${HOLISTIC_CDN}${file}`
-    });
-    holistic.setOptions({
-      modelComplexity: 1,
-      smoothLandmarks: true,
-      enableSegmentation: true,
-      smoothSegmentation: true,
-      refineFaceLandmarks: true,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
-    });
-    holistic.onResults(handleResults);
-    state.holistic = holistic;
-    return holistic;
+  const drawFrameToCanvas = (processor) => {
+    const { video, canvas, ctx, input } = processor;
+    const crop = input?.crop || DEFAULT_CROP;
+    const flip = input?.flip || DEFAULT_FLIP;
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    if (!vw || !vh) return false;
+    const cropW = Math.max(1, crop.w * vw);
+    const cropH = Math.max(1, crop.h * vh);
+    const cropX = crop.x * vw;
+    const cropY = crop.y * vh;
+    if (canvas.width !== cropW || canvas.height !== cropH) {
+      canvas.width = cropW;
+      canvas.height = cropH;
+    }
+    ctx.save();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.translate(flip.horizontal ? canvas.width : 0, flip.vertical ? canvas.height : 0);
+    ctx.scale(flip.horizontal ? -1 : 1, flip.vertical ? -1 : 1);
+    ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    return true;
   };
 
-  const ensureProcessingVideo = () => {
-    if (state.processingVideo) {
-      return state.processingVideo;
+  const createProcessor = (input) => {
+    const video = createProcessingVideo();
+    video.srcObject = input.stream;
+    video.play().catch(() => {});
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    const holistic = createHolisticInstance((results) => emitResults(input.id, results));
+    if (!holistic) {
+      console.warn("[mediamime] Holistic not available; skipping processor.");
+      return null;
     }
-    state.processingVideo = createProcessingVideo();
-    return state.processingVideo;
-  };
+    const processor = {
+      sourceId: input.id,
+      input,
+      video,
+      canvas,
+      ctx,
+      holistic,
+      rafId: null,
+      pending: null,
+      running: false
+    };
 
-  const stopProcessing = () => {
-    state.running = false;
-    if (state.rafId) {
-      cancelAnimationFrame(state.rafId);
-      state.rafId = null;
-    }
-    if (state.pending && typeof state.pending.cancel === "function") {
-      try {
-        state.pending.cancel();
-      } catch {
-        // ignore; MediaPipe promises do not expose cancel but guard regardless
+    const processFrame = () => {
+      if (!processor.running) return;
+      if (!processor.input?.stream) {
+        scheduleNext();
+        return;
       }
-    }
-    state.pending = null;
-    if (state.processingVideo) {
-      state.processingVideo.pause();
-      state.processingVideo.srcObject = null;
-    }
-    reportPipelineState();
+      if (video.readyState < 2) {
+        scheduleNext();
+        return;
+      }
+      if (processor.pending) {
+        scheduleNext();
+        return;
+      }
+      const drew = drawFrameToCanvas(processor);
+      if (!drew) {
+        scheduleNext();
+        return;
+      }
+      processor.pending = processor.holistic
+        .send({ image: canvas })
+        .catch((error) => {
+          console.warn("[mediamime] Holistic frame failed", error);
+        })
+        .finally(() => {
+          processor.pending = null;
+        });
+      scheduleNext();
+    };
+
+    const scheduleNext = () => {
+      if (!processor.running) return;
+      processor.rafId = requestAnimationFrame(processFrame);
+    };
+
+    processor.updateInput = (nextInput) => {
+      processor.input = nextInput;
+      if (video.srcObject !== nextInput.stream) {
+        video.srcObject = nextInput.stream;
+        video.play().catch(() => {});
+      }
+    };
+
+    processor.start = () => {
+      if (processor.running) return;
+      processor.running = true;
+      scheduleNext();
+    };
+
+    processor.stop = () => {
+      processor.running = false;
+      if (processor.rafId) cancelAnimationFrame(processor.rafId);
+      processor.rafId = null;
+      if (processor.pending && typeof processor.pending.cancel === "function") {
+        try {
+          processor.pending.cancel();
+        } catch {
+          /* noop */
+        }
+      }
+      processor.pending = null;
+      video.pause();
+      video.srcObject = null;
+      if (processor.holistic && typeof processor.holistic.close === "function") {
+        processor.holistic.close();
+      }
+      emitResults(processor.sourceId, null);
+    };
+
+    processor.start();
+    return processor;
   };
 
-  const scheduleFrame = () => {
-    if (!state.running) return;
-    state.rafId = requestAnimationFrame(processFrame);
+  const syncProcessors = () => {
+    // Update or remove existing processors
+    processors.forEach((processor, sourceId) => {
+      const input = inputsById.get(sourceId);
+      const shouldExist = requiredSources.has(sourceId) && input && input.stream;
+      if (!shouldExist) {
+        processor.stop();
+        processors.delete(sourceId);
+      } else {
+        processor.updateInput(input);
+      }
+    });
+
+    // Create processors for new sources
+    requiredSources.forEach((sourceId) => {
+      if (processors.has(sourceId)) return;
+      const input = inputsById.get(sourceId);
+      if (!input || !input.stream) return;
+      const processor = createProcessor(input);
+      if (processor) {
+        processors.set(sourceId, processor);
+      }
+    });
+    emitPipelineState();
   };
 
-  const processFrame = () => {
-    if (!state.running || !state.processingVideo) return;
-    const holistic = state.holistic;
-    if (!holistic) {
-      scheduleFrame();
-      return;
-    }
-    if (state.processingVideo.readyState < 2) {
-      scheduleFrame();
-      return;
-    }
-    if (state.pending) {
-      scheduleFrame();
-      return;
-    }
-    state.pending = holistic
-      .send({ image: state.processingVideo })
-      .catch((error) => {
-        console.warn("[mediamime] Holistic frame failed.", error);
-      })
-      .finally(() => {
-        state.pending = null;
-      });
-    scheduleFrame();
+  const handleInputListChange = (event) => {
+    const inputs = Array.isArray(event?.detail?.inputs) ? event.detail.inputs : [];
+    inputsById.clear();
+    inputs.forEach((input) => {
+      if (!input?.id) return;
+      inputsById.set(input.id, input);
+    });
+    syncProcessors();
   };
 
-  const startProcessing = () => {
-    if (!state.activeInput?.stream) {
-      stopProcessing();
-      return;
-    }
-    const holistic = ensureHolistic();
-    if (!holistic) {
-      console.warn("[mediamime] Holistic library not available; skipping pipeline.");
-      stopProcessing();
-      return;
-    }
-    const video = ensureProcessingVideo();
-    if (video.srcObject !== state.activeInput.stream) {
-      video.srcObject = state.activeInput.stream;
-    }
-    const playPromise = video.play();
-    if (playPromise?.catch) {
-      playPromise.catch((error) => {
-        console.warn("[mediamime] Processing source playback failed.", error);
-      });
-    }
-    if (!state.running) {
-      state.running = true;
-      scheduleFrame();
-      reportPipelineState();
-    }
-  };
-
-  const clearActiveInput = () => {
-    state.activeInput = null;
-    stopProcessing();
-    dispatchCustomEvent(HOLISTIC_RESULTS_EVENT, { results: null, source: null, updatedAt: Date.now() });
-  };
-
-  const handleActiveInputChange = (event) => {
-    const nextInput = event?.detail?.input || null;
-    state.activeInput = nextInput;
-    if (nextInput?.stream) {
-      startProcessing();
-    } else {
-      clearActiveInput();
-    }
+  const handleLayerChange = (event) => {
+    const streams = Array.isArray(event?.detail?.streams) ? event.detail.streams : [];
+    const nextSources = new Set();
+    streams.forEach((stream) => {
+      if (!stream || !stream.enabled || !stream.sourceId) return;
+      nextSources.add(stream.sourceId);
+    });
+    requiredSources = nextSources;
+    syncProcessors();
   };
 
   if (typeof window !== "undefined") {
-    window.addEventListener(ACTIVE_INPUT_EVENT, handleActiveInputChange);
+    window.addEventListener(INPUT_LIST_EVENT, handleInputListChange);
+    window.addEventListener(LAYERS_EVENT, handleLayerChange);
   }
 
-  reportPipelineState();
   console.info("[mediamime] MediaPipe pipeline initialised.");
 
   return {
     dispose() {
-      stopProcessing();
+      processors.forEach((processor) => processor.stop());
+      processors.clear();
       if (typeof window !== "undefined") {
-        window.removeEventListener(ACTIVE_INPUT_EVENT, handleActiveInputChange);
+        window.removeEventListener(INPUT_LIST_EVENT, handleInputListChange);
+        window.removeEventListener(LAYERS_EVENT, handleLayerChange);
       }
-      if (state.holistic && typeof state.holistic.close === "function") {
-        state.holistic.close();
-      }
-      state.holistic = null;
-      if (state.processingVideo && typeof state.processingVideo.remove === "function") {
-        state.processingVideo.remove();
-      }
-      state.processingVideo = null;
-      dispatchCustomEvent(HOLISTIC_RESULTS_EVENT, { results: null, source: null, updatedAt: Date.now() });
-      reportPipelineState();
+      emitPipelineState();
     }
   };
 }

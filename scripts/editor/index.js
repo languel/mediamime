@@ -187,6 +187,8 @@ class Editor {
     // History (undo/redo)
     this.history = { past: [], future: [], limit: 3 };
     this.isRestoring = false;
+    this.lastToolKey = null;
+    this.lastToolKeyTime = 0;
   }
 
   init() {
@@ -400,6 +402,21 @@ class Editor {
     this.svg.addEventListener("wheel", this.handleWheel, { passive: false });
     window.addEventListener("keydown", this.handleKeyDown);
     window.addEventListener("keyup", this.handleKeyUp);
+  }
+
+  handleToolShortcut(tool, key) {
+    const now = performance.now ? performance.now() : Date.now();
+    const DOUBLE_TAP_MS = 350;
+    let toggleLock = false;
+    if (this.lastToolKey === key && now - this.lastToolKeyTime <= DOUBLE_TAP_MS) {
+      toggleLock = true;
+      this.lastToolKey = null;
+      this.lastToolKeyTime = 0;
+    } else {
+      this.lastToolKey = key;
+      this.lastToolKeyTime = now;
+    }
+    this.setTool(tool, { toggleLock });
   }
 
   setTool(tool, { toggleLock = false } = {}) {
@@ -1650,31 +1667,31 @@ class Editor {
         break;
       }
       case "v":
-        this.setTool("select");
+        this.handleToolShortcut("select", "v");
         event.preventDefault();
         break;
       case "h":
-        this.setTool("hand");
+        this.handleToolShortcut("hand", "h");
         event.preventDefault();
         break;
       case "d":
-        this.setTool("freehand");
+        this.handleToolShortcut("freehand", "d");
         event.preventDefault();
         break;
       case "e":
-        this.setTool("eraser");
+        this.handleToolShortcut("eraser", "e");
         event.preventDefault();
         break;
       case "l":
-        this.setTool("line");
+        this.handleToolShortcut("line", "l");
         event.preventDefault();
         break;
       case "r":
-        this.setTool("rect");
+        this.handleToolShortcut("rect", "r");
         event.preventDefault();
         break;
       case "o":
-        this.setTool("ellipse");
+        this.handleToolShortcut("ellipse", "o");
         event.preventDefault();
         break;
       case "q":

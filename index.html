@@ -99,6 +99,32 @@
                     <canvas id="input-preview-canvas" width="320" height="180" aria-label="Input preview"></canvas>
                   </div>
                 </div>
+                <div class="assignment-row" id="input-transport-row">
+                  <label>Transport</label>
+                  <div class="input-transport-controls">
+                    <button type="button" id="input-transport-toggle" class="pill-button small" disabled>
+                      <span class="material-icons-outlined" aria-hidden="true">play_arrow</span>
+                      <span data-transport-label>Play</span>
+                    </button>
+                    <label class="input-transport-speed">
+                      <span>Speed</span>
+                      <input type="range" id="input-transport-speed" min="-10" max="10" step="0.25" value="1" disabled>
+                      <span id="input-transport-speed-value">1×</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="assignment-row input-url-manager">
+                  <label for="input-url-field">Add media URL</label>
+                  <div class="input-url-field">
+                    <input type="url" id="input-url-field" placeholder="https://example.com/video.mp4" autocomplete="off">
+                    <button type="button" id="input-url-add" class="pill-button small">
+                      <span class="material-icons-outlined" aria-hidden="true">library_add</span>
+                      <span>Add</span>
+                    </button>
+                  </div>
+                  <p id="input-url-message" class="input-hint" role="status" aria-live="polite"></p>
+                  <div class="input-url-bookmarks" id="input-url-bookmarks" role="list"></div>
+                </div>
                 <div class="assignment-row">
                   <label>Crop</label>
                   <div class="assignment-field-group assignment-field-group--compact">

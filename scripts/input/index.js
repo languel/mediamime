@@ -8,11 +8,13 @@ const createId = () => `input-${Date.now()}-${Math.random().toString(36).slice(2
 const DEFAULT_CROP = { x: 0, y: 0, w: 1, h: 1 };
 const DEFAULT_FLIP = { horizontal: false, vertical: false };
 const INPUT_STORAGE_KEY = 'mediamime:inputs';
+const INPUT_BOOKMARKS_KEY = 'mediamime:url-bookmarks';
 const DEFAULT_URL_SOURCE = {
   url: 'https://cdn.jsdelivr.net/gh/mediapipe/assets/video/dance.mp4',
   name: 'Sample Clip',
   type: 'video'
 };
+const STATUS_TYPES = Object.freeze({ info: 'info', error: 'error', success: 'success' });
 const VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov', 'm4v', 'ogv', 'ogg'];
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
 
@@ -34,6 +36,18 @@ export function initInput({ editor }) {
   const inputPreviewCanvas = document.getElementById('input-preview-canvas');
   const previewCtx = inputPreviewCanvas ? inputPreviewCanvas.getContext('2d') : null;
   const previewWrapper = document.querySelector('#input-detail .input-preview-wrapper');
+  const transportRow = document.getElementById('input-transport-row');
+  const transportToggle = document.getElementById('input-transport-toggle');
+  const transportToggleLabel = transportToggle ? transportToggle.querySelector('[data-transport-label]') : null;
+  const transportSpeed = document.getElementById('input-transport-speed');
+  const transportSpeedValue = document.getElementById('input-transport-speed-value');
+  if (transportRow) {
+    transportRow.style.display = 'none';
+  }
+  const urlInput = document.getElementById('input-url-field');
+  const urlAddButton = document.getElementById('input-url-add');
+  const urlBookmarksList = document.getElementById('input-url-bookmarks');
+  const urlMessage = document.getElementById('input-url-message');
   const cropX = document.getElementById('input-crop-x');
   const cropY = document.getElementById('input-crop-y');
   const cropW = document.getElementById('input-crop-w');
@@ -46,7 +60,8 @@ export function initInput({ editor }) {
   const state = {
     inputs: [], // Array of {id, name, type, stream, crop:{x,y,w,h}, flip:{horizontal,vertical}}
     activeInputId: null,
-    isSyncing: false
+    isSyncing: false,
+    bookmarks: []
   };
 
   const ACTIVE_INPUT_EVENT = 'mediamime:active-input-changed';
@@ -77,8 +92,116 @@ export function initInput({ editor }) {
       type: input.type,
       stream: input.stream,
       crop: { ...input.crop },
-      flip: { ...input.flip }
+      flip: { ...input.flip },
+      origin: input.origin,
+      sourceUrl: input.sourceUrl || null,
+      sourceKind: input.sourceKind || null,
+      constraints: input.constraints || null,
+      persistable: Boolean(input.persistable),
+      playbackRate: typeof input.playbackRate === 'number' ? input.playbackRate : 1,
+      isPaused: Boolean(input.isPaused)
     };
+  };
+
+  const setUrlMessage = (message = '', tone = 'info') => {
+    if (!urlMessage) return;
+    urlMessage.textContent = message;
+    urlMessage.classList.remove('is-error', 'is-success');
+    if (!message) return;
+    if (tone === 'error') {
+      urlMessage.classList.add('is-error');
+    } else if (tone === 'success') {
+      urlMessage.classList.add('is-success');
+    }
+  };
+
+  const showInlineStatus = (message, tone = STATUS_TYPES.info) => {
+    setUrlMessage(message, tone);
+  };
+
+  const saveBookmarks = () => {
+    if (typeof localStorage === 'undefined') return;
+    try {
+      localStorage.setItem(INPUT_BOOKMARKS_KEY, JSON.stringify(state.bookmarks));
+    } catch (error) {
+      console.warn('[mediamime] Failed to persist bookmarks', error);
+    }
+  };
+
+  const renderBookmarks = () => {
+    if (!urlBookmarksList) return;
+    if (!state.bookmarks.length) {
+      urlBookmarksList.innerHTML = '<div class="input-hint">No bookmarks yet. Paste a media URL above.</div>';
+      return;
+    }
+    const markup = state.bookmarks
+      .map((bookmark) => {
+        const safeName = escapeHtml(bookmark.name || bookmark.url);
+        const safeUrl = escapeHtml(bookmark.url);
+        return `
+          <div class="input-url-bookmark" role="listitem" data-url="${safeUrl}">
+            <button type="button" class="bookmark-load" data-bookmark-url="${safeUrl}">
+              <span class="material-icons-outlined" aria-hidden="true">play_circle</span>
+              <span>${safeName}</span>
+            </button>
+            <button type="button" class="input-url-bookmark-remove" title="Remove bookmark" aria-label="Remove bookmark" data-remove-url="${safeUrl}">
+              <span class="material-icons-outlined" aria-hidden="true">close</span>
+            </button>
+          </div>
+        `;
+      })
+      .join('');
+    urlBookmarksList.innerHTML = markup;
+  };
+
+  const loadBookmarks = () => {
+    if (typeof localStorage === 'undefined') {
+      state.bookmarks = [{ url: DEFAULT_URL_SOURCE.url, name: DEFAULT_URL_SOURCE.name }];
+      renderBookmarks();
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(INPUT_BOOKMARKS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length) {
+          state.bookmarks = parsed;
+        } else {
+          state.bookmarks = [{ url: DEFAULT_URL_SOURCE.url, name: DEFAULT_URL_SOURCE.name }];
+        }
+      } else {
+        state.bookmarks = [{ url: DEFAULT_URL_SOURCE.url, name: DEFAULT_URL_SOURCE.name }];
+      }
+    } catch (error) {
+      console.warn('[mediamime] Failed to load bookmarks', error);
+      state.bookmarks = [{ url: DEFAULT_URL_SOURCE.url, name: DEFAULT_URL_SOURCE.name }];
+    }
+    renderBookmarks();
+    saveBookmarks();
+  };
+
+  const addBookmark = (url, name) => {
+    const existing = state.bookmarks.find((bookmark) => bookmark.url === url);
+    if (existing) {
+      existing.name = name || existing.name;
+    } else {
+      state.bookmarks.unshift({
+        url,
+        name: name || url
+      });
+    }
+    state.bookmarks = state.bookmarks.slice(0, 25);
+    saveBookmarks();
+    renderBookmarks();
+  };
+
+  const removeBookmark = (url) => {
+    const before = state.bookmarks.length;
+    state.bookmarks = state.bookmarks.filter((bookmark) => bookmark.url !== url);
+    if (state.bookmarks.length !== before) {
+      saveBookmarks();
+      renderBookmarks();
+    }
   };
 
   const persistInputs = () => {
@@ -111,14 +234,143 @@ export function initInput({ editor }) {
     return 'video';
   };
 
-  const createVideoStreamFromUrl = async (url) => {
+  const supportsTransport = (input) => {
+    if (!input) return false;
+    if (input.type !== 'video') return false;
+    if (input.sourceKind === 'image') return false;
+    return Boolean(input.videoElement);
+  };
+
+  const ensureTransportState = (input) => {
+    if (!input) return;
+    if (typeof input.playbackRate !== 'number') input.playbackRate = 1;
+    if (typeof input.isPaused !== 'boolean') input.isPaused = false;
+  };
+
+  const stopReversePlayback = (input) => {
+    if (input?.reversePlayback?.rafId) {
+      cancelAnimationFrame(input.reversePlayback.rafId);
+    }
+    if (input) {
+      input.reversePlayback = null;
+    }
+  };
+
+  const startReversePlayback = (input) => {
+    if (!supportsTransport(input) || !input.videoElement) return;
+    stopReversePlayback(input);
+    const video = input.videoElement;
+    const speed = Math.max(0.1, Math.abs(input.playbackRate || 1));
+    const meta = { speed, rafId: null, lastTs: null };
+    const step = (timestamp) => {
+      if (!input.reversePlayback || input.playbackRate >= 0 || input.isPaused) {
+        stopReversePlayback(input);
+        return;
+      }
+      if (meta.lastTs == null) meta.lastTs = timestamp;
+      const delta = (timestamp - meta.lastTs) / 1000;
+      meta.lastTs = timestamp;
+      video.pause();
+      const duration = Number.isFinite(video.duration) ? video.duration : null;
+      let nextTime = video.currentTime - delta * meta.speed;
+      if (nextTime <= 0) {
+        nextTime = duration && duration > 0 ? duration : 0;
+      }
+      video.currentTime = Math.max(0, nextTime);
+      meta.rafId = requestAnimationFrame(step);
+    };
+    input.reversePlayback = meta;
+    meta.rafId = requestAnimationFrame(step);
+  };
+
+  const applyPlaybackState = (input) => {
+    if (!supportsTransport(input) || !input.videoElement) return;
+    ensureTransportState(input);
+    const video = input.videoElement;
+    const rate = input.playbackRate || 0;
+    if (input.isPaused || rate === 0) {
+      stopReversePlayback(input);
+      video.pause();
+      return;
+    }
+    if (rate < 0) {
+      startReversePlayback(input);
+    } else {
+      stopReversePlayback(input);
+      const resolvedRate = Math.max(0.1, rate);
+      video.playbackRate = resolvedRate;
+      video.play().catch(() => {});
+    }
+  };
+
+  const formatSpeedLabel = (rate) => {
+    const value = Number.isFinite(rate) ? rate : 0;
+    if (value === 0) return '0×';
+    const sign = value < 0 ? '-' : '';
+    const magnitude = Math.abs(value);
+    const formatted = magnitude >= 1 ? magnitude.toFixed(1) : magnitude.toFixed(2);
+    return `${sign}${formatted.replace(/\.?0+$/, '')}×`;
+  };
+
+  const updateTransportUI = (input) => {
+    if (!transportRow) return;
+    const supported = supportsTransport(input);
+    transportRow.style.display = supported ? '' : 'none';
+    if (!supported) return;
+    ensureTransportState(input);
+    if (transportToggle) {
+      transportToggle.disabled = false;
+      if (transportToggleLabel) {
+        transportToggleLabel.textContent = input.isPaused ? 'Play' : 'Pause';
+      }
+      const icon = transportToggle.querySelector('.material-icons-outlined');
+      if (icon) {
+        icon.textContent = input.isPaused ? 'play_arrow' : input.playbackRate < 0 ? 'replay' : 'pause';
+      }
+    }
+    if (transportSpeed) {
+      transportSpeed.disabled = false;
+      transportSpeed.value = `${input.playbackRate ?? 1}`;
+    }
+    if (transportSpeedValue) {
+      transportSpeedValue.textContent = formatSpeedLabel(input.playbackRate ?? 1);
+    }
+  };
+
+  const setInputPlaybackRate = (input, rate) => {
+    if (!supportsTransport(input)) return;
+    input.playbackRate = rate;
+    if (rate === 0) {
+      input.isPaused = true;
+    }
+    applyPlaybackState(input);
+    persistInputs();
+    updateTransportUI(input);
+  };
+
+  const toggleInputPlayback = (input) => {
+    if (!supportsTransport(input)) return;
+    if (input.playbackRate === 0) {
+      input.playbackRate = 1;
+    }
+    input.isPaused = !input.isPaused;
+    applyPlaybackState(input);
+    persistInputs();
+    updateTransportUI(input);
+  };
+
+  const createVideoStreamFromUrl = async (url, { autoplay } = { autoplay: false }) => {
     const video = document.createElement('video');
     video.crossOrigin = 'anonymous';
     video.src = url;
-    video.autoplay = true;
+    video.autoplay = Boolean(autoplay);
     video.loop = true;
     video.muted = true;
-    await video.play();
+    if (autoplay) {
+      await video.play();
+    } else {
+      await video.load();
+    }
     const stream = video.captureStream?.();
     if (!stream) {
       throw new Error('captureStream() not supported for this media.');
@@ -166,15 +418,20 @@ export function initInput({ editor }) {
     for (const entry of saved) {
       try {
         if (entry.type === 'camera') {
-          await addCameraInput({
+          const created = await addCameraInput({
             id: entry.id,
             name: entry.name,
             constraints: entry.constraints || { video: { width: 1280, height: 720 }, audio: false },
             persist: false,
             setActive: false
           });
+          if (created) {
+            created.playbackRate = entry.playbackRate ?? 1;
+            created.isPaused = entry.isPaused ?? false;
+            applyPlaybackState(created);
+          }
         } else if (entry.sourceUrl) {
-          await addUrlInputFromData({
+          const created = await addUrlInputFromData({
             id: entry.id,
             name: entry.name,
             sourceUrl: entry.sourceUrl,
@@ -182,6 +439,11 @@ export function initInput({ editor }) {
             persist: false,
             setActive: false
           });
+          if (created) {
+            created.playbackRate = entry.playbackRate ?? 1;
+            created.isPaused = entry.isPaused ?? false;
+            applyPlaybackState(created);
+          }
         }
       } catch (error) {
         console.warn('[mediamime] Failed to restore input', entry?.name || entry?.id, error);
@@ -231,6 +493,9 @@ export function initInput({ editor }) {
       const isActive = input.id === state.activeInputId;
       const icon = input.type === 'camera' ? 'videocam' : 'movie';
       const safeName = escapeHtml(input.name);
+      const statusChip = input.status?.message
+        ? `<span class="input-meta-chip ${input.status?.tone || ''}">${escapeHtml(input.status.message)}</span>`
+        : '';
       return `
         <button
           data-input-id="${input.id}"
@@ -240,7 +505,7 @@ export function initInput({ editor }) {
             <span class="material-icons-outlined">${icon}</span>
             <span class="input-label-text">${safeName}</span>
           </span>
-          <span class="input-meta" aria-hidden="true"></span>
+          <span class="input-meta" aria-hidden="true">${statusChip}</span>
           <span class="input-actions">
             <span class="input-source-delete-btn" role="button" tabindex="0" data-action="delete-input" data-input-id="${input.id}" title="Delete source" aria-label="Delete source">
               <span class="material-icons-outlined" aria-hidden="true">delete</span>
@@ -261,6 +526,7 @@ export function initInput({ editor }) {
       }
     } else {
       inputDetail.style.display = 'none';
+      updateTransportUI(null);
     }
 
     dispatchInputEvent(INPUT_LIST_EVENT, {
@@ -269,6 +535,14 @@ export function initInput({ editor }) {
     dispatchInputEvent(ACTIVE_INPUT_EVENT, {
       input: serializeInput(activeInput)
     });
+  };
+
+  const updateSourceStatus = (input, message, tone = STATUS_TYPES.info) => {
+    if (!input) return;
+    input.status = { message, tone };
+    if (state.activeInputId === input.id) {
+      showInlineStatus(message, tone);
+    }
   };
 
   // Helper: Sync detail form with active input
@@ -301,6 +575,7 @@ export function initInput({ editor }) {
     if (inputPreviewVideo) inputPreviewVideo.style.transform = transform;
     if (inputPreviewCanvas) inputPreviewCanvas.style.transform = transform;
 
+    updateTransportUI(input);
     state.isSyncing = false;
   };
 
@@ -329,6 +604,8 @@ export function initInput({ editor }) {
         flip: { ...DEFAULT_FLIP }
       };
 
+      ensureTransportState(input);
+      applyPlaybackState(input);
       state.inputs.push(input);
       if (setActive) {
         state.activeInputId = input.id;
@@ -336,9 +613,11 @@ export function initInput({ editor }) {
       updateUI();
       if (persist) persistInputs();
       console.log('[mediamime] Added camera input:', input.name);
+      return input;
     } catch (error) {
       console.error('[mediamime] Failed to add camera:', error);
-      alert('Could not access camera. Please check permissions.');
+      setUrlMessage('Could not access camera. Please check permissions.', 'error');
+      return null;
     }
   };
 
@@ -374,6 +653,8 @@ export function initInput({ editor }) {
         flip: { ...DEFAULT_FLIP }
       };
 
+      ensureTransportState(input);
+      applyPlaybackState(input);
       state.inputs.push(input);
       state.activeInputId = input.id;
       updateUI();
@@ -393,8 +674,8 @@ export function initInput({ editor }) {
     } = options;
     const url = (sourceUrl || '').trim();
     if (!url) {
-      alert('Please provide a valid URL.');
-      return;
+      setUrlMessage('Please provide a valid URL.', 'error');
+      return null;
     }
     const kind = sourceKind || detectUrlKind(url);
     try {
@@ -406,7 +687,7 @@ export function initInput({ editor }) {
         stream = result.stream;
         stopRender = result.stop;
       } else {
-        const result = await createVideoStreamFromUrl(url);
+        const result = await createVideoStreamFromUrl(url, { autoplay: false });
         stream = result.stream;
         videoElement = result.video;
       }
@@ -424,6 +705,8 @@ export function initInput({ editor }) {
         crop: { ...DEFAULT_CROP },
         flip: { ...DEFAULT_FLIP }
       };
+      ensureTransportState(input);
+      applyPlaybackState(input);
       state.inputs.push(input);
       if (setActive) {
         state.activeInputId = input.id;
@@ -431,9 +714,13 @@ export function initInput({ editor }) {
       updateUI();
       if (persist) persistInputs();
       console.log('[mediamime] Added URL input:', input.name);
+      return input;
+      setUrlMessage(`Loaded media from ${url}`, 'success');
+      return input;
     } catch (error) {
       console.error('[mediamime] Failed to load media URL', error);
-      alert('Could not load the provided media URL.');
+      setUrlMessage('Could not load the provided media URL.', 'error');
+      return null;
     }
   };
 
@@ -446,6 +733,7 @@ export function initInput({ editor }) {
 
     const input = state.inputs[index];
 
+    stopReversePlayback(input);
     // Stop stream
     if (input.stream) {
       input.stream.getTracks().forEach(track => track.stop());
@@ -496,14 +784,6 @@ export function initInput({ editor }) {
 
   if (addVideoButton) {
     addVideoButton.addEventListener('click', addVideoInput);
-  }
-
-  if (addUrlButton) {
-    addUrlButton.addEventListener('click', () => {
-      const url = prompt('Enter a media URL (video, GIF, or still image):');
-      if (!url) return;
-      addUrlInputFromData({ sourceUrl: url.trim() });
-    });
   }
 
   if (inputList) {
@@ -560,6 +840,85 @@ export function initInput({ editor }) {
     if (!state.activeInputId || state.isSyncing) return;
     updateInputMeta(state.activeInputId, { flip: { vertical: e.target.checked } });
   });
+
+  if (transportToggle) {
+    transportToggle.addEventListener('click', () => {
+      if (!state.activeInputId) return;
+      const input = state.inputs.find((item) => item.id === state.activeInputId);
+      if (!input) return;
+      toggleInputPlayback(input);
+    });
+  }
+
+  if (transportSpeed) {
+    transportSpeed.addEventListener('input', (e) => {
+      if (!state.activeInputId) return;
+      const input = state.inputs.find((item) => item.id === state.activeInputId);
+      if (!input || !supportsTransport(input)) return;
+      const rate = parseFloat(e.target.value);
+      if (!Number.isFinite(rate)) return;
+      setInputPlaybackRate(input, rate);
+      if (transportSpeedValue) transportSpeedValue.textContent = formatSpeedLabel(rate);
+    });
+  }
+
+  const handleUrlSubmit = async () => {
+    if (!urlInput) return;
+    const raw = urlInput.value.trim();
+    if (!raw) {
+      setUrlMessage('Enter a media URL.', 'error');
+      return;
+    }
+    let parsed;
+    try {
+      parsed = new URL(raw, window.location.origin);
+    } catch {
+      setUrlMessage('Invalid URL format.', 'error');
+      return;
+    }
+    const normalized = parsed.href;
+    const name = parsed.hostname || normalized;
+    setUrlMessage('Loading media…', 'info');
+    addBookmark(normalized, name);
+    const result = await addUrlInputFromData({ sourceUrl: normalized, name, sourceKind: detectUrlKind(normalized) });
+    if (result) {
+      urlInput.value = '';
+    }
+  };
+
+  if (urlAddButton) {
+    urlAddButton.addEventListener('click', () => {
+      void handleUrlSubmit();
+    });
+  }
+  if (urlInput) {
+    urlInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        void handleUrlSubmit();
+      }
+    });
+  }
+  if (urlBookmarksList) {
+    urlBookmarksList.addEventListener('click', (event) => {
+      const removeBtn = event.target.closest('[data-remove-url]');
+      if (removeBtn) {
+        const targetUrl = removeBtn.dataset.removeUrl;
+        removeBookmark(targetUrl);
+        setUrlMessage('Removed bookmark.', 'info');
+        return;
+      }
+      const loadBtn = event.target.closest('[data-bookmark-url]');
+      if (loadBtn) {
+        const targetUrl = loadBtn.dataset.bookmarkUrl;
+        const bookmark = state.bookmarks.find((entry) => entry.url === targetUrl);
+        if (bookmark) {
+          setUrlMessage('Loading media…', 'info');
+          void addUrlInputFromData({ sourceUrl: bookmark.url, name: bookmark.name, sourceKind: detectUrlKind(bookmark.url) });
+        }
+      }
+    });
+  }
 
   // Preview render loop
   const queuePreviewResize = () => {
@@ -670,6 +1029,7 @@ export function initInput({ editor }) {
   // Initialize
   updateUI();
   startPreviewLoop();
+  loadBookmarks();
   loadPersistedInputs().catch((error) => {
     console.warn('[mediamime] Failed to restore inputs', error);
   });
