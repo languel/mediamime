@@ -14,6 +14,7 @@ const init = async () => {
     { initMapping },
     { initDrawing },
     { initInput },
+    { initLayers },
     { initLayout }
   ] = await Promise.all([
     import("./editor/index.js"),
@@ -21,6 +22,7 @@ const init = async () => {
     import("./mapping/index.js"),
     import("./drawing/index.js"),
     import("./input/index.js"),
+    import("./layers/index.js"),
     import("./ui/layout.js")
   ]);
 
@@ -33,6 +35,7 @@ const init = async () => {
   initMapping({ editor: editorApi });
   initDrawing({ editor: editorApi });
   initInput({ editor: editorApi });
+  initLayers({ editor: editorApi });
 };
 
 if (document.readyState === "loading") {

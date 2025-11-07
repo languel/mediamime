@@ -165,140 +165,141 @@
                 <span>Persistent trails</span>
               </label>
             </div>
-            <div class="overlay-table-wrapper">
-              <table class="overlay-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Stream</th>
-                    <th scope="col">Main</th>
-                    <th scope="col">Preview</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <th scope="row">Source</th>
-                    <td>
-                      <label class="overlay-switch" title="Source main">
-                        <input type="checkbox" id="overlay-underlay-main" aria-label="Source main">
+            <div class="layers-panel" id="layers-panel">
+              <div class="layers-panel-header">
+                <div class="layers-panel-actions">
+                  <button type="button" class="pill-button" id="layer-add-stream">
+                    <span class="material-icons-outlined" aria-hidden="true">add</span>
+                    <span>Add stream</span>
+                  </button>
+                  <button type="button" class="pill-button" id="layer-duplicate-stream" disabled>
+                    <span class="material-icons-outlined" aria-hidden="true">content_copy</span>
+                    <span>Duplicate</span>
+                  </button>
+                  <button type="button" class="pill-button is-danger" id="layer-delete-stream" disabled>
+                    <span class="material-icons-outlined" aria-hidden="true">delete</span>
+                    <span>Delete</span>
+                  </button>
+                </div>
+                <div class="layers-panel-hint">
+                  Streams blend inputs, MediaPipe processors, and viewports.
+                </div>
+              </div>
+              <div class="layers-panel-body">
+                <div class="layers-stream-list" id="layer-stream-list" role="listbox" aria-label="Streams"></div>
+                <div class="layers-empty" id="layer-empty">
+                  Add a stream to forward a camera or video input through processing layers. Duplicate streams to reuse the same source in different score regions.
+                </div>
+                <form class="layers-detail" id="layer-detail" autocomplete="off" aria-live="polite">
+                  <div class="assignment-row">
+                    <label for="layer-stream-name">Name</label>
+                    <input type="text" id="layer-stream-name" placeholder="Stream name">
+                  </div>
+                  <div class="assignment-row layers-toggle-row">
+                    <label class="layers-switch" for="layer-stream-enabled">
+                      <input type="checkbox" id="layer-stream-enabled" checked>
+                      <span>Enabled</span>
+                    </label>
+                  </div>
+                  <div class="assignment-row">
+                    <label for="layer-stream-source">Source</label>
+                    <select id="layer-stream-source">
+                      <option value="">No sources available</option>
+                    </select>
+                  </div>
+                  <div class="assignment-row">
+                    <label for="layer-stream-process">Process</label>
+                    <select id="layer-stream-process"></select>
+                  </div>
+                  <div class="assignment-row">
+                    <label>Color</label>
+                    <div class="color-chip-wrapper" data-color-picker="layers">
+                      <button type="button" class="color-chip" id="layer-color-chip" data-color-toggle="layers" aria-haspopup="true" aria-expanded="false" aria-label="Pick stream color"></button>
+                      <div class="color-picker-panel" id="layer-color-panel" data-color-panel="layers" hidden>
+                        <div class="rgba-picker" data-rgba-picker="layers">
+                          <div class="rgba-picker-preview" aria-live="polite">
+                            <span class="rgba-picker-preview-swatch" aria-hidden="true"></span>
+                            <output class="rgba-picker-preview-value" data-rgba-output>rgba(255, 255, 255, 0.85)</output>
+                          </div>
+                          <div class="rgba-picker-workspace">
+                            <div class="rgba-picker-spectrum" data-rgba-spectrum>
+                              <div class="rgba-picker-spectrum-cursor" data-rgba-spectrum-cursor aria-hidden="true"></div>
+                            </div>
+                            <div class="rgba-picker-slider-stack">
+                              <div class="rgba-picker-slider" data-rgba-hue role="slider" aria-label="Hue" aria-valuemin="0" aria-valuemax="360" aria-valuenow="0">
+                                <div class="rgba-picker-slider-track"></div>
+                                <div class="rgba-picker-slider-thumb"></div>
+                              </div>
+                              <div class="rgba-picker-slider rgba-picker-slider--alpha" data-rgba-alpha role="slider" aria-label="Alpha" aria-valuemin="0" aria-valuemax="100" aria-valuenow="85">
+                                <div class="rgba-picker-slider-track"></div>
+                                <div class="rgba-picker-slider-thumb"></div>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="rgba-picker-inputs">
+                            <label class="rgba-picker-field">
+                              <span>R</span>
+                              <input type="number" min="0" max="255" data-rgba-channel="r" inputmode="numeric" aria-label="Red value">
+                            </label>
+                            <label class="rgba-picker-field">
+                              <span>G</span>
+                              <input type="number" min="0" max="255" data-rgba-channel="g" inputmode="numeric" aria-label="Green value">
+                            </label>
+                            <label class="rgba-picker-field">
+                              <span>B</span>
+                              <input type="number" min="0" max="255" data-rgba-channel="b" inputmode="numeric" aria-label="Blue value">
+                            </label>
+                            <label class="rgba-picker-field">
+                              <span>A%</span>
+                              <input type="number" min="0" max="100" data-rgba-channel="a" inputmode="numeric" aria-label="Alpha percentage">
+                            </label>
+                            <label class="rgba-picker-field rgba-picker-field--hex">
+                              <span>Hex</span>
+                              <input type="text" data-rgba-hex inputmode="text" aria-label="Hex color">
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="assignment-row">
+                    <label>Viewport</label>
+                    <div class="assignment-field-group assignment-field-group--compact">
+                      <div class="field-compact small">
+                        <span>X</span>
+                        <input type="number" step="0.01" min="0" max="1" id="layer-viewport-x" value="0">
+                      </div>
+                      <div class="field-compact small">
+                        <span>Y</span>
+                        <input type="number" step="0.01" min="0" max="1" id="layer-viewport-y" value="0">
+                      </div>
+                      <div class="field-compact small">
+                        <span>W</span>
+                        <input type="number" step="0.01" min="0.01" max="1" id="layer-viewport-w" value="1">
+                      </div>
+                      <div class="field-compact small">
+                        <span>H</span>
+                        <input type="number" step="0.01" min="0.01" max="1" id="layer-viewport-h" value="1">
+                      </div>
+                    </div>
+                    <div class="layers-viewport-controls">
+                      <label class="layers-switch layers-switch--inline" for="layer-viewport-fit">
+                        <input type="checkbox" id="layer-viewport-fit" checked>
+                        <span>Fit score viewport</span>
                       </label>
-                    </td>
-                    <td>
-                      <label class="overlay-switch" title="Source preview">
-                        <input type="checkbox" id="overlay-underlay-preview" aria-label="Source preview">
-                      </label>
-                    </td>
-                  </tr>
-                  <tr>
-                    <th scope="row">Pose</th>
-                    <td>
-                      <label class="overlay-switch" title="Pose main">
-                        <input type="checkbox" id="overlay-pose-main" checked aria-label="Pose main">
-                      </label>
-                    </td>
-                    <td>
-                      <label class="overlay-switch" title="Pose preview">
-                        <input type="checkbox" id="overlay-pose-preview" checked aria-label="Pose preview">
-                      </label>
-                    </td>
-                  </tr>
-                  <tr>
-                    <th scope="row">Left hand</th>
-                    <td>
-                      <label class="overlay-switch" title="Left hand main">
-                        <input type="checkbox" id="overlay-left-hand-main" checked aria-label="Left hand main">
-                      </label>
-                    </td>
-                    <td>
-                      <label class="overlay-switch" title="Left hand preview">
-                        <input type="checkbox" id="overlay-left-hand-preview" checked aria-label="Left hand preview">
-                      </label>
-                    </td>
-                  </tr>
-                  <tr>
-                    <th scope="row">Right hand</th>
-                    <td>
-                      <label class="overlay-switch" title="Right hand main">
-                        <input type="checkbox" id="overlay-right-hand-main" checked aria-label="Right hand main">
-                      </label>
-                    </td>
-                    <td>
-                      <label class="overlay-switch" title="Right hand preview">
-                        <input type="checkbox" id="overlay-right-hand-preview" checked aria-label="Right hand preview">
-                      </label>
-                    </td>
-                  </tr>
-                  <tr>
-                    <th scope="row">Face</th>
-                    <td>
-                      <label class="overlay-switch" title="Face main">
-                        <input type="checkbox" id="overlay-face-main" checked aria-label="Face main">
-                      </label>
-                    </td>
-                    <td>
-                      <label class="overlay-switch" title="Face preview">
-                        <input type="checkbox" id="overlay-face-preview" checked aria-label="Face preview">
-                      </label>
-                    </td>
-                  </tr>
-                  <tr>
-                    <th scope="row">Segmentation</th>
-                    <td>
-                      <label class="overlay-switch" title="Segmentation main">
-                        <input type="checkbox" id="overlay-segmentation-main" aria-label="Segmentation main">
-                      </label>
-                    </td>
-                    <td>
-                      <label class="overlay-switch" title="Segmentation preview">
-                        <input type="checkbox" id="overlay-segmentation-preview" aria-label="Segmentation preview">
-                      </label>
-                    </td>
-                  </tr>
-                  <tr>
-                    <th scope="row">Depth</th>
-                    <td>
-                      <label class="overlay-switch" title="Depth main">
-                        <input type="checkbox" id="overlay-depth-main" aria-label="Depth main">
-                      </label>
-                    </td>
-                    <td>
-                      <label class="overlay-switch" title="Depth preview">
-                        <input type="checkbox" id="overlay-depth-preview" aria-label="Depth preview">
-                      </label>
-                    </td>
-                  </tr>
-                  <tr>
-                    <th scope="row">Performance</th>
-                    <td>
-                      <label class="overlay-switch" title="Performance main">
-                        <input type="checkbox" id="overlay-performance-main" aria-label="Performance main">
-                      </label>
-                    </td>
-                    <td>
-                      <label class="overlay-switch" title="Performance preview">
-                        <input type="checkbox" id="overlay-performance-preview" aria-label="Performance preview">
-                      </label>
-                    </td>
-                  </tr>
-                  <tr>
-                    <th scope="row">Score</th>
-                    <td>
-                      <label class="overlay-switch" title="Score main">
-                        <input type="checkbox" id="overlay-score-main" checked aria-label="Score main">
-                      </label>
-                    </td>
-                    <td>
-                      <label class="overlay-switch" title="Score preview">
-                        <input type="checkbox" id="overlay-score-preview" checked aria-label="Score preview">
-                      </label>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                      <button type="button" class="pill-button" id="layer-fit-viewport">
+                        <span class="material-icons-outlined" aria-hidden="true">center_focus_strong</span>
+                        <span>Reset viewport</span>
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
             </div>
             <div class="panel-footnote">
               <span id="mediamime-status" class="status-chip">Initializing…</span>
               <div class="tip">
-                Toggle Main overlays to affect the canvas, and use Preview toggles to stage diagnostics or capture snapshots.
+                Use streams to decide which inputs are processed, how they are coloured, and where they land on the score. Duplicate streams to reuse MediaPipe results across regions.
               </div>
             </div>
             </div>
