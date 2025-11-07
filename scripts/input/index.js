@@ -10,7 +10,7 @@ const DEFAULT_FLIP = { horizontal: false, vertical: false };
 const INPUT_STORAGE_KEY = 'mediamime:inputs';
 const INPUT_BOOKMARKS_KEY = 'mediamime:url-bookmarks';
 const DEFAULT_URL_SOURCE = {
-  url: 'https://cdn.jsdelivr.net/gh/mediapipe/assets/video/dance.mp4',
+  url: './scripts/input/default_input.mp4',
   name: 'Sample Clip',
   type: 'video'
 };
@@ -48,6 +48,7 @@ export function initInput({ editor }) {
   const urlAddButton = document.getElementById('input-url-add');
   const urlBookmarksList = document.getElementById('input-url-bookmarks');
   const urlMessage = document.getElementById('input-url-message');
+  const loadSampleButton = document.getElementById('input-load-sample');
   const cropX = document.getElementById('input-crop-x');
   const cropY = document.getElementById('input-crop-y');
   const cropW = document.getElementById('input-crop-w');
@@ -917,6 +918,18 @@ export function initInput({ editor }) {
           void addUrlInputFromData({ sourceUrl: bookmark.url, name: bookmark.name, sourceKind: detectUrlKind(bookmark.url) });
         }
       }
+    });
+  }
+
+  if (loadSampleButton) {
+    loadSampleButton.addEventListener('click', () => {
+      setUrlMessage('Loading sample clip…', 'info');
+      addBookmark(DEFAULT_URL_SOURCE.url, DEFAULT_URL_SOURCE.name);
+      void addUrlInputFromData({
+        sourceUrl: DEFAULT_URL_SOURCE.url,
+        name: DEFAULT_URL_SOURCE.name,
+        sourceKind: 'video'
+      });
     });
   }
 

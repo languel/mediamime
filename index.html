@@ -113,18 +113,6 @@
                     </label>
                   </div>
                 </div>
-                <div class="assignment-row input-url-manager">
-                  <label for="input-url-field">Add media URL</label>
-                  <div class="input-url-field">
-                    <input type="url" id="input-url-field" placeholder="https://example.com/video.mp4" autocomplete="off">
-                    <button type="button" id="input-url-add" class="pill-button small">
-                      <span class="material-icons-outlined" aria-hidden="true">library_add</span>
-                      <span>Add</span>
-                    </button>
-                  </div>
-                  <p id="input-url-message" class="input-hint" role="status" aria-live="polite"></p>
-                  <div class="input-url-bookmarks" id="input-url-bookmarks" role="list"></div>
-                </div>
                 <div class="assignment-row">
                   <label>Crop</label>
                   <div class="assignment-field-group assignment-field-group--compact">
@@ -160,6 +148,28 @@
                   </div>
                 </div>
                 <!-- Delete action moved to the input list row as an icon button -->
+                <div class="input-subpanel">
+                  <div class="input-subpanel-header">
+                    <div>
+                      <strong id="input-bookmark-title">Media bookmarks & sample clip</strong>
+                      <p class="input-hint">Store frequently used URLs or load the built-in sample clip.</p>
+                    </div>
+                    <button type="button" id="input-load-sample" class="pill-button small">
+                      <span class="material-icons-outlined" aria-hidden="true">movie</span>
+                      <span>Sample clip</span>
+                    </button>
+                  </div>
+                  <label for="input-url-field" class="input-hint">Add media URL</label>
+                  <div class="input-url-field">
+                    <input type="url" id="input-url-field" placeholder="https://example.com/video.mp4" autocomplete="off">
+                    <button type="button" id="input-url-add" class="pill-button small">
+                      <span class="material-icons-outlined" aria-hidden="true">library_add</span>
+                      <span>Add</span>
+                    </button>
+                  </div>
+                  <p id="input-url-message" class="input-hint" role="status" aria-live="polite"></p>
+                  <div class="input-url-bookmarks" id="input-url-bookmarks" role="list"></div>
+                </div>
               </div>
             </div>
           </div>
