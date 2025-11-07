@@ -7,6 +7,14 @@ const createId = () => `input-${Date.now()}-${Math.random().toString(36).slice(2
 
 const DEFAULT_CROP = { x: 0, y: 0, w: 1, h: 1 };
 const DEFAULT_FLIP = { horizontal: false, vertical: false };
+const INPUT_STORAGE_KEY = 'mediamime:inputs';
+const DEFAULT_URL_SOURCE = {
+  url: 'https://cdn.jsdelivr.net/gh/mediapipe/assets/video/dance.mp4',
+  name: 'Sample Clip',
+  type: 'video'
+};
+const VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov', 'm4v', 'ogv', 'ogg'];
+const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
 
 export function initInput({ editor }) {
   console.log('[mediamime] Initializing Input layer system');
@@ -17,6 +25,7 @@ export function initInput({ editor }) {
   const inputDetail = document.getElementById('input-detail');
   const addCameraButton = document.getElementById('input-add-camera');
   const addVideoButton = document.getElementById('input-add-video');
+  const addUrlButton = document.getElementById('input-add-url');
   
   // Detail form elements
   const inputSourceName = document.getElementById('input-source-name');
@@ -70,6 +79,132 @@ export function initInput({ editor }) {
       crop: { ...input.crop },
       flip: { ...input.flip }
     };
+  };
+
+  const persistInputs = () => {
+    if (typeof localStorage === 'undefined') return;
+    try {
+      const payload = state.inputs
+        .filter((input) => input.persistable)
+        .map((input) => ({
+          id: input.id,
+          name: input.name,
+          type: input.type,
+          origin: input.origin || input.type,
+          crop: { ...input.crop },
+          flip: { ...input.flip },
+          sourceUrl: input.sourceUrl || null,
+          sourceKind: input.sourceKind || null,
+          constraints: input.constraints || null
+        }));
+      localStorage.setItem(INPUT_STORAGE_KEY, JSON.stringify(payload));
+    } catch (error) {
+      console.warn('[mediamime] Failed to persist inputs', error);
+    }
+  };
+
+  const detectUrlKind = (url = '') => {
+    const normalized = url.split('?')[0].toLowerCase();
+    const ext = normalized.split('.').pop() || '';
+    if (IMAGE_EXTENSIONS.includes(ext)) return 'image';
+    if (VIDEO_EXTENSIONS.includes(ext)) return 'video';
+    return 'video';
+  };
+
+  const createVideoStreamFromUrl = async (url) => {
+    const video = document.createElement('video');
+    video.crossOrigin = 'anonymous';
+    video.src = url;
+    video.autoplay = true;
+    video.loop = true;
+    video.muted = true;
+    await video.play();
+    const stream = video.captureStream?.();
+    if (!stream) {
+      throw new Error('captureStream() not supported for this media.');
+    }
+    return { stream, video };
+  };
+
+  const createImageStreamFromUrl = async (url) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.decoding = 'async';
+    img.src = url;
+    await img.decode();
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const width = img.naturalWidth || 1280;
+    const height = img.naturalHeight || 720;
+    canvas.width = width;
+    canvas.height = height;
+    ctx.drawImage(img, 0, 0, width, height);
+    let rafId = null;
+    const pump = () => {
+      ctx.drawImage(img, 0, 0, width, height);
+      rafId = requestAnimationFrame(pump);
+    };
+    rafId = requestAnimationFrame(pump);
+    const stream = canvas.captureStream(30);
+    return {
+      stream,
+      stop() {
+        if (rafId) cancelAnimationFrame(rafId);
+      }
+    };
+  };
+
+  const loadPersistedInputs = async () => {
+    if (typeof localStorage === 'undefined') return;
+    let saved = [];
+    try {
+      const raw = localStorage.getItem(INPUT_STORAGE_KEY);
+      if (raw) saved = JSON.parse(raw);
+    } catch (error) {
+      console.warn('[mediamime] Failed to parse persisted inputs', error);
+    }
+    for (const entry of saved) {
+      try {
+        if (entry.type === 'camera') {
+          await addCameraInput({
+            id: entry.id,
+            name: entry.name,
+            constraints: entry.constraints || { video: { width: 1280, height: 720 }, audio: false },
+            persist: false,
+            setActive: false
+          });
+        } else if (entry.sourceUrl) {
+          await addUrlInputFromData({
+            id: entry.id,
+            name: entry.name,
+            sourceUrl: entry.sourceUrl,
+            sourceKind: entry.sourceKind,
+            persist: false,
+            setActive: false
+          });
+        }
+      } catch (error) {
+        console.warn('[mediamime] Failed to restore input', entry?.name || entry?.id, error);
+      }
+    }
+    if (!state.inputs.length) {
+      try {
+        await addUrlInputFromData({
+          name: DEFAULT_URL_SOURCE.name,
+          sourceUrl: DEFAULT_URL_SOURCE.url,
+          sourceKind: 'video',
+          persist: true,
+          setActive: true
+        });
+      } catch (error) {
+        console.warn('[mediamime] Failed to add default source', error);
+      }
+    }
+    if (state.inputs.length && !state.activeInputId) {
+      state.activeInputId = state.inputs[0].id;
+    }
+    updateUI();
+    persistInputs();
   };
 
   // Helper: Generate input name
@@ -170,25 +305,36 @@ export function initInput({ editor }) {
   };
 
   // Add camera input
-  const addCameraInput = async () => {
+  const addCameraInput = async (options = {}) => {
+    const {
+      id = createId(),
+      name = generateInputName('camera'),
+      constraints = { video: { width: 1280, height: 720 }, audio: false },
+      persist = true,
+      setActive = true
+    } = options;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 1280, height: 720 },
-        audio: false
-      });
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
       const input = {
-        id: createId(),
-        name: generateInputName('camera'),
+        id,
+        name,
         type: 'camera',
         stream,
+        constraints,
+        persistable: true,
+        origin: 'camera',
+        persistable: true,
         crop: { ...DEFAULT_CROP },
         flip: { ...DEFAULT_FLIP }
       };
 
       state.inputs.push(input);
-      state.activeInputId = input.id;
+      if (setActive) {
+        state.activeInputId = input.id;
+      }
       updateUI();
+      if (persist) persistInputs();
       console.log('[mediamime] Added camera input:', input.name);
     } catch (error) {
       console.error('[mediamime] Failed to add camera:', error);
@@ -220,6 +366,8 @@ export function initInput({ editor }) {
         id: createId(),
         name: file.name.replace(/\.[^/.]+$/, '') || generateInputName('video'),
         type: 'video',
+        origin: 'file',
+        persistable: false,
         stream,
         videoElement: video, // Keep reference to video element
         crop: { ...DEFAULT_CROP },
@@ -232,6 +380,61 @@ export function initInput({ editor }) {
       console.log('[mediamime] Added video input:', input.name);
     };
     fileInput.click();
+  };
+
+  const addUrlInputFromData = async (options = {}) => {
+    const {
+      id = createId(),
+      name = options.name || generateInputName('video'),
+      sourceUrl,
+      sourceKind,
+      persist = true,
+      setActive = true
+    } = options;
+    const url = (sourceUrl || '').trim();
+    if (!url) {
+      alert('Please provide a valid URL.');
+      return;
+    }
+    const kind = sourceKind || detectUrlKind(url);
+    try {
+      let stream;
+      let videoElement = null;
+      let stopRender = null;
+      if (kind === 'image') {
+        const result = await createImageStreamFromUrl(url);
+        stream = result.stream;
+        stopRender = result.stop;
+      } else {
+        const result = await createVideoStreamFromUrl(url);
+        stream = result.stream;
+        videoElement = result.video;
+      }
+      const input = {
+        id,
+        name,
+        type: 'video',
+        origin: 'url',
+        persistable: true,
+        sourceUrl: url,
+        sourceKind: kind,
+        stream,
+        videoElement,
+        stopRender,
+        crop: { ...DEFAULT_CROP },
+        flip: { ...DEFAULT_FLIP }
+      };
+      state.inputs.push(input);
+      if (setActive) {
+        state.activeInputId = input.id;
+      }
+      updateUI();
+      if (persist) persistInputs();
+      console.log('[mediamime] Added URL input:', input.name);
+    } catch (error) {
+      console.error('[mediamime] Failed to load media URL', error);
+      alert('Could not load the provided media URL.');
+    }
   };
 
   // Delete input
@@ -253,6 +456,13 @@ export function initInput({ editor }) {
       input.videoElement.pause();
       input.videoElement.src = '';
     }
+    if (input.stopRender) {
+      try {
+        input.stopRender();
+      } catch {
+        /* noop */
+      }
+    }
 
     state.inputs.splice(index, 1);
 
@@ -265,6 +475,7 @@ export function initInput({ editor }) {
     }
 
     updateUI();
+    persistInputs();
     console.log('[mediamime] Deleted input');
   };
 
@@ -275,7 +486,7 @@ export function initInput({ editor }) {
     if (patch.crop) Object.assign(input.crop, patch.crop);
     if (patch.flip) Object.assign(input.flip, patch.flip);
     updateUI();
-    // TODO: Emit event for rendering layer
+    persistInputs();
   };
 
   // Event Listeners
@@ -285,6 +496,14 @@ export function initInput({ editor }) {
 
   if (addVideoButton) {
     addVideoButton.addEventListener('click', addVideoInput);
+  }
+
+  if (addUrlButton) {
+    addUrlButton.addEventListener('click', () => {
+      const url = prompt('Enter a media URL (video, GIF, or still image):');
+      if (!url) return;
+      addUrlInputFromData({ sourceUrl: url.trim() });
+    });
   }
 
   if (inputList) {
@@ -318,6 +537,7 @@ export function initInput({ editor }) {
       if (input) {
         input.name = e.target.value;
         updateUI();
+        persistInputs();
       }
     });
   }
@@ -450,6 +670,9 @@ export function initInput({ editor }) {
   // Initialize
   updateUI();
   startPreviewLoop();
+  loadPersistedInputs().catch((error) => {
+    console.warn('[mediamime] Failed to restore inputs', error);
+  });
 
   // Public API
   return {
@@ -468,6 +691,13 @@ export function initInput({ editor }) {
         if (input.videoElement) {
           input.videoElement.pause();
           input.videoElement.src = '';
+        }
+        if (input.stopRender) {
+          try {
+            input.stopRender();
+          } catch {
+            /* noop */
+          }
         }
       });
       state.inputs = [];

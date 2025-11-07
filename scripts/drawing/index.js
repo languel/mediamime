@@ -83,9 +83,9 @@ const getHandConnections = () => {
   return HAND_CONNECTIONS_FALLBACK;
 };
 
-const drawConnectorList = (ctx, landmarks, connections, viewportPx, color) => {
+const drawConnectorList = (ctx, landmarks, connections, viewportPx, strokeColor) => {
   if (!landmarks || !connections) return;
-  ctx.strokeStyle = color;
+  ctx.strokeStyle = strokeColor;
   ctx.lineWidth = 2;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
@@ -119,13 +119,11 @@ const drawLandmarks = (ctx, landmarks, viewportPx, color, size = 4) => {
   });
 };
 
-const drawSegmentation = (ctx, mask, viewportPx, color) => {
-  if (!mask) return;
+const drawSegmentation = (ctx, mask, viewportPx, color, alpha = 0) => {
+  if (!mask || !color || alpha <= 0) return;
   try {
     ctx.save();
-    ctx.globalAlpha *= 0.35;
-    ctx.strokeStyle = color;
-    ctx.fillStyle = color;
+    ctx.globalAlpha = Math.min(1, Math.max(0, alpha));
     ctx.drawImage(mask, viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
     ctx.restore();
   } catch (error) {
@@ -133,9 +131,13 @@ const drawSegmentation = (ctx, mask, viewportPx, color) => {
   }
 };
 
-const drawViewportBounds = (ctx, viewportPx, color) => {
+const drawViewportBounds = (ctx, viewportPx, strokeColor, fillAlpha = 0, fillColor = null) => {
   ctx.save();
-  ctx.strokeStyle = color;
+  if (fillAlpha > 0 && fillColor) {
+    ctx.fillStyle = fillColor;
+    ctx.fillRect(viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
+  }
+  ctx.strokeStyle = strokeColor;
   ctx.lineWidth = 1;
   ctx.setLineDash([6, 4]);
   ctx.strokeRect(viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
@@ -204,32 +206,33 @@ export function initDrawing({ editor }) {
       if (!stream.enabled) return;
       if (stream.sourceId && state.sourceId && stream.sourceId !== state.sourceId) return;
       const viewportPx = getViewportPx(stream.viewport);
-      const rgba = toRgba(stream.color?.hex, stream.color?.alpha ?? 1);
+      const strokeColor = toRgba(stream.color?.hex, 1);
+      const fillAlpha = Math.min(1, Math.max(0, stream.color?.alpha ?? 0));
+      const fillColor = fillAlpha > 0 ? toRgba(stream.color?.hex, fillAlpha) : null;
       ctx.save();
-      ctx.globalAlpha = Math.min(1, Math.max(0, stream.color?.alpha ?? 1));
       switch (stream.process) {
         case "pose":
-          drawConnectorList(ctx, state.holistic.poseLandmarks, getPoseConnections(), viewportPx, rgba);
-          drawLandmarks(ctx, state.holistic.poseLandmarks, viewportPx, rgba, 3);
+          drawConnectorList(ctx, state.holistic.poseLandmarks, getPoseConnections(), viewportPx, strokeColor);
+          drawLandmarks(ctx, state.holistic.poseLandmarks, viewportPx, strokeColor, 3);
           break;
         case "hands":
-          drawConnectorList(ctx, state.holistic.leftHandLandmarks, getHandConnections(), viewportPx, rgba);
-          drawConnectorList(ctx, state.holistic.rightHandLandmarks, getHandConnections(), viewportPx, rgba);
-          drawLandmarks(ctx, state.holistic.leftHandLandmarks, viewportPx, rgba, 3);
-          drawLandmarks(ctx, state.holistic.rightHandLandmarks, viewportPx, rgba, 3);
+          drawConnectorList(ctx, state.holistic.leftHandLandmarks, getHandConnections(), viewportPx, strokeColor);
+          drawConnectorList(ctx, state.holistic.rightHandLandmarks, getHandConnections(), viewportPx, strokeColor);
+          drawLandmarks(ctx, state.holistic.leftHandLandmarks, viewportPx, strokeColor, 3);
+          drawLandmarks(ctx, state.holistic.rightHandLandmarks, viewportPx, strokeColor, 3);
           break;
         case "face":
-          drawLandmarks(ctx, state.holistic.faceLandmarks, viewportPx, rgba, 2);
+          drawLandmarks(ctx, state.holistic.faceLandmarks, viewportPx, strokeColor, 2);
           break;
         case "segmentation":
-          drawSegmentation(ctx, state.holistic.segmentationMask, viewportPx, rgba);
+          drawSegmentation(ctx, state.holistic.segmentationMask, viewportPx, fillColor, fillAlpha);
           break;
         case "depth":
-          drawViewportBounds(ctx, viewportPx, rgba);
+          drawViewportBounds(ctx, viewportPx, strokeColor, fillAlpha, fillColor);
           break;
         case "raw":
         default:
-          drawViewportBounds(ctx, viewportPx, rgba);
+          drawViewportBounds(ctx, viewportPx, strokeColor, fillAlpha, fillColor);
           break;
       }
       ctx.restore();

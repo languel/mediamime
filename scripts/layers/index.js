@@ -10,10 +10,11 @@ const PROCESS_OPTIONS = [
 ];
 
 const DEFAULT_STREAM_COLOR = "#52d5ff";
-const DEFAULT_STREAM_ALPHA = 0.85;
+const DEFAULT_STREAM_ALPHA = 0;
 const DEFAULT_VIEWPORT = Object.freeze({ x: 0, y: 0, w: 1, h: 1 });
 const MIN_VIEWPORT_SIZE = 0.05;
 const LAYERS_STATE_EVENT = "mediamime:layers-changed";
+const LAYERS_STORAGE_KEY = "mediamime:layers";
 
 const clampRange = (value, min, max) => {
   const number = Number.isFinite(value) ? value : Number.parseFloat(`${value}`) || 0;
@@ -121,6 +122,59 @@ const dispatchLayersEvent = (streams) => {
       }
     })
   );
+};
+
+const persistStreams = (streams) => {
+  if (typeof localStorage === "undefined") return;
+  try {
+    const payload = streams.map((stream) => ({
+      id: stream.id,
+      name: stream.name,
+      enabled: Boolean(stream.enabled),
+      sourceId: stream.sourceId || null,
+      process: stream.process,
+      color: {
+        hex: normalizeHex(stream.color?.hex ?? DEFAULT_STREAM_COLOR),
+        alpha: clampUnit(stream.color?.alpha ?? DEFAULT_STREAM_ALPHA)
+      },
+      viewport: {
+        x: clampUnit(stream.viewport?.x ?? DEFAULT_VIEWPORT.x),
+        y: clampUnit(stream.viewport?.y ?? DEFAULT_VIEWPORT.y),
+        w: clampUnit(stream.viewport?.w ?? DEFAULT_VIEWPORT.w),
+        h: clampUnit(stream.viewport?.h ?? DEFAULT_VIEWPORT.h)
+      },
+      viewportMode: stream.viewportMode === "custom" ? "custom" : "fit"
+    }));
+    localStorage.setItem(LAYERS_STORAGE_KEY, JSON.stringify(payload));
+  } catch (error) {
+    console.warn("[mediamime] Failed to persist streams", error);
+  }
+};
+
+const loadStoredStreams = () => {
+  if (typeof localStorage === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(LAYERS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((entry, index) => ({
+      id: entry.id || createId(),
+      name: entry.name || `Stream ${index + 1}`,
+      enabled: entry.enabled !== false,
+      sourceId: entry.sourceId || null,
+      process: PROCESS_OPTIONS.some((option) => option.id === entry.process) ? entry.process : PROCESS_OPTIONS[0].id,
+      color: {
+        hex: normalizeHex(entry.color?.hex ?? DEFAULT_STREAM_COLOR),
+        alpha: clampUnit(entry.color?.alpha ?? DEFAULT_STREAM_ALPHA)
+      },
+      viewport: clampViewport(entry.viewport || DEFAULT_VIEWPORT),
+      viewportMode: entry.viewportMode === "custom" ? "custom" : "fit"
+    }));
+  } catch (error) {
+    console.warn("[mediamime] Failed to load stored streams", error);
+    return [];
+  }
 };
 
 export function initLayers({ editor }) {
@@ -349,6 +403,7 @@ export function initLayers({ editor }) {
     renderList();
     updateEmptyState();
     syncDetailForm();
+    persistStreams(state.streams);
     dispatchLayersEvent(state.streams);
   };
 
@@ -479,6 +534,8 @@ export function initLayers({ editor }) {
     if (!stream) return;
     stream.name = event.target.value;
     renderList();
+    persistStreams(state.streams);
+    dispatchLayersEvent(state.streams);
   });
 
   addListener(enabledInput, "change", (event) => {
@@ -491,7 +548,7 @@ export function initLayers({ editor }) {
     const stream = getActiveStream();
     if (!stream) return;
     stream.sourceId = event.target.value || null;
-    renderList();
+    updateUI();
   });
 
   addListener(processSelect, "change", (event) => {
@@ -499,7 +556,7 @@ export function initLayers({ editor }) {
     const stream = getActiveStream();
     if (!stream) return;
     stream.process = event.target.value || PROCESS_OPTIONS[0].id;
-    renderList();
+    updateUI();
   });
 
   Object.entries(viewportInputs).forEach(([key, input]) => {
@@ -525,6 +582,11 @@ export function initLayers({ editor }) {
   }
 
   populateProcessOptions();
+  const storedStreams = loadStoredStreams();
+  if (storedStreams.length) {
+    state.streams = storedStreams;
+    state.activeId = storedStreams[0].id;
+  }
   updateUI();
   updateActionButtons();
 
@@ -548,6 +610,7 @@ export function initLayers({ editor }) {
         state.colorPicker.destroy();
       }
       state.streams = [];
+      persistStreams(state.streams);
       dispatchLayersEvent(state.streams);
     }
   };

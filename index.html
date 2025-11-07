@@ -66,6 +66,9 @@
             <button id="input-add-video" type="button" class="icon-button" title="Add video input" aria-label="Add video input">
               <span class="material-icons-outlined" aria-hidden="true">video_library</span>
             </button>
+            <button id="input-add-url" type="button" class="icon-button" title="Add media by URL" aria-label="Add media by URL">
+              <span class="material-icons-outlined" aria-hidden="true">link</span>
+            </button>
             <button type="button" class="icon-button panel-close" data-modal-close="input" title="Hide Input panel" aria-label="Hide Input panel">
               <span class="material-icons-outlined" aria-hidden="true">close</span>
             </button>
@@ -216,26 +219,26 @@
                     <div class="color-chip-wrapper" data-color-picker="layers">
                       <button type="button" class="color-chip" id="layer-color-chip" data-color-toggle="layers" aria-haspopup="true" aria-expanded="false" aria-label="Pick stream color"></button>
                       <div class="color-picker-panel" id="layer-color-panel" data-color-panel="layers" hidden>
-                        <div class="rgba-picker" data-rgba-picker="layers">
-                          <div class="rgba-picker-preview" aria-live="polite">
-                            <span class="rgba-picker-preview-swatch" aria-hidden="true"></span>
-                            <output class="rgba-picker-preview-value" data-rgba-output>rgba(255, 255, 255, 0.85)</output>
-                          </div>
-                          <div class="rgba-picker-workspace">
-                            <div class="rgba-picker-spectrum" data-rgba-spectrum>
-                              <div class="rgba-picker-spectrum-cursor" data-rgba-spectrum-cursor aria-hidden="true"></div>
-                            </div>
-                            <div class="rgba-picker-slider-stack">
-                              <div class="rgba-picker-slider" data-rgba-hue role="slider" aria-label="Hue" aria-valuemin="0" aria-valuemax="360" aria-valuenow="0">
-                                <div class="rgba-picker-slider-track"></div>
-                                <div class="rgba-picker-slider-thumb"></div>
+                            <div class="rgba-picker" data-rgba-picker="layers">
+                              <div class="rgba-picker-preview" aria-live="polite">
+                                <span class="rgba-picker-preview-swatch" aria-hidden="true"></span>
+                                <output class="rgba-picker-preview-value" data-rgba-output>rgba(255, 255, 255, 0)</output>
                               </div>
-                              <div class="rgba-picker-slider rgba-picker-slider--alpha" data-rgba-alpha role="slider" aria-label="Alpha" aria-valuemin="0" aria-valuemax="100" aria-valuenow="85">
-                                <div class="rgba-picker-slider-track"></div>
-                                <div class="rgba-picker-slider-thumb"></div>
+                              <div class="rgba-picker-workspace">
+                                <div class="rgba-picker-spectrum" data-rgba-spectrum>
+                                  <div class="rgba-picker-spectrum-cursor" data-rgba-spectrum-cursor aria-hidden="true"></div>
+                                </div>
+                                <div class="rgba-picker-slider-stack">
+                                  <div class="rgba-picker-slider" data-rgba-hue role="slider" aria-label="Hue" aria-valuemin="0" aria-valuemax="360" aria-valuenow="0">
+                                    <div class="rgba-picker-slider-track"></div>
+                                    <div class="rgba-picker-slider-thumb"></div>
+                                  </div>
+                                  <div class="rgba-picker-slider rgba-picker-slider--alpha" data-rgba-alpha role="slider" aria-label="Alpha" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                    <div class="rgba-picker-slider-track"></div>
+                                    <div class="rgba-picker-slider-thumb"></div>
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          </div>
                           <div class="rgba-picker-inputs">
                             <label class="rgba-picker-field">
                               <span>R</span>
