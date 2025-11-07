@@ -184,61 +184,71 @@ export function initDrawing({ editor }) {
     resizeObserver: null
   };
 
-  const getViewportPx = (viewport) => {
+  const getViewportPx = (viewport, width, height) => {
     const normalized = normalizeViewport(viewport);
     return {
-      x: normalized.x * canvas.width,
-      y: normalized.y * canvas.height,
-      w: normalized.w * canvas.width,
-      h: normalized.h * canvas.height
+      x: normalized.x * width,
+      y: normalized.y * height,
+      w: normalized.w * width,
+      h: normalized.h * height
     };
   };
 
-  const render = () => {
-    state.pendingRender = false;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = DEFAULT_BG;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    if (!state.streams.length || state.resultsBySource.size === 0) return;
-
+  const renderTo = (targetCtx, width, height) => {
+    targetCtx.clearRect(0, 0, width, height);
+    targetCtx.fillStyle = DEFAULT_BG;
+    targetCtx.fillRect(0, 0, width, height);
+    if (!state.streams.length) return;
     state.streams.forEach((stream) => {
       if (!stream.enabled) return;
       if (stream.preview === false) return;
       if (!stream.sourceId) return;
       const results = state.resultsBySource.get(stream.sourceId);
-      if (!results) return;
-      const viewportPx = getViewportPx(stream.viewport);
+      const viewportPx = getViewportPx(stream.viewport, width, height);
       const strokeColor = toRgba(stream.color?.hex, 1);
       const fillAlpha = Math.min(1, Math.max(0, stream.color?.alpha ?? 0));
       const fillColor = fillAlpha > 0 ? toRgba(stream.color?.hex, fillAlpha) : null;
-      ctx.save();
+      targetCtx.save();
+      if (!results) {
+        drawViewportBounds(targetCtx, viewportPx, strokeColor, fillAlpha, fillColor);
+        targetCtx.restore();
+        return;
+      }
       switch (stream.process) {
         case "pose":
-          drawConnectorList(ctx, results.poseLandmarks, getPoseConnections(), viewportPx, strokeColor);
-          drawLandmarks(ctx, results.poseLandmarks, viewportPx, strokeColor, 3);
+          drawConnectorList(targetCtx, results.poseLandmarks, getPoseConnections(), viewportPx, strokeColor);
+          drawLandmarks(targetCtx, results.poseLandmarks, viewportPx, strokeColor, 3);
           break;
         case "hands":
-          drawConnectorList(ctx, results.leftHandLandmarks, getHandConnections(), viewportPx, strokeColor);
-          drawConnectorList(ctx, results.rightHandLandmarks, getHandConnections(), viewportPx, strokeColor);
-          drawLandmarks(ctx, results.leftHandLandmarks, viewportPx, strokeColor, 3);
-          drawLandmarks(ctx, results.rightHandLandmarks, viewportPx, strokeColor, 3);
+          drawConnectorList(targetCtx, results.leftHandLandmarks, getHandConnections(), viewportPx, strokeColor);
+          drawConnectorList(targetCtx, results.rightHandLandmarks, getHandConnections(), viewportPx, strokeColor);
+          drawLandmarks(targetCtx, results.leftHandLandmarks, viewportPx, strokeColor, 3);
+          drawLandmarks(targetCtx, results.rightHandLandmarks, viewportPx, strokeColor, 3);
           break;
         case "face":
-          drawLandmarks(ctx, results.faceLandmarks, viewportPx, strokeColor, 2);
+          drawLandmarks(targetCtx, results.faceLandmarks, viewportPx, strokeColor, 2);
           break;
         case "segmentation":
-          drawSegmentation(ctx, results.segmentationMask, viewportPx, fillColor, fillAlpha);
+          drawSegmentation(targetCtx, results.segmentationMask, viewportPx, fillColor, fillAlpha);
           break;
         case "depth":
-          drawViewportBounds(ctx, viewportPx, strokeColor, fillAlpha, fillColor);
+          drawViewportBounds(targetCtx, viewportPx, strokeColor, fillAlpha, fillColor);
           break;
         case "raw":
         default:
-          drawViewportBounds(ctx, viewportPx, strokeColor, fillAlpha, fillColor);
+          drawViewportBounds(targetCtx, viewportPx, strokeColor, fillAlpha, fillColor);
           break;
       }
-      ctx.restore();
+      targetCtx.restore();
     });
+  };
+
+  const render = () => {
+    state.pendingRender = false;
+    renderTo(ctx, canvas.width, canvas.height);
+    if (state.previewCtx && state.previewCanvas) {
+      renderTo(state.previewCtx, state.previewCanvas.width, state.previewCanvas.height);
+    }
   };
 
   const requestRender = () => {
@@ -263,13 +273,41 @@ export function initDrawing({ editor }) {
     window.requestAnimationFrame(resizeCanvas);
   };
 
+  // Setup preview canvas inside the Preview modal
+  const previewCanvas = document.getElementById("segmentation-preview");
+  if (previewCanvas && previewCanvas.getContext) {
+    state.previewCanvas = previewCanvas;
+    state.previewCtx = previewCanvas.getContext("2d");
+  }
+
+  const resizePreviewCanvas = () => {
+    if (!state.previewCanvas) return;
+    const rect = state.previewCanvas.getBoundingClientRect();
+    const ratio = window.devicePixelRatio || 1;
+    const w = Math.max(1, Math.floor(rect.width * ratio));
+    const h = Math.max(1, Math.floor(rect.height * ratio));
+    if (state.previewCanvas.width !== w || state.previewCanvas.height !== h) {
+      state.previewCanvas.width = w;
+      state.previewCanvas.height = h;
+    }
+    requestRender();
+  };
+
   if (typeof ResizeObserver === "function") {
     state.resizeObserver = new ResizeObserver(() => scheduleResize());
     state.resizeObserver.observe(container);
+    if (state.previewCanvas) {
+      const ro = new ResizeObserver(() => resizePreviewCanvas());
+      state.previewResizeObserver = ro;
+      ro.observe(state.previewCanvas);
+      resizePreviewCanvas();
+    }
   } else {
     window.addEventListener("resize", resizeCanvas);
+    window.addEventListener("resize", resizePreviewCanvas);
   }
   resizeCanvas();
+  resizePreviewCanvas();
 
   const handleLayerUpdate = (event) => {
     const streams = Array.isArray(event?.detail?.streams) ? event.detail.streams : [];
@@ -304,6 +342,11 @@ export function initDrawing({ editor }) {
         state.resizeObserver.disconnect();
       } else {
         window.removeEventListener("resize", resizeCanvas);
+      }
+      if (state.previewResizeObserver) {
+        state.previewResizeObserver.disconnect();
+      } else {
+        window.removeEventListener("resize", resizePreviewCanvas);
       }
     }
   };
