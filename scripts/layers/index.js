@@ -203,7 +203,125 @@ export function initLayers({ editor }) {
   const duplicateButton = document.getElementById("layer-duplicate-stream");
   const colorChip = document.getElementById("layer-color-chip");
   const colorPanel = document.getElementById("layer-color-panel");
-  const colorPickerRoot = document.querySelector('[data-rgba-picker="layers"]');
+  const colorPickerRoot = colorPanel?.querySelector('[data-rgba-picker]');
+  // Listener registries (restored after refactor)
+  const listeners = [];
+  const popoverDisposers = [];
+  const addListener = (target, type, handler, options) => {
+    if (!target) return;
+    target.addEventListener(type, handler, options);
+    listeners.push(() => target.removeEventListener(type, handler, options));
+  };
+  // inputListHandler is assigned later and used in dispose; declare upfront
+  let inputListHandler = null;
+  const registerColorPopover = (toggle, panel) => {
+    if (!toggle || !panel) return;
+    // Portal panel to body for positioning (avoid clipping)
+    if (!panel.dataset.popoverPortal) {
+      panel.dataset.popoverPortal = "true";
+      panel.hidden = true;
+      panel.classList.remove("is-open");
+      panel.style.top = "-9999px";
+      panel.style.left = "-9999px";
+      try {
+        document.body.appendChild(panel);
+      } catch (error) {
+        console.warn("[mediamime] Failed to portal color picker panel.", error);
+      }
+    }
+    let isOpen = false;
+    const repositionPanel = () => {
+      if (!isOpen || !toggle || !panel) return;
+      const margin = 12;
+      const rect = toggle.getBoundingClientRect();
+      if (!rect || (rect.width === 0 && rect.height === 0)) return;
+      panel.style.top = "-9999px";
+      panel.style.left = "-9999px";
+      const maxHeight = Math.max(180, window.innerHeight - margin * 2);
+      panel.style.maxHeight = `${maxHeight}px`;
+      const panelWidth = panel.offsetWidth;
+      const panelHeight = Math.min(panel.offsetHeight, maxHeight);
+      let top = rect.bottom + margin;
+      let origin = "top right";
+      if (top + panelHeight > window.innerHeight - margin) {
+        top = Math.max(margin, rect.top - panelHeight - margin);
+        origin = "bottom right";
+      }
+      let left = rect.left + rect.width - panelWidth;
+      const minLeft = margin;
+      const maxLeft = window.innerWidth - panelWidth - margin;
+      left = Math.min(Math.max(left, minLeft), maxLeft);
+      panel.style.top = `${Math.round(top)}px`;
+      panel.style.left = `${Math.round(left)}px`;
+      panel.style.setProperty("--color-popover-origin", origin);
+    };
+    const close = () => {
+      if (!isOpen) return;
+      isOpen = false;
+      panel.classList.remove("is-open");
+      panel.hidden = true;
+      panel.style.top = "-9999px";
+      panel.style.left = "-9999px";
+      panel.style.removeProperty("--color-popover-origin");
+      toggle.setAttribute("aria-expanded", "false");
+      toggle.classList.remove("is-open");
+      document.removeEventListener("pointerdown", handleGlobalPointerDown, true);
+      window.removeEventListener("resize", repositionPanel);
+      window.removeEventListener("scroll", repositionPanel, true);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+    const open = () => {
+      if (isOpen || toggle.disabled) return;
+      isOpen = true;
+      panel.hidden = false;
+      panel.classList.add("is-open");
+      toggle.setAttribute("aria-expanded", "true");
+      toggle.classList.add("is-open");
+      repositionPanel();
+      requestAnimationFrame(repositionPanel);
+      document.addEventListener("pointerdown", handleGlobalPointerDown, true);
+      window.addEventListener("resize", repositionPanel);
+      window.addEventListener("scroll", repositionPanel, true);
+      document.addEventListener("keydown", handleKeyDown);
+    };
+    const handleToggle = (event) => {
+      event.preventDefault();
+      if (isOpen) {
+        close();
+      } else {
+        open();
+      }
+    };
+    const handleGlobalPointerDown = (event) => {
+      if (!isOpen) return;
+      const path = typeof event.composedPath === "function" ? event.composedPath() : null;
+      const inside = panel.contains(event.target) || toggle.contains(event.target) || (path && (path.includes(panel) || path.includes(toggle)));
+      if (!inside) close();
+    };
+    const stopPropagation = (event) => {
+      if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+      event.stopPropagation();
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape" && isOpen) close();
+    };
+    toggle.addEventListener("click", handleToggle);
+    panel.addEventListener("pointerdown", stopPropagation);
+    panel.addEventListener("mousedown", stopPropagation);
+    panel.addEventListener("touchstart", stopPropagation);
+    panel.addEventListener("click", stopPropagation);
+    popoverDisposers.push(() => {
+      toggle.removeEventListener("click", handleToggle);
+      panel.removeEventListener("pointerdown", stopPropagation);
+      panel.removeEventListener("mousedown", stopPropagation);
+      panel.removeEventListener("touchstart", stopPropagation);
+      panel.removeEventListener("click", stopPropagation);
+      document.removeEventListener("pointerdown", handleGlobalPointerDown, true);
+      window.removeEventListener("resize", repositionPanel);
+      window.removeEventListener("scroll", repositionPanel, true);
+      document.removeEventListener("keydown", handleKeyDown);
+    });
+  };
 
   const state = {
     streams: [],
@@ -213,50 +331,12 @@ export function initLayers({ editor }) {
     colorPicker: null
   };
 
-  const listeners = [];
-  const popoverDisposers = [];
-  let inputListHandler = null;
-
-  const addListener = (target, type, handler, options) => {
-    if (!target) return;
-    target.addEventListener(type, handler, options);
-    listeners.push(() => target.removeEventListener(type, handler, options));
-  };
-
-  const registerColorPopover = (toggle, panel) => {
-    if (!toggle || !panel) return;
-    const handleDocumentClick = (event) => {
-      if (panel.contains(event.target) || toggle.contains(event.target)) {
-        return;
-      }
-      panel.hidden = true;
-      toggle.setAttribute("aria-expanded", "false");
-      document.removeEventListener("pointerdown", handleDocumentClick, true);
-    };
-    const handleToggle = () => {
-      if (panel.hidden) {
-        panel.hidden = false;
-        toggle.setAttribute("aria-expanded", "true");
-        document.addEventListener("pointerdown", handleDocumentClick, true);
-      } else {
-        panel.hidden = true;
-        toggle.setAttribute("aria-expanded", "false");
-        document.removeEventListener("pointerdown", handleDocumentClick, true);
-      }
-    };
-    toggle.addEventListener("click", handleToggle);
-    popoverDisposers.push(() => {
-      toggle.removeEventListener("click", handleToggle);
-      document.removeEventListener("pointerdown", handleDocumentClick, true);
-    });
-  };
-
   const getActiveStream = () => state.streams.find((stream) => stream.id === state.activeId) || null;
 
   const getSourceLabel = (stream) => {
     if (!stream?.sourceId) return "No source";
     const source = state.inputs.find((input) => input.id === stream.sourceId);
-    if (!source) return "Missing source";
+    if (!source) return "-"; // Previously "Missing source"; now a concise placeholder
     return `${source.name || "Source"} · ${source.type || "camera"}`;
   };
 
