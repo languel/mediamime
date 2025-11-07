@@ -24,6 +24,7 @@ export function initInput({ editor }) {
   const inputPreviewVideo = document.getElementById('input-preview-video');
   const inputPreviewCanvas = document.getElementById('input-preview-canvas');
   const previewCtx = inputPreviewCanvas ? inputPreviewCanvas.getContext('2d') : null;
+  const previewWrapper = document.querySelector('#input-detail .input-preview-wrapper');
   const cropX = document.getElementById('input-crop-x');
   const cropY = document.getElementById('input-crop-y');
   const cropW = document.getElementById('input-crop-w');
@@ -34,9 +35,41 @@ export function initInput({ editor }) {
 
   // State
   const state = {
-  inputs: [], // Array of {id, name, type, stream, crop:{x,y,w,h}, flip:{horizontal,vertical}}
+    inputs: [], // Array of {id, name, type, stream, crop:{x,y,w,h}, flip:{horizontal,vertical}}
     activeInputId: null,
     isSyncing: false
+  };
+
+  const ACTIVE_INPUT_EVENT = 'mediamime:active-input-changed';
+  const INPUT_LIST_EVENT = 'mediamime:input-list-changed';
+  let previewFrameHandle = null;
+  let previewLoopRunning = false;
+  let pendingPreviewResize = false;
+  let previewResizeObserver = null;
+
+  const dispatchInputEvent = (type, detail) => {
+    if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
+    window.dispatchEvent(new CustomEvent(type, { detail }));
+  };
+
+  const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (match) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[match]));
+
+  const serializeInput = (input) => {
+    if (!input) return null;
+    return {
+      id: input.id,
+      name: input.name,
+      type: input.type,
+      stream: input.stream,
+      crop: { ...input.crop },
+      flip: { ...input.flip }
+    };
   };
 
   // Helper: Generate input name
@@ -51,6 +84,8 @@ export function initInput({ editor }) {
       inputEmpty.style.display = 'block';
       inputDetail.style.display = 'none';
       inputList.innerHTML = '';
+      dispatchInputEvent(INPUT_LIST_EVENT, { inputs: [] });
+      dispatchInputEvent(ACTIVE_INPUT_EVENT, { input: null });
       return;
     }
 
@@ -60,14 +95,15 @@ export function initInput({ editor }) {
     inputList.innerHTML = state.inputs.map(input => {
       const isActive = input.id === state.activeInputId;
       const icon = input.type === 'camera' ? 'videocam' : 'movie';
+      const safeName = escapeHtml(input.name);
       return `
         <button
           data-input-id="${input.id}"
           class="${isActive ? 'is-active' : ''}"
-          title="${input.name}">
+          title="${safeName}">
           <span class="input-label">
             <span class="material-icons-outlined">${icon}</span>
-            <span class="input-label-text">${input.name}</span>
+            <span class="input-label-text">${safeName}</span>
           </span>
           <span class="input-meta" aria-hidden="true"></span>
           <span class="input-actions">
@@ -80,15 +116,24 @@ export function initInput({ editor }) {
     }).join('');
 
     // Update detail panel
+    let activeInput = null;
     if (state.activeInputId) {
-      const input = state.inputs.find(i => i.id === state.activeInputId);
-      if (input) {
+      activeInput = state.inputs.find(i => i.id === state.activeInputId) || null;
+      if (activeInput) {
         inputDetail.style.display = 'flex';
-        syncDetailForm(input);
+        syncDetailForm(activeInput);
+        queuePreviewResize();
       }
     } else {
       inputDetail.style.display = 'none';
     }
+
+    dispatchInputEvent(INPUT_LIST_EVENT, {
+      inputs: state.inputs.map((input) => serializeInput(input))
+    });
+    dispatchInputEvent(ACTIVE_INPUT_EVENT, {
+      input: serializeInput(activeInput)
+    });
   };
 
   // Helper: Sync detail form with active input
@@ -297,12 +342,31 @@ export function initInput({ editor }) {
   });
 
   // Preview render loop
+  const queuePreviewResize = () => {
+    if (pendingPreviewResize) return;
+    pendingPreviewResize = true;
+    requestAnimationFrame(() => {
+      pendingPreviewResize = false;
+      resizePreview();
+    });
+  };
+
   const resizePreview = () => {
     if (!inputPreviewCanvas) return;
-    const rect = inputPreviewCanvas.getBoundingClientRect();
+    let rect = inputPreviewCanvas.getBoundingClientRect();
+    if ((!rect.width || !rect.height) && previewWrapper) {
+      rect = previewWrapper.getBoundingClientRect();
+    }
+    const width = rect.width || 0;
+    const height = rect.height || 0;
+    if (!width || !height) return;
     const dpr = window.devicePixelRatio || 1;
-    inputPreviewCanvas.width = Math.max(1, Math.floor(rect.width * dpr));
-    inputPreviewCanvas.height = Math.max(1, Math.floor(rect.height * dpr));
+    const nextWidth = Math.max(1, Math.floor(width * dpr));
+    const nextHeight = Math.max(1, Math.floor(height * dpr));
+    if (inputPreviewCanvas.width !== nextWidth || inputPreviewCanvas.height !== nextHeight) {
+      inputPreviewCanvas.width = nextWidth;
+      inputPreviewCanvas.height = nextHeight;
+    }
   };
   const renderPreview = () => {
     if (!previewCtx || !inputPreviewCanvas) return;
@@ -310,57 +374,82 @@ export function initInput({ editor }) {
     const video = inputPreviewVideo;
     const w = inputPreviewCanvas.width;
     const h = inputPreviewCanvas.height;
+    if (!w || !h) {
+      queuePreviewResize();
+      return;
+    }
     previewCtx.clearRect(0, 0, w, h);
     if (!active || !video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
       // Draw placeholder if no video
       previewCtx.save();
-      previewCtx.fillStyle = '#3a3232';
+      previewCtx.fillStyle = '#05070d';
       previewCtx.fillRect(0, 0, w, h);
       previewCtx.restore();
-      requestAnimationFrame(renderPreview);
       return;
     }
-  const vw = video.videoWidth;
-  const vh = video.videoHeight;
-  // Compute letterbox scale only for overlay math; video is drawn by the video element
-  const scale = Math.min(w / vw, h / vh);
-  const padX = (w - vw * scale) / 2;
-  const padY = (h - vh * scale) / 2;
-    // Draw crop rectangle overlay
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    const scale = Math.min(w / vw, h / vh);
+    const drawW = vw * scale;
+    const drawH = vh * scale;
+    const offsetX = (w - drawW) / 2;
+    const offsetY = (h - drawH) / 2;
+    previewCtx.save();
+    previewCtx.imageSmoothingEnabled = true;
+    previewCtx.drawImage(video, offsetX, offsetY, drawW, drawH);
+    previewCtx.restore();
+    // Draw crop rectangle overlay (no fill)
     const cropX = Math.max(0, Math.min(1, active.crop.x));
     const cropY = Math.max(0, Math.min(1, active.crop.y));
     const cropW = Math.max(0.01, Math.min(1 - cropX, active.crop.w));
     const cropH = Math.max(0.01, Math.min(1 - cropY, active.crop.h));
-    const rectX = padX + cropX * vw * scale;
-    const rectY = padY + cropY * vh * scale;
-    const rectW = cropW * vw * scale;
-    const rectH = cropH * vh * scale;
-  previewCtx.save();
-  // Dim outside crop area
-  previewCtx.fillStyle = 'rgba(0,0,0,0.35)';
-  // Left
-  previewCtx.fillRect(0, 0, rectX, h);
-  // Right
-  previewCtx.fillRect(rectX + rectW, 0, w - (rectX + rectW), h);
-  // Top
-  previewCtx.fillRect(rectX, 0, rectW, rectY);
-  // Bottom
-  previewCtx.fillRect(rectX, rectY + rectH, rectW, h - (rectY + rectH));
-  // Crop border
-  previewCtx.strokeStyle = '#00e0ff';
-  previewCtx.lineWidth = Math.max(1, 2 * (window.devicePixelRatio || 1));
-  previewCtx.setLineDash([8, 6]);
-  previewCtx.strokeRect(rectX, rectY, rectW, rectH);
-  previewCtx.restore();
-    requestAnimationFrame(renderPreview);
+    const rectX = offsetX + cropX * drawW;
+    const rectY = offsetY + cropY * drawH;
+    const rectW = cropW * drawW;
+    const rectH = cropH * drawH;
+    previewCtx.save();
+    previewCtx.strokeStyle = '#00e0ff';
+    previewCtx.lineWidth = Math.max(1, 2 * (window.devicePixelRatio || 1));
+    previewCtx.setLineDash([10, 6]);
+    previewCtx.strokeRect(rectX, rectY, rectW, rectH);
+    previewCtx.restore();
   };
 
-  window.addEventListener('resize', resizePreview);
+  const previewLoop = () => {
+    if (!previewLoopRunning) return;
+    renderPreview();
+    previewFrameHandle = requestAnimationFrame(previewLoop);
+  };
+
+  const startPreviewLoop = () => {
+    if (previewLoopRunning) return;
+    previewLoopRunning = true;
+    previewFrameHandle = requestAnimationFrame(previewLoop);
+  };
+
+  const stopPreviewLoop = () => {
+    previewLoopRunning = false;
+    if (previewFrameHandle !== null) {
+      cancelAnimationFrame(previewFrameHandle);
+      previewFrameHandle = null;
+    }
+  };
+
+  const handleVideoMetadata = () => queuePreviewResize();
+  const handleWindowResize = () => queuePreviewResize();
+  if (inputPreviewVideo) {
+    inputPreviewVideo.addEventListener('loadedmetadata', handleVideoMetadata);
+  }
+  window.addEventListener('resize', handleWindowResize);
+  if (typeof ResizeObserver === 'function' && previewWrapper) {
+    previewResizeObserver = new ResizeObserver(() => queuePreviewResize());
+    previewResizeObserver.observe(previewWrapper);
+  }
   resizePreview();
 
   // Initialize
   updateUI();
-  requestAnimationFrame(renderPreview);
+  startPreviewLoop();
 
   // Public API
   return {
@@ -382,6 +471,17 @@ export function initInput({ editor }) {
         }
       });
       state.inputs = [];
+      dispatchInputEvent(INPUT_LIST_EVENT, { inputs: [] });
+      dispatchInputEvent(ACTIVE_INPUT_EVENT, { input: null });
+      stopPreviewLoop();
+      window.removeEventListener('resize', handleWindowResize);
+      if (inputPreviewVideo) {
+        inputPreviewVideo.removeEventListener('loadedmetadata', handleVideoMetadata);
+      }
+      if (previewResizeObserver) {
+        previewResizeObserver.disconnect();
+        previewResizeObserver = null;
+      }
       console.log('[mediamime] Input system disposed');
     }
   };

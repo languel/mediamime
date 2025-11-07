@@ -77,10 +77,25 @@ const HAND_LANDMARKS_LIST = [
   { key: "pinky_tip", label: "Pinky tip", index: 20 }
 ];
 
+const createLandmarkIndexMap = (list) =>
+  list.reduce((map, entry, defaultIndex) => {
+    const index = Number.isFinite(entry.index) ? entry.index : defaultIndex;
+    map[entry.key] = index;
+    return map;
+  }, {});
+
+const POSE_INDEX_BY_KEY = createLandmarkIndexMap(POSE_LANDMARKS_LIST);
+const HAND_INDEX_BY_KEY = createLandmarkIndexMap(HAND_LANDMARKS_LIST);
+
 const FACE_REFERENCE_POINTS = [
   { key: "centroid", label: "Face centroid" },
   { key: "nose_tip", label: "Nose tip", index: 1 }
 ];
+
+const FACE_INDEX_BY_KEY = FACE_REFERENCE_POINTS.filter((entry) => Number.isFinite(entry.index)).reduce((map, entry) => {
+  map[entry.key] = entry.index;
+  return map;
+}, {});
 
 const POINTER_REFERENCE_POINTS = [
   { key: "position", label: "Pointer position" },
@@ -2323,11 +2338,59 @@ export function initMapping({ editor }) {
     handleEditorEventFieldChange(eventId, control.dataset.field, control.value);
   };
 
+  const clampLandmarkPoint = (landmark) => {
+    if (!landmark) return null;
+    return {
+      x: clampUnit(landmark.x ?? 0),
+      y: clampUnit(landmark.y ?? 0),
+      z: Number.isFinite(landmark.z) ? landmark.z : 0,
+      visibility: Number.isFinite(landmark.visibility) ? landmark.visibility : 0
+    };
+  };
+
+  const resolveFaceCentroid = (landmarks) => {
+    if (!Array.isArray(landmarks) || landmarks.length === 0) return null;
+    let sumX = 0;
+    let sumY = 0;
+    let sumZ = 0;
+    landmarks.forEach((landmark) => {
+      sumX += landmark.x ?? 0;
+      sumY += landmark.y ?? 0;
+      sumZ += landmark.z ?? 0;
+    });
+    return clampLandmarkPoint({
+      x: sumX / landmarks.length,
+      y: sumY / landmarks.length,
+      z: sumZ / landmarks.length
+    });
+  };
+
   const resolveStreamPoint = (streamId, landmarkKey, holisticResults) => {
-    // Placeholder for future landmark integration
-    void streamId;
-    void landmarkKey;
-    void holisticResults;
+    if (!holisticResults) return null;
+    const key = landmarkKey || "";
+    if (streamId === "pose") {
+      const index = POSE_INDEX_BY_KEY[key] ?? POSE_INDEX_BY_KEY.nose ?? 0;
+      return clampLandmarkPoint(Array.isArray(holisticResults.poseLandmarks) ? holisticResults.poseLandmarks[index] : null);
+    }
+    if (streamId === "leftHand") {
+      const index = HAND_INDEX_BY_KEY[key] ?? HAND_INDEX_BY_KEY.wrist ?? 0;
+      return clampLandmarkPoint(Array.isArray(holisticResults.leftHandLandmarks) ? holisticResults.leftHandLandmarks[index] : null);
+    }
+    if (streamId === "rightHand") {
+      const index = HAND_INDEX_BY_KEY[key] ?? HAND_INDEX_BY_KEY.wrist ?? 0;
+      return clampLandmarkPoint(Array.isArray(holisticResults.rightHandLandmarks) ? holisticResults.rightHandLandmarks[index] : null);
+    }
+    if (streamId === "face") {
+      if (key === "centroid") {
+        return resolveFaceCentroid(holisticResults.faceLandmarks);
+      }
+      const index = FACE_INDEX_BY_KEY[key];
+      if (Number.isFinite(index)) {
+        return clampLandmarkPoint(Array.isArray(holisticResults.faceLandmarks) ? holisticResults.faceLandmarks[index] : null);
+      }
+      // Default to centroid if no explicit index
+      return resolveFaceCentroid(holisticResults.faceLandmarks);
+    }
     return null;
   };
 
@@ -2569,6 +2632,13 @@ export function initMapping({ editor }) {
     });
 
     updateShapeActiveIndicators();
+  };
+
+  const handleHolisticResults = (event) => {
+    const nextResults = event?.detail?.results || null;
+    if (inputState.holistic === nextResults) return;
+    inputState.holistic = nextResults;
+    evaluateShapeInteractions();
   };
 
   const getPointerNormalized = (event) => {
@@ -2878,6 +2948,7 @@ export function initMapping({ editor }) {
   addListener(window, "pointercancel", handleInputPointerCancel);
   addListener(window, "keydown", handleInputKeyDown, true);
   addListener(window, "keyup", handleInputKeyUp, true);
+  addListener(window, "mediamime:holistic-results", handleHolisticResults);
 
   if (typeof editor.on === "function") {
     editor.on("selectionchange", handleSelectionChange);
