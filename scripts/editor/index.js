@@ -251,7 +251,9 @@ class Editor {
       off: (event, handler) => this.off(event, handler),
       normalizePoint: (clientPoint, options) => this.normalizeClientPoint(clientPoint, options),
       shapeContainsPoint: (shapeId, point, tolerance) => this.shapeContainsPoint(shapeId, point, tolerance),
-      getShapeSnapshot: (shapeId) => cloneShape(this.shapeStore?.read(shapeId))
+      getShapeSnapshot: (shapeId) => cloneShape(this.shapeStore?.read(shapeId)),
+      getCamera: () => ({ ...this.camera }),
+      getViewBox: () => ({ ...this.view })
     };
   }
 
@@ -372,6 +374,13 @@ class Editor {
     if (this.state.gridMode !== 'off') {
       this.renderGrid();
     }
+    
+    // Dispatch camera change event for canvas layers
+    const event = new CustomEvent('mediamime:camera-changed', {
+      detail: { camera: { ...this.camera } },
+      bubbles: true
+    });
+    window.dispatchEvent(event);
   }  bindToolbar() {
     this.toolbar.querySelectorAll("[data-tool]").forEach((button) => {
       button.addEventListener("click", (event) => {

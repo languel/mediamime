@@ -199,6 +199,7 @@ export function initLayers({ editor }) {
     h: document.getElementById("layer-viewport-h")
   };
   const fitButton = document.getElementById("layer-fit-viewport");
+  const editViewportBtn = document.getElementById("layer-viewport-edit");
   const addButton = document.getElementById("layer-add-stream");
   const duplicateButton = document.getElementById("layer-duplicate-stream");
   const colorChip = document.getElementById("layer-color-chip");
@@ -328,7 +329,19 @@ export function initLayers({ editor }) {
     activeId: null,
     inputs: [],
     isSyncing: false,
-    colorPicker: null
+    colorPicker: null,
+    viewportEditing: { x: null, y: null, w: null, h: null }
+  };
+
+  const dispatchViewportEditMode = (enabled) => {
+    const event = new CustomEvent('mediamime:viewport-edit-mode', {
+      detail: {
+        enabled: Boolean(enabled),
+        layerId: state.activeId
+      },
+      bubbles: true
+    });
+    window.dispatchEvent(event);
   };
 
   const getActiveStream = () => state.streams.find((stream) => stream.id === state.activeId) || null;
@@ -521,6 +534,10 @@ export function initLayers({ editor }) {
     syncDetailForm();
     persistStreams(state.streams);
     dispatchLayersEvent(state.streams);
+    // Keep edit button state in sync (disabled when no active layer)
+    if (editViewportBtn) {
+      editViewportBtn.disabled = !getActiveStream();
+    }
   };
 
   const addStream = () => {
@@ -572,14 +589,22 @@ export function initLayers({ editor }) {
     updateUI();
   };
 
-  const handleViewportChange = (key, value) => {
+  // Commit viewport change after transient editing (blur / Enter)
+  const commitViewportChange = (key) => {
     const stream = getActiveStream();
     if (!stream || state.isSyncing) return;
-    const parsed = clampUnit(Number.parseFloat(value));
+    const input = viewportInputs[key];
+    if (!input) return;
+    const raw = input.value.trim();
+    let parsed = Number.parseFloat(raw);
+    if (!Number.isFinite(parsed)) parsed = stream.viewport[key];
+    parsed = clampUnit(parsed);
     const nextViewport = { ...stream.viewport, [key]: parsed };
     stream.viewportMode = "custom";
     if (fitToggle) fitToggle.checked = false;
     stream.viewport = clampViewport(nextViewport);
+    input.dataset.editing = "false";
+    state.viewportEditing[key] = null;
     updateUI();
   };
 
@@ -644,7 +669,6 @@ export function initLayers({ editor }) {
       }
       return;
     }
-
     // Handle enabled toggle
     const enabledBtn = event.target.closest('[data-action="toggle-enabled"]');
     if (enabledBtn) {
@@ -683,6 +707,14 @@ export function initLayers({ editor }) {
     const id = button.dataset.streamId;
     if (!id || id === state.activeId) return;
     state.activeId = id;
+    
+    // Dispatch layer selection event
+    const event2 = new CustomEvent('mediamime:layer-selected', {
+      detail: { layerId: id },
+      bubbles: true
+    });
+    window.dispatchEvent(event2);
+    
     updateUI();
   });
 
@@ -731,9 +763,29 @@ export function initLayers({ editor }) {
     updateUI();
   });
 
-  Object.entries(viewportInputs).forEach(([key, input]) => {
-    addListener(input, "input", (event) => handleViewportChange(key, event.target.value));
-  });
+  // Transient viewport numeric input editing
+  for (const [key, input] of Object.entries(viewportInputs)) {
+    if (!input) continue;
+    addListener(input, "focus", () => {
+      input.dataset.editing = "true";
+      state.viewportEditing[key] = input.value;
+    });
+    addListener(input, "input", () => {
+      if (state.isSyncing) return;
+      if (input.dataset.editing !== "true") input.dataset.editing = "true";
+      state.viewportEditing[key] = input.value;
+    });
+    addListener(input, "blur", () => {
+      if (input.dataset.editing === "true") commitViewportChange(key);
+    });
+    addListener(input, "keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        commitViewportChange(key);
+        input.blur();
+      }
+    });
+  }
 
   addListener(fitButton, "click", () => resetViewport());
   addListener(fitToggle, "change", (event) => handleFitToggle(event.target.checked));
@@ -742,6 +794,14 @@ export function initLayers({ editor }) {
     const next = !fitToggle.checked;
     fitToggle.checked = next;
     handleFitToggle(next);
+  });
+
+  // Toggle viewport edit mode
+  addListener(editViewportBtn, "click", () => {
+    const pressed = editViewportBtn.getAttribute('aria-pressed') === 'true';
+    const next = !pressed;
+    editViewportBtn.setAttribute('aria-pressed', String(next));
+    dispatchViewportEditMode(next);
   });
 
   if (colorChip && colorPanel) {
@@ -771,6 +831,26 @@ export function initLayers({ editor }) {
   inputListHandler = (event) => handleInputListChanged(event);
   window.addEventListener("mediamime:input-list-changed", inputListHandler);
 
+  // Handle viewport changes from drawing module
+  const handleViewportUpdate = (e) => {
+    const { layerId, viewport, viewportMode } = e.detail;
+    const stream = state.streams.find(s => s.id === layerId);
+    if (stream) {
+      stream.viewport = viewport;
+      stream.viewportMode = viewportMode;
+      persistStreams(state.streams);
+      updateUI();
+    }
+  };
+  window.addEventListener('mediamime:layer-viewport-changed', handleViewportUpdate);
+
+  // Ensure viewport edit mode follows active layer changes
+  window.addEventListener('mediamime:layer-selected', () => {
+    if (editViewportBtn && editViewportBtn.getAttribute('aria-pressed') === 'true') {
+      dispatchViewportEditMode(true);
+    }
+  });
+
   return {
     getStreams: () =>
       state.streams.map((stream) => ({
@@ -784,6 +864,7 @@ export function initLayers({ editor }) {
       if (inputListHandler) {
         window.removeEventListener("mediamime:input-list-changed", inputListHandler);
       }
+      window.removeEventListener('mediamime:layer-viewport-changed', handleViewportUpdate);
       if (state.colorPicker && typeof state.colorPicker.destroy === "function") {
         state.colorPicker.destroy();
       }

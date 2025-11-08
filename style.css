@@ -173,6 +173,12 @@ html, body {
       justify-content: center;
       overflow: hidden;
     }
+    /* Canvas layering: only elevate & pass pointer events during explicit viewport edit mode */
+    .gesture-editor.is-viewport-edit + #mediamime-sketch canvas#layer-compositor,
+    #mediamime-sketch canvas#layer-compositor.is-viewport-edit {
+      z-index: 110;
+    }
+    .gesture-editor.is-viewport-edit .gesture-svg { pointer-events: none; }
     .preview-canvas canvas {
       display: block;
       width: auto;
