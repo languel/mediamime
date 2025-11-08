@@ -38,7 +38,8 @@ export function initInput({ editor }) {
   const previewWrapper = document.querySelector('#input-detail .input-preview-wrapper');
   const transportRow = document.getElementById('input-transport-row');
   const transportToggle = document.getElementById('input-transport-toggle');
-  const transportToggleLabel = transportToggle ? transportToggle.querySelector('[data-transport-label]') : null;
+  const transportScrub = document.getElementById('input-transport-scrub');
+  const transportTime = document.getElementById('input-transport-time');
   const transportSpeed = document.getElementById('input-transport-speed');
   const transportSpeedValue = document.getElementById('input-transport-speed-value');
   if (transportRow) {
@@ -313,6 +314,13 @@ export function initInput({ editor }) {
     return `${sign}${formatted.replace(/\.?0+$/, '')}×`;
   };
 
+  const formatTime = (seconds) => {
+    if (!Number.isFinite(seconds) || seconds < 0) seconds = 0;
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
   const updateTransportUI = (input) => {
     if (!transportRow) return;
     const supported = supportsTransport(input);
@@ -321,20 +329,37 @@ export function initInput({ editor }) {
     ensureTransportState(input);
     if (transportToggle) {
       transportToggle.disabled = false;
-      if (transportToggleLabel) {
-        transportToggleLabel.textContent = input.isPaused ? 'Play' : 'Pause';
-      }
       const icon = transportToggle.querySelector('.material-icons-outlined');
       if (icon) {
-        icon.textContent = input.isPaused ? 'play_arrow' : input.playbackRate < 0 ? 'replay' : 'pause';
+        icon.textContent = input.isPaused || input.playbackRate === 0 ? 'play_arrow' : input.playbackRate < 0 ? 'replay' : 'pause';
       }
     }
     if (transportSpeed) {
       transportSpeed.disabled = false;
-      transportSpeed.value = `${input.playbackRate ?? 1}`;
+      // Avoid overwriting while user is actively editing unless the field is in a transient state
+      const activeEditing = document.activeElement === transportSpeed;
+      const currentDisplay = transportSpeed.value;
+      const targetValue = `${input.playbackRate ?? 1}`;
+      if (!activeEditing || currentDisplay === '' || currentDisplay === '-' || currentDisplay === '.' || currentDisplay === '-.') {
+        transportSpeed.value = targetValue;
+      }
     }
     if (transportSpeedValue) {
       transportSpeedValue.textContent = formatSpeedLabel(input.playbackRate ?? 1);
+    }
+    if (transportScrub && transportTime && input.videoElement) {
+      const v = input.videoElement;
+      const duration = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : null;
+      const current = Number.isFinite(v.currentTime) ? v.currentTime : 0;
+      if (duration) {
+        transportScrub.disabled = false;
+        transportScrub.value = (current / duration).toFixed(4);
+        transportTime.textContent = `${formatTime(current)} / ${formatTime(duration)}`;
+      } else {
+        transportScrub.disabled = true;
+        transportScrub.value = '0';
+        transportTime.textContent = '0:00';
+      }
     }
   };
 
@@ -823,16 +848,35 @@ export function initInput({ editor }) {
     });
   }
 
-  const createCropHandler = (key) => (e) => {
-    if (!state.activeInputId || state.isSyncing) return;
-    const value = parseFloat(e.target.value);
-    if (!isFinite(value)) return;
-    updateInputMeta(state.activeInputId, { crop: { [key]: Math.min(1, Math.max(0, value)) } });
+  const createCropHandler = (key) => {
+    const commit = (raw) => {
+      const value = parseFloat(raw);
+      if (!isFinite(value)) return;
+      updateInputMeta(state.activeInputId, { crop: { [key]: Math.min(1, Math.max(0, value)) } });
+    };
+    return (e) => {
+      if (!state.activeInputId || state.isSyncing) return;
+      const raw = e.target.value.trim();
+      if (raw === '' || raw === '.') return; // transient state
+      commit(raw);
+    };
   };
-  if (cropX) cropX.addEventListener('input', createCropHandler('x'));
-  if (cropY) cropY.addEventListener('input', createCropHandler('y'));
-  if (cropW) cropW.addEventListener('input', createCropHandler('w'));
-  if (cropH) cropH.addEventListener('input', createCropHandler('h'));
+  const attachCropField = (el, key) => {
+    if (!el) return;
+    el.addEventListener('input', createCropHandler(key));
+    el.addEventListener('blur', (e) => {
+      if (!state.activeInputId || state.isSyncing) return;
+      const raw = e.target.value.trim();
+      if (raw === '' || raw === '.') return;
+      const value = parseFloat(raw);
+      if (!isFinite(value)) return;
+      updateInputMeta(state.activeInputId, { crop: { [key]: Math.min(1, Math.max(0, value)) } });
+    });
+  };
+  attachCropField(cropX, 'x');
+  attachCropField(cropY, 'y');
+  attachCropField(cropW, 'w');
+  attachCropField(cropH, 'h');
   if (flipH) flipH.addEventListener('change', (e) => {
     if (!state.activeInputId || state.isSyncing) return;
     updateInputMeta(state.activeInputId, { flip: { horizontal: e.target.checked } });
@@ -852,14 +896,51 @@ export function initInput({ editor }) {
   }
 
   if (transportSpeed) {
-    transportSpeed.addEventListener('input', (e) => {
+    // Commit logic separated to allow transient editing states (empty, minus, period)
+    const commitSpeedValue = () => {
       if (!state.activeInputId) return;
       const input = state.inputs.find((item) => item.id === state.activeInputId);
       if (!input || !supportsTransport(input)) return;
-      const rate = parseFloat(e.target.value);
+      const raw = transportSpeed.value.trim();
+      if (raw === '' || raw === '-' || raw === '.' || raw === '-.') return; // ignore incomplete
+      const rate = parseFloat(raw);
       if (!Number.isFinite(rate)) return;
       setInputPlaybackRate(input, rate);
       if (transportSpeedValue) transportSpeedValue.textContent = formatSpeedLabel(rate);
+    };
+    transportSpeed.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        commitSpeedValue();
+        transportSpeed.blur();
+      }
+    });
+    transportSpeed.addEventListener('blur', commitSpeedValue);
+    transportSpeed.addEventListener('input', () => {
+      // Live update if valid number; otherwise allow incomplete typing
+      const raw = transportSpeed.value.trim();
+      if (raw === '' || raw === '-' || raw === '.' || raw === '-.') return;
+      const rate = parseFloat(raw);
+      if (!Number.isFinite(rate)) return;
+      if (!state.activeInputId) return;
+      const input = state.inputs.find((item) => item.id === state.activeInputId);
+      if (!input || !supportsTransport(input)) return;
+      setInputPlaybackRate(input, rate);
+      if (transportSpeedValue) transportSpeedValue.textContent = formatSpeedLabel(rate);
+    });
+  }
+
+  if (transportScrub) {
+    transportScrub.addEventListener('input', (e) => {
+      if (!state.activeInputId) return;
+      const input = state.inputs.find((item) => item.id === state.activeInputId);
+      if (!input || !supportsTransport(input) || !input.videoElement) return;
+      const v = input.videoElement;
+      const ratio = parseFloat(e.target.value);
+      if (!Number.isFinite(ratio) || ratio < 0 || ratio > 1) return;
+      const duration = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : null;
+      if (!duration) return;
+      v.currentTime = ratio * duration;
+      updateTransportUI(input);
     });
   }
 
@@ -990,7 +1071,7 @@ export function initInput({ editor }) {
     previewCtx.imageSmoothingEnabled = true;
     previewCtx.drawImage(video, offsetX, offsetY, drawW, drawH);
     previewCtx.restore();
-    // Draw crop rectangle overlay (no fill)
+    // Draw crop rectangle overlay with handles
     const cropX = Math.max(0, Math.min(1, active.crop.x));
     const cropY = Math.max(0, Math.min(1, active.crop.y));
     const cropW = Math.max(0.01, Math.min(1 - cropX, active.crop.w));
@@ -999,17 +1080,56 @@ export function initInput({ editor }) {
     const rectY = offsetY + cropY * drawH;
     const rectW = cropW * drawW;
     const rectH = cropH * drawH;
+    
+    // Store preview geometry for drag handlers (in CSS pixels)
+    const dpr = window.devicePixelRatio || 1;
+    state.previewGeometry = {
+      offsetX: offsetX / dpr,
+      offsetY: offsetY / dpr,
+      drawW: drawW / dpr,
+      drawH: drawH / dpr,
+      rectX: rectX / dpr,
+      rectY: rectY / dpr,
+      rectW: rectW / dpr,
+      rectH: rectH / dpr
+    };
+    
     previewCtx.save();
     previewCtx.strokeStyle = '#00e0ff';
-    previewCtx.lineWidth = Math.max(1, 2 * (window.devicePixelRatio || 1));
+    previewCtx.lineWidth = Math.max(1, 2 * dpr);
     previewCtx.setLineDash([10, 6]);
     previewCtx.strokeRect(rectX, rectY, rectW, rectH);
+    previewCtx.restore();
+    
+    // Draw corner handles
+    const handleSize = 12 * dpr;
+    const handles = [
+      { x: rectX, y: rectY, cursor: 'nwse-resize', type: 'nw' },
+      { x: rectX + rectW, y: rectY, cursor: 'nesw-resize', type: 'ne' },
+      { x: rectX, y: rectY + rectH, cursor: 'nesw-resize', type: 'sw' },
+      { x: rectX + rectW, y: rectY + rectH, cursor: 'nwse-resize', type: 'se' },
+    ];
+    
+    previewCtx.save();
+    handles.forEach(handle => {
+      previewCtx.fillStyle = '#00e0ff';
+      previewCtx.fillRect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
+      previewCtx.strokeStyle = '#05070d';
+      previewCtx.lineWidth = 1.5 * dpr;
+      previewCtx.setLineDash([]);
+      previewCtx.strokeRect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
+    });
     previewCtx.restore();
   };
 
   const previewLoop = () => {
     if (!previewLoopRunning) return;
     renderPreview();
+    // Update scrubber UI as video plays
+    if (state.activeInputId) {
+      const input = state.inputs.find(i => i.id === state.activeInputId);
+      if (input) updateTransportUI(input);
+    }
     previewFrameHandle = requestAnimationFrame(previewLoop);
   };
 
@@ -1026,6 +1146,164 @@ export function initInput({ editor }) {
       previewFrameHandle = null;
     }
   };
+
+  // Crop drag state
+  let cropDragState = null;
+
+  const getCursorForHandle = (handleType) => {
+    const cursors = {
+      nw: 'nwse-resize',
+      ne: 'nesw-resize',
+      sw: 'nesw-resize',
+      se: 'nwse-resize',
+      move: 'move'
+    };
+    return cursors[handleType] || 'default';
+  };
+
+  const getHoveredCropElement = (canvasX, canvasY) => {
+    if (!state.activeInputId || !state.previewGeometry) return null;
+    const geo = state.previewGeometry;
+    const handleSize = 12; // CSS pixels
+    const hitMargin = 4;
+    
+    // Check corner handles
+    const handles = [
+      { type: 'nw', x: geo.rectX, y: geo.rectY },
+      { type: 'ne', x: geo.rectX + geo.rectW, y: geo.rectY },
+      { type: 'sw', x: geo.rectX, y: geo.rectY + geo.rectH },
+      { type: 'se', x: geo.rectX + geo.rectW, y: geo.rectY + geo.rectH },
+    ];
+    
+    for (const handle of handles) {
+      const dx = Math.abs(canvasX - handle.x);
+      const dy = Math.abs(canvasY - handle.y);
+      if (dx <= handleSize / 2 + hitMargin && dy <= handleSize / 2 + hitMargin) {
+        return { type: 'handle', handleType: handle.type };
+      }
+    }
+    
+    // Check if inside crop rect (for move)
+    if (canvasX >= geo.rectX && canvasX <= geo.rectX + geo.rectW &&
+        canvasY >= geo.rectY && canvasY <= geo.rectY + geo.rectH) {
+      return { type: 'move' };
+    }
+    
+    return null;
+  };
+
+  const handlePreviewPointerMove = (e) => {
+    if (!inputPreviewCanvas) return;
+    const rect = inputPreviewCanvas.getBoundingClientRect();
+    const canvasX = e.clientX - rect.left;
+    const canvasY = e.clientY - rect.top;
+    
+    if (cropDragState) {
+      e.preventDefault();
+      const input = state.inputs.find(i => i.id === state.activeInputId);
+      if (!input || !state.previewGeometry) return;
+      
+      const geo = state.previewGeometry;
+      const dx = canvasX - cropDragState.startX;
+      const dy = canvasY - cropDragState.startY;
+      
+      let newCrop = { ...input.crop };
+      
+      if (cropDragState.handleType === 'move') {
+        // Move entire crop rect
+        const deltaX = dx / geo.drawW;
+        const deltaY = dy / geo.drawH;
+        newCrop.x = Math.max(0, Math.min(1 - newCrop.w, cropDragState.initialCrop.x + deltaX));
+        newCrop.y = Math.max(0, Math.min(1 - newCrop.h, cropDragState.initialCrop.y + deltaY));
+      } else {
+        // Resize from corner
+        const deltaX = dx / geo.drawW;
+        const deltaY = dy / geo.drawH;
+        
+        if (cropDragState.handleType === 'nw') {
+          const newX = Math.max(0, Math.min(cropDragState.initialCrop.x + cropDragState.initialCrop.w - 0.01, cropDragState.initialCrop.x + deltaX));
+          const newY = Math.max(0, Math.min(cropDragState.initialCrop.y + cropDragState.initialCrop.h - 0.01, cropDragState.initialCrop.y + deltaY));
+          newCrop.w = cropDragState.initialCrop.x + cropDragState.initialCrop.w - newX;
+          newCrop.h = cropDragState.initialCrop.y + cropDragState.initialCrop.h - newY;
+          newCrop.x = newX;
+          newCrop.y = newY;
+        } else if (cropDragState.handleType === 'ne') {
+          const newY = Math.max(0, Math.min(cropDragState.initialCrop.y + cropDragState.initialCrop.h - 0.01, cropDragState.initialCrop.y + deltaY));
+          newCrop.w = Math.max(0.01, Math.min(1 - cropDragState.initialCrop.x, cropDragState.initialCrop.w + deltaX));
+          newCrop.h = cropDragState.initialCrop.y + cropDragState.initialCrop.h - newY;
+          newCrop.y = newY;
+        } else if (cropDragState.handleType === 'sw') {
+          const newX = Math.max(0, Math.min(cropDragState.initialCrop.x + cropDragState.initialCrop.w - 0.01, cropDragState.initialCrop.x + deltaX));
+          newCrop.w = cropDragState.initialCrop.x + cropDragState.initialCrop.w - newX;
+          newCrop.h = Math.max(0.01, Math.min(1 - cropDragState.initialCrop.y, cropDragState.initialCrop.h + deltaY));
+          newCrop.x = newX;
+        } else if (cropDragState.handleType === 'se') {
+          newCrop.w = Math.max(0.01, Math.min(1 - cropDragState.initialCrop.x, cropDragState.initialCrop.w + deltaX));
+          newCrop.h = Math.max(0.01, Math.min(1 - cropDragState.initialCrop.y, cropDragState.initialCrop.h + deltaY));
+        }
+      }
+      
+      // Update crop (will trigger UI sync via updateInputMeta)
+      Object.assign(input.crop, newCrop);
+      if (!state.isSyncing) {
+        syncDetailForm(input);
+      }
+      persistInputs();
+      return;
+    }
+    
+    // Update cursor based on hover
+    const hovered = getHoveredCropElement(canvasX, canvasY);
+    if (hovered) {
+      inputPreviewCanvas.style.cursor = getCursorForHandle(hovered.handleType || hovered.type);
+    } else {
+      inputPreviewCanvas.style.cursor = 'crosshair';
+    }
+  };
+
+  const handlePreviewPointerDown = (e) => {
+    if (!inputPreviewCanvas || !state.activeInputId) return;
+    const rect = inputPreviewCanvas.getBoundingClientRect();
+    const canvasX = e.clientX - rect.left;
+    const canvasY = e.clientY - rect.top;
+    
+    const hovered = getHoveredCropElement(canvasX, canvasY);
+    if (hovered) {
+      e.preventDefault();
+      const input = state.inputs.find(i => i.id === state.activeInputId);
+      if (!input) return;
+      
+      cropDragState = {
+        handleType: hovered.handleType || hovered.type,
+        startX: canvasX,
+        startY: canvasY,
+        initialCrop: { ...input.crop }
+      };
+      inputPreviewCanvas.setPointerCapture(e.pointerId);
+    }
+  };
+
+  const handlePreviewPointerUp = (e) => {
+    if (cropDragState && inputPreviewCanvas) {
+      inputPreviewCanvas.releasePointerCapture(e.pointerId);
+      cropDragState = null;
+    }
+  };
+
+  const handlePreviewPointerCancel = (e) => {
+    if (cropDragState && inputPreviewCanvas) {
+      inputPreviewCanvas.releasePointerCapture(e.pointerId);
+      cropDragState = null;
+    }
+  };
+
+  // Attach crop interaction handlers
+  if (inputPreviewCanvas) {
+    inputPreviewCanvas.addEventListener('pointermove', handlePreviewPointerMove);
+    inputPreviewCanvas.addEventListener('pointerdown', handlePreviewPointerDown);
+    inputPreviewCanvas.addEventListener('pointerup', handlePreviewPointerUp);
+    inputPreviewCanvas.addEventListener('pointercancel', handlePreviewPointerCancel);
+  }
 
   const handleVideoMetadata = () => queuePreviewResize();
   const handleWindowResize = () => queuePreviewResize();
