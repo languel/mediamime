@@ -1,9 +1,9 @@
 import { createRgbaPicker } from "../ui/rgba-picker.js";
 
 const PROCESS_OPTIONS = [
-  { id: "pose", label: "MediaPipe Pose" },
-  { id: "hands", label: "MediaPipe Hands" },
-  { id: "face", label: "MediaPipe Face" },
+  { id: "pose", label: "Pose (MP)" },
+  { id: "hands", label: "Hands (MP)" },
+  { id: "face", label: "Face (MP)" },
   { id: "segmentation", label: "Segmentation Mask" },
   { id: "depth", label: "Depth Map" },
   { id: "raw", label: "Raw Source" }
@@ -334,10 +334,10 @@ export function initLayers({ editor }) {
   const getActiveStream = () => state.streams.find((stream) => stream.id === state.activeId) || null;
 
   const getSourceLabel = (stream) => {
-    if (!stream?.sourceId) return "No source";
+    if (!stream?.sourceId) return "-"; // No source selected
     const source = state.inputs.find((input) => input.id === stream.sourceId);
-    if (!source) return "-"; // Previously "Missing source"; now a concise placeholder
-    return `${source.name || "Source"} · ${source.type || "camera"}`;
+    if (!source) return "-"; // Missing or removed source
+    return `${source.name || source.id}`; // Only source label
   };
 
   const updateActionButtons = () => {

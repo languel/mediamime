@@ -123,8 +123,13 @@ const drawSegmentation = (ctx, mask, viewportPx, color, alpha = 0) => {
   if (!mask || !color || alpha <= 0) return;
   try {
     ctx.save();
+    // Draw mask as layer color: use globalCompositeOperation to tint
     ctx.globalAlpha = Math.min(1, Math.max(0, alpha));
     ctx.drawImage(mask, viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
+    ctx.globalCompositeOperation = "source-in";
+    ctx.fillStyle = color;
+    ctx.fillRect(viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
+    ctx.globalCompositeOperation = "source-over";
     ctx.restore();
   } catch (error) {
     console.warn("[mediamime] Failed to draw segmentation mask", error);
@@ -194,14 +199,15 @@ export function initDrawing({ editor }) {
     };
   };
 
-  const renderTo = (targetCtx, width, height) => {
+  const renderTo = (targetCtx, width, height, { isPreview = false } = {}) => {
     targetCtx.clearRect(0, 0, width, height);
     targetCtx.fillStyle = DEFAULT_BG;
     targetCtx.fillRect(0, 0, width, height);
     if (!state.streams.length) return;
     state.streams.forEach((stream) => {
       if (!stream.enabled) return;
-      if (stream.preview === false) return;
+      // Only respect the preview toggle for the preview canvas; main canvas shows all enabled layers
+      if (isPreview && stream.preview === false) return;
       if (!stream.sourceId) return;
       const results = state.resultsBySource.get(stream.sourceId);
       const viewportPx = getViewportPx(stream.viewport, width, height);
@@ -245,9 +251,9 @@ export function initDrawing({ editor }) {
 
   const render = () => {
     state.pendingRender = false;
-    renderTo(ctx, canvas.width, canvas.height);
+    renderTo(ctx, canvas.width, canvas.height, { isPreview: false });
     if (state.previewCtx && state.previewCanvas) {
-      renderTo(state.previewCtx, state.previewCanvas.width, state.previewCanvas.height);
+      renderTo(state.previewCtx, state.previewCanvas.width, state.previewCanvas.height, { isPreview: true });
     }
   };
 
