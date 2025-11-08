@@ -200,6 +200,7 @@ export function initLayers({ editor }) {
   };
   const fitButton = document.getElementById("layer-fit-viewport");
   const editViewportBtn = document.getElementById("layer-viewport-edit");
+  let viewportEditOn = false; // explicit local toggle state
   const addButton = document.getElementById("layer-add-stream");
   const duplicateButton = document.getElementById("layer-duplicate-stream");
   const colorChip = document.getElementById("layer-color-chip");
@@ -536,7 +537,14 @@ export function initLayers({ editor }) {
     dispatchLayersEvent(state.streams);
     // Keep edit button state in sync (disabled when no active layer)
     if (editViewportBtn) {
-      editViewportBtn.disabled = !getActiveStream();
+      const hasActive = Boolean(getActiveStream());
+      editViewportBtn.disabled = !hasActive;
+      // If active layer disappeared, turn off mode
+      if (!hasActive && viewportEditOn) {
+        viewportEditOn = false;
+        editViewportBtn.setAttribute('aria-pressed', 'false');
+        dispatchViewportEditMode(false);
+      }
     }
   };
 
@@ -798,10 +806,10 @@ export function initLayers({ editor }) {
 
   // Toggle viewport edit mode
   addListener(editViewportBtn, "click", () => {
-    const pressed = editViewportBtn.getAttribute('aria-pressed') === 'true';
-    const next = !pressed;
-    editViewportBtn.setAttribute('aria-pressed', String(next));
-    dispatchViewportEditMode(next);
+    if (editViewportBtn.disabled) return;
+    viewportEditOn = !viewportEditOn;
+    editViewportBtn.setAttribute('aria-pressed', String(viewportEditOn));
+    dispatchViewportEditMode(viewportEditOn);
   });
 
   if (colorChip && colorPanel) {
@@ -846,7 +854,8 @@ export function initLayers({ editor }) {
 
   // Ensure viewport edit mode follows active layer changes
   window.addEventListener('mediamime:layer-selected', () => {
-    if (editViewportBtn && editViewportBtn.getAttribute('aria-pressed') === 'true') {
+    if (editViewportBtn && viewportEditOn) {
+      // Re-emit to ensure drawing module updates active layer id
       dispatchViewportEditMode(true);
     }
   });

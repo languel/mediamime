@@ -296,6 +296,8 @@ export function initDrawing({ editor }) {
   };
 
   const renderViewportHandles = (targetCtx, width, height) => {
+    // Only render when explicit viewport edit mode is enabled
+    if (!state.viewportEditMode) return;
     if (!state.activeLayerId || !state.editor) return;
     const activeLayer = state.streams.find(s => s.id === state.activeLayerId);
     if (!activeLayer || !activeLayer.enabled) return;
@@ -370,6 +372,7 @@ export function initDrawing({ editor }) {
 
   // Viewport handle interaction
   const getHoveredViewportHandle = (clientX, clientY) => {
+    if (!state.viewportEditMode) return null;
     if (!state.activeLayerId || !state.editor) return null;
     const activeLayer = state.streams.find(s => s.id === state.activeLayerId);
     if (!activeLayer) return null;
@@ -421,6 +424,7 @@ export function initDrawing({ editor }) {
   };
 
   const handleCanvasPointerMove = (e) => {
+    if (!state.viewportEditMode) return; // ignore when mode is off
     if (state.viewportDragState) {
       e.preventDefault();
       e.stopPropagation();
@@ -495,6 +499,7 @@ export function initDrawing({ editor }) {
   };
 
   const handleCanvasPointerDown = (e) => {
+    if (!state.viewportEditMode) return; // ignore when mode is off
     const hovered = getHoveredViewportHandle(e.clientX, e.clientY);
     if (hovered) {
       e.preventDefault();
@@ -522,7 +527,7 @@ export function initDrawing({ editor }) {
     } else {
       if (state.activeLayerId) {
         state.activeLayerId = null;
-        updateOverlayInteractivity();
+        applyViewportEditMode();
         requestRender();
       }
     }
