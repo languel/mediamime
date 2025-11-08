@@ -102,14 +102,18 @@
                 <div class="assignment-row" id="input-transport-row">
                   <label>Transport</label>
                   <div class="input-transport-controls">
-                    <button type="button" id="input-transport-toggle" class="pill-button small" disabled>
+                    <button type="button" id="input-transport-toggle" class="icon-button" disabled title="Play/Pause" aria-label="Play/Pause">
                       <span class="material-icons-outlined" aria-hidden="true">play_arrow</span>
-                      <span data-transport-label>Play</span>
                     </button>
-                    <label class="input-transport-speed">
-                      <span>Speed</span>
-                      <input type="range" id="input-transport-speed" min="-10" max="10" step="0.25" value="1" disabled>
-                      <span id="input-transport-speed-value">1×</span>
+                    <label class="input-transport-scrubber" style="flex:1;display:flex;align-items:center;gap:0.4rem;">
+                      <span class="sr-only">Scrub</span>
+                      <input type="range" id="input-transport-scrub" min="0" max="1" step="0.0005" value="0" disabled aria-label="Timeline scrubber">
+                      <span id="input-transport-time" style="min-width:3.2rem;text-align:right;font-variant-numeric:tabular-nums;">0:00</span>
+                    </label>
+                    <label class="input-transport-speed" style="width:4.5rem;display:flex;flex-direction:column;gap:0.25rem;align-items:stretch;">
+                      <span class="sr-only">Speed</span>
+                      <input type="number" id="input-transport-speed" min="-10" max="10" step="0.25" value="1" disabled aria-label="Playback speed">
+                      <span id="input-transport-speed-value" aria-hidden="true" style="text-align:center;font-size:0.65rem;opacity:0.7;">1×</span>
                     </label>
                   </div>
                 </div>
