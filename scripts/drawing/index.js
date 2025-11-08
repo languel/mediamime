@@ -150,6 +150,33 @@ const drawViewportBounds = (ctx, viewportPx, strokeColor, fillAlpha = 0, fillCol
   ctx.restore();
 };
 
+const SUPPORTS_DOM_MATRIX = typeof DOMMatrix === "function" && typeof DOMPoint === "function";
+
+const toDomMatrix = (matrix) => {
+  if (!SUPPORTS_DOM_MATRIX || !matrix) return null;
+  if (matrix instanceof DOMMatrix) return matrix;
+  const { a = 1, b = 0, c = 0, d = 1, e = 0, f = 0 } = matrix;
+  try {
+    return new DOMMatrix([a, b, c, d, e, f]);
+  } catch (error) {
+    console.warn("[mediamime] Failed to create DOMMatrix from", matrix, error);
+    return null;
+  }
+};
+
+const createCssToCanvasMatrix = (rect, dpr) => {
+  if (!SUPPORTS_DOM_MATRIX) return null;
+  const ratio = Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
+  return new DOMMatrix([
+    ratio,
+    0,
+    0,
+    ratio,
+    -rect.left * ratio,
+    -rect.top * ratio
+  ]);
+};
+
 const createCanvas = (container) => {
   const canvas = document.createElement("canvas");
   canvas.id = ACTIVE_LAYER_CANVAS_ID;
@@ -193,7 +220,30 @@ export function initDrawing({ editor }) {
     spacebarPanning: false, // Track when editor is panning with spacebar
     editorMode: editor?.getMode ? editor.getMode() : 'edit',
     svg: document.getElementById('gesture-svg') || null,
+    shapesLayer: null,
     displayMetrics: null
+  };
+
+  const isSelectToolActive = () => {
+    if (!state.editor?.getState) return true;
+    try {
+      const editorState = state.editor.getState();
+      return !editorState?.tool || editorState.tool === 'select';
+    } catch (error) {
+      console.warn('[mediamime] Failed to read editor state for tool detection.', error);
+      return true;
+    }
+  };
+
+  const emitLayerSelection = (layerId) => {
+    const event = new CustomEvent('mediamime:layer-selected', {
+      detail: {
+        layerId: layerId || null,
+        source: 'drawing'
+      },
+      bubbles: true
+    });
+    window.dispatchEvent(event);
   };
 
   const getViewportPx = (viewport, width, height) => {
@@ -206,6 +256,16 @@ export function initDrawing({ editor }) {
     };
   };
 
+  const getViewportWorldRect = (viewport, viewBox) => {
+    const normalized = normalizeViewport(viewport);
+    return {
+      x: normalized.x * viewBox.width,
+      y: normalized.y * viewBox.height,
+      w: normalized.w * viewBox.width,
+      h: normalized.h * viewBox.height
+    };
+  };
+
   const ensureDisplayMetrics = () => {
     const dpr = window.devicePixelRatio || 1;
     const canvasRect = canvas.getBoundingClientRect();
@@ -213,42 +273,87 @@ export function initDrawing({ editor }) {
       !state.displayMetrics ||
       state.displayMetrics.dpr !== dpr ||
       state.displayMetrics.cssWidth !== canvasRect.width ||
-      state.displayMetrics.cssHeight !== canvasRect.height;
+      state.displayMetrics.cssHeight !== canvasRect.height ||
+      state.displayMetrics.cssLeft !== canvasRect.left ||
+      state.displayMetrics.cssTop !== canvasRect.top;
 
     if (shouldRefresh) {
       const svgElement = state.svg || document.getElementById('gesture-svg');
       if (!state.svg && svgElement) {
         state.svg = svgElement;
       }
-      const svgRect = svgElement ? svgElement.getBoundingClientRect() : canvasRect;
+      if (!state.shapesLayer && (state.svg || svgElement)) {
+        const layer = (state.svg || svgElement)?.querySelector('[data-layer="shapes"]');
+        if (layer) state.shapesLayer = layer;
+      }
       const viewBox = state.editor?.getViewBox ? state.editor.getViewBox() : { width: canvasRect.width || 1, height: canvasRect.height || 1 };
-      const worldScaleX = viewBox.width ? svgRect.width / viewBox.width : 1;
-      const worldScaleY = viewBox.height ? svgRect.height / viewBox.height : 1;
+      const camera = state.editor?.getCamera ? state.editor.getCamera() : { x: 0, y: 0, zoom: 1 };
+      const svgRect = (state.svg || svgElement) ? (state.svg || svgElement).getBoundingClientRect() : canvasRect;
 
-      state.displayMetrics = {
+      const baseMetrics = {
         dpr,
         cssWidth: canvasRect.width,
         cssHeight: canvasRect.height,
+        cssLeft: canvasRect.left,
+        cssTop: canvasRect.top,
+        viewBox,
+        camera
+      };
+
+      if (SUPPORTS_DOM_MATRIX && state.shapesLayer && typeof state.shapesLayer.getScreenCTM === "function") {
+        const rawMatrix = state.shapesLayer.getScreenCTM();
+        const worldToCssMatrix = toDomMatrix(rawMatrix);
+        if (worldToCssMatrix) {
+          const cssToWorldMatrix = worldToCssMatrix.inverse();
+          const cssToCanvasMatrix = createCssToCanvasMatrix(canvasRect, dpr);
+          const worldToCanvasMatrix = cssToCanvasMatrix ? cssToCanvasMatrix.multiply(worldToCssMatrix) : null;
+          if (worldToCanvasMatrix) {
+            state.displayMetrics = {
+              ...baseMetrics,
+              worldToCssMatrix,
+              cssToWorldMatrix,
+              worldToCanvasMatrix,
+              usesDomMatrix: true
+            };
+            return state.displayMetrics;
+          }
+        }
+      }
+
+      const worldScaleX = viewBox.width ? svgRect.width / viewBox.width : 1;
+      const worldScaleY = viewBox.height ? svgRect.height / viewBox.height : 1;
+      state.displayMetrics = {
+        ...baseMetrics,
         worldScaleX,
         worldScaleY,
         offsetX: svgRect.left - canvasRect.left,
         offsetY: svgRect.top - canvasRect.top,
-        viewBox
+        usesDomMatrix: false
       };
-    } else if (state.editor?.getViewBox) {
-      state.displayMetrics.viewBox = state.editor.getViewBox();
+    } else {
+      if (state.editor?.getViewBox) {
+        state.displayMetrics.viewBox = state.editor.getViewBox();
+      }
+      if (state.editor?.getCamera) {
+        state.displayMetrics.camera = state.editor.getCamera();
+      }
     }
 
     return state.displayMetrics;
   };
 
   const toWorldCoords = (cssX, cssY, camera, metrics) => {
-    const scaleX = (camera?.zoom || 1) * (metrics?.worldScaleX || 1);
-    const scaleY = (camera?.zoom || 1) * (metrics?.worldScaleY || 1);
+    if (metrics?.usesDomMatrix && metrics.cssToWorldMatrix && SUPPORTS_DOM_MATRIX) {
+      const point = new DOMPoint(cssX, cssY).matrixTransform(metrics.cssToWorldMatrix);
+      return { x: point.x, y: point.y };
+    }
+    const activeCamera = camera || metrics?.camera || (state.editor?.getCamera ? state.editor.getCamera() : null);
+    const scaleX = (activeCamera?.zoom || 1) * (metrics?.worldScaleX || 1);
+    const scaleY = (activeCamera?.zoom || 1) * (metrics?.worldScaleY || 1);
     const offsetX = metrics?.offsetX || 0;
     const offsetY = metrics?.offsetY || 0;
-    const worldX = ((cssX - offsetX) / (scaleX || 1)) - (camera?.x || 0);
-    const worldY = ((cssY - offsetY) / (scaleY || 1)) - (camera?.y || 0);
+    const worldX = ((cssX - offsetX) / (scaleX || 1)) - (activeCamera?.x || 0);
+    const worldY = ((cssY - offsetY) / (scaleY || 1)) - (activeCamera?.y || 0);
     return { x: worldX, y: worldY };
   };
 
@@ -265,10 +370,13 @@ export function initDrawing({ editor }) {
     if (!state.streams.length) return;
 
     // Apply camera transform for main canvas (not preview)
-  const camera = !isPreview && state.editor ? (state.editor.getCamera ? state.editor.getCamera() : null) : null;
-  const viewBox = !isPreview && state.editor ? (metrics?.viewBox || (state.editor.getViewBox ? state.editor.getViewBox() : null)) : null;
+    const camera = state.editor ? (state.editor.getCamera ? state.editor.getCamera() : null) : null;
+    const viewBox = state.editor ? (metrics?.viewBox || (state.editor.getViewBox ? state.editor.getViewBox() : null)) : null;
 
-    if (!isPreview && camera && viewBox && metrics) {
+    if (!isPreview && metrics?.usesDomMatrix && metrics.worldToCanvasMatrix) {
+      const m = metrics.worldToCanvasMatrix;
+      targetCtx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
+    } else if (!isPreview && camera && viewBox && metrics) {
       const baseScaleX = camera.zoom * (metrics.worldScaleX || 1);
       const baseScaleY = camera.zoom * (metrics.worldScaleY || 1);
       const translateX = (metrics.offsetX || 0) + camera.x * baseScaleX;
@@ -295,20 +403,9 @@ export function initDrawing({ editor }) {
       const results = state.resultsBySource.get(stream.sourceId);
       
       // Calculate viewport in appropriate coordinate space
-      let viewportPx;
-      if (!isPreview && viewBox) {
-        // Main canvas: use score coordinates (world space)
-        const normalized = normalizeViewport(stream.viewport);
-        viewportPx = {
-          x: normalized.x * viewBox.width,
-          y: normalized.y * viewBox.height,
-          w: normalized.w * viewBox.width,
-          h: normalized.h * viewBox.height
-        };
-      } else {
-        // Preview canvas: use CSS pixel coordinates
-        viewportPx = getViewportPx(stream.viewport, cssWidth, cssHeight);
-      }
+      const viewportPx = (!isPreview && viewBox)
+        ? getViewportWorldRect(stream.viewport, viewBox)
+        : getViewportPx(stream.viewport, cssWidth, cssHeight);
       
       const strokeColor = toRgba(stream.color?.hex, 1);
       const fillAlpha = Math.min(1, Math.max(0, stream.color?.alpha ?? 0));
@@ -370,23 +467,29 @@ export function initDrawing({ editor }) {
     if (mode === 'perform') return;
 
     const appliedMetrics = metrics || ensureDisplayMetrics();
-    const camera = state.editor.getCamera ? state.editor.getCamera() : { x: 0, y: 0, zoom: 1 };
-    const viewBox = appliedMetrics?.viewBox || (state.editor.getViewBox ? state.editor.getViewBox() : { width: 1000, height: 1000 });
-    const dpr = appliedMetrics?.dpr || window.devicePixelRatio || 1;
-    const worldScaleX = appliedMetrics?.worldScaleX || 1;
-    const worldScaleY = appliedMetrics?.worldScaleY || 1;
-    const translateX = (appliedMetrics?.offsetX || 0) + camera.x * camera.zoom * worldScaleX;
-    const translateY = (appliedMetrics?.offsetY || 0) + camera.y * camera.zoom * worldScaleY;
+    if (!appliedMetrics) return;
+    const camera = appliedMetrics.camera || (state.editor.getCamera ? state.editor.getCamera() : { x: 0, y: 0, zoom: 1 });
+    const viewBox = appliedMetrics.viewBox || (state.editor.getViewBox ? state.editor.getViewBox() : { width: 1000, height: 1000 });
+    const dpr = appliedMetrics.dpr || window.devicePixelRatio || 1;
+    const worldScaleX = appliedMetrics.worldScaleX || 1;
+    const worldScaleY = appliedMetrics.worldScaleY || 1;
+    const translateX = (appliedMetrics.offsetX || 0) + camera.x * camera.zoom * worldScaleX;
+    const translateY = (appliedMetrics.offsetY || 0) + camera.y * camera.zoom * worldScaleY;
 
     targetCtx.save();
-    targetCtx.setTransform(
-      camera.zoom * worldScaleX * dpr,
-      0,
-      0,
-      camera.zoom * worldScaleY * dpr,
-      translateX * dpr,
-      translateY * dpr
-    );
+    if (appliedMetrics.usesDomMatrix && appliedMetrics.worldToCanvasMatrix) {
+      const m = appliedMetrics.worldToCanvasMatrix;
+      targetCtx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
+    } else {
+      targetCtx.setTransform(
+        camera.zoom * worldScaleX * dpr,
+        0,
+        0,
+        camera.zoom * worldScaleY * dpr,
+        translateX * dpr,
+        translateY * dpr
+      );
+    }
 
     const dashPattern = [8 / camera.zoom, 4 / camera.zoom];
 
@@ -453,123 +556,155 @@ export function initDrawing({ editor }) {
     }
   };
 
+  const setViewportEditMode = (enabled, { broadcast = false } = {}) => {
+    const next = Boolean(enabled);
+    const changed = state.viewportEditMode !== next;
+    if (changed) {
+      state.viewportEditMode = next;
+      applyViewportEditMode();
+      requestRender();
+    }
+    if (broadcast) {
+      const event = new CustomEvent('mediamime:viewport-edit-mode', {
+        detail: {
+          enabled: next,
+          layerId: state.activeLayerId,
+          source: 'drawing'
+        },
+        bubbles: true
+      });
+      window.dispatchEvent(event);
+    }
+  };
+
   // Viewport handle interaction
-  const getHoveredViewportHandle = (clientX, clientY, metricsOverride = null, cameraOverride = null) => {
-    if (!state.viewportEditMode) return null;
-    if (!state.activeLayerId || !state.editor) return null;
-    const activeLayer = state.streams.find(s => s.id === state.activeLayerId);
-    if (!activeLayer) return null;
-    
+  const getHoveredViewportHandle = (clientX, clientY, metricsOverride = null, cameraOverride = null, options = {}) => {
+    if (!state.editor || !state.streams.length) return null;
+    const { anyLayer = false } = options;
     const camera = cameraOverride || (state.editor.getCamera ? state.editor.getCamera() : { x: 0, y: 0, zoom: 1 });
     const metrics = metricsOverride || ensureDisplayMetrics();
-    const viewBox = metrics?.viewBox || (state.editor.getViewBox ? state.editor.getViewBox() : { width: 1000, height: 1000 });
+    if (!metrics) return null;
+    const viewBox = metrics.viewBox || (state.editor.getViewBox ? state.editor.getViewBox() : { width: 1000, height: 1000 });
+    const baseTargets = anyLayer
+      ? state.streams
+      : state.streams.filter((stream) => stream.id === state.activeLayerId);
+    if (!baseTargets.length) return null;
+    const targets = anyLayer ? [...baseTargets].reverse() : baseTargets;
     const rect = canvas.getBoundingClientRect();
-    const cssX = clientX - rect.left;
-    const cssY = clientY - rect.top;
+    const cssX = metrics?.usesDomMatrix ? clientX : clientX - rect.left;
+    const cssY = metrics?.usesDomMatrix ? clientY : clientY - rect.top;
     const worldPoint = toWorldCoords(cssX, cssY, camera, metrics);
     const scoreX = worldPoint.x;
     const scoreY = worldPoint.y;
-    
-    // Get viewport in score coordinates
-    const normalized = normalizeViewport(activeLayer.viewport);
-    const vpX = normalized.x * viewBox.width;
-    const vpY = normalized.y * viewBox.height;
-    const vpW = normalized.w * viewBox.width;
-    const vpH = normalized.h * viewBox.height;
-    
-    const handleSize = 12 / camera.zoom;
-    const hitMargin = 4 / camera.zoom;
-    
-    // Check corner handles
-    const handles = [
-      { type: 'nw', x: vpX, y: vpY },
-      { type: 'ne', x: vpX + vpW, y: vpY },
-      { type: 'sw', x: vpX, y: vpY + vpH },
-      { type: 'se', x: vpX + vpW, y: vpY + vpH },
-    ];
-    
-    for (const handle of handles) {
-      const dx = Math.abs(scoreX - handle.x);
-      const dy = Math.abs(scoreY - handle.y);
-      if (dx <= handleSize / 2 + hitMargin && dy <= handleSize / 2 + hitMargin) {
-        return { type: 'handle', handleType: handle.type };
+    const zoom = camera?.zoom || 1;
+    const handleSize = 12 / zoom;
+    const hitMargin = 4 / zoom;
+
+    for (const stream of targets) {
+      const normalized = normalizeViewport(stream.viewport);
+      const vpX = normalized.x * viewBox.width;
+      const vpY = normalized.y * viewBox.height;
+      const vpW = normalized.w * viewBox.width;
+      const vpH = normalized.h * viewBox.height;
+
+      const handles = [
+        { type: 'nw', x: vpX, y: vpY },
+        { type: 'ne', x: vpX + vpW, y: vpY },
+        { type: 'sw', x: vpX, y: vpY + vpH },
+        { type: 'se', x: vpX + vpW, y: vpY + vpH }
+      ];
+
+      for (const handle of handles) {
+        const dx = Math.abs(scoreX - handle.x);
+        const dy = Math.abs(scoreY - handle.y);
+        if (dx <= handleSize / 2 + hitMargin && dy <= handleSize / 2 + hitMargin) {
+          return { type: 'handle', handleType: handle.type, stream };
+        }
+      }
+
+      if (scoreX >= vpX && scoreX <= vpX + vpW && scoreY >= vpY && scoreY <= vpY + vpH) {
+        return { type: 'move', stream };
       }
     }
-    
-    // Check if inside viewport rect (for move)
-    if (scoreX >= vpX && scoreX <= vpX + vpW &&
-        scoreY >= vpY && scoreY <= vpY + vpH) {
-      return { type: 'move' };
-    }
-    
+
     return null;
   };
 
   const handleCanvasPointerMove = (e) => {
-    if (!state.viewportEditMode) return; // ignore when mode is off
-    // Allow editor pan when spacebar is held (pass through)
     if (e.target !== canvas || state.spacebarPanning) return;
     const camera = state.editor?.getCamera ? state.editor.getCamera() : { x: 0, y: 0, zoom: 1 };
     const metrics = ensureDisplayMetrics();
-    const viewBox = metrics?.viewBox || (state.editor?.getViewBox ? state.editor.getViewBox() : { width: 1000, height: 1000 });
+    if (!metrics) return;
+    const viewBox = metrics.viewBox || (state.editor?.getViewBox ? state.editor.getViewBox() : { width: 1000, height: 1000 });
+
     if (state.viewportDragState) {
       e.preventDefault();
       e.stopPropagation();
-      
-      const activeLayer = state.streams.find(s => s.id === state.activeLayerId);
-      if (!activeLayer || !state.editor) return;
-      
+
+      const layerId = state.viewportDragState.layerId || state.activeLayerId;
+      const activeLayer = state.streams.find((s) => s.id === layerId);
+      if (!activeLayer) return;
+
       const rect = canvas.getBoundingClientRect();
-      const cssX = e.clientX - rect.left;
-      const cssY = e.clientY - rect.top;
+      const cssX = metrics?.usesDomMatrix ? e.clientX : e.clientX - rect.left;
+      const cssY = metrics?.usesDomMatrix ? e.clientY : e.clientY - rect.top;
       const worldPoint = toWorldCoords(cssX, cssY, camera, metrics);
       const scoreX = worldPoint.x;
       const scoreY = worldPoint.y;
-      
+
       const dx = scoreX - state.viewportDragState.startScoreX;
       const dy = scoreY - state.viewportDragState.startScoreY;
       const deltaX = dx / viewBox.width;
       const deltaY = dy / viewBox.height;
-      
-      let newViewport = { ...activeLayer.viewport };
+
+      let newViewport = { ...state.viewportDragState.initialViewport };
       const minSize = 0.05;
-      const init = state.viewportDragState.initialViewport;
-      
+
       if (state.viewportDragState.handleType === 'move') {
-        // Allow viewport to move anywhere (no clamping like editor shapes)
-        newViewport.x = init.x + deltaX;
-        newViewport.y = init.y + deltaY;
+        newViewport.x = newViewport.x + deltaX;
+        newViewport.y = newViewport.y + deltaY;
       } else if (state.viewportDragState.handleType === 'nw') {
-        // Allow unrestricted resize with minimum size enforcement only
-        const newX = Math.min(init.x + init.w - minSize, init.x + deltaX);
-        const newY = Math.min(init.y + init.h - minSize, init.y + deltaY);
-        newViewport.w = init.x + init.w - newX;
-        newViewport.h = init.y + init.h - newY;
+        const newX = Math.min(newViewport.x + newViewport.w - minSize, newViewport.x + deltaX);
+        const newY = Math.min(newViewport.y + newViewport.h - minSize, newViewport.y + deltaY);
+        newViewport.w = newViewport.x + newViewport.w - newX;
+        newViewport.h = newViewport.y + newViewport.h - newY;
         newViewport.x = newX;
         newViewport.y = newY;
       } else if (state.viewportDragState.handleType === 'ne') {
-        const newY = Math.min(init.y + init.h - minSize, init.y + deltaY);
-        newViewport.w = Math.max(minSize, init.w + deltaX);
-        newViewport.h = init.y + init.h - newY;
+        const newY = Math.min(newViewport.y + newViewport.h - minSize, newViewport.y + deltaY);
+        newViewport.w = Math.max(minSize, newViewport.w + deltaX);
+        newViewport.h = newViewport.y + newViewport.h - newY;
         newViewport.y = newY;
       } else if (state.viewportDragState.handleType === 'sw') {
-        const newX = Math.min(init.x + init.w - minSize, init.x + deltaX);
-        newViewport.w = init.x + init.w - newX;
-        newViewport.h = Math.max(minSize, init.h + deltaY);
+        const newX = Math.min(newViewport.x + newViewport.w - minSize, newViewport.x + deltaX);
+        newViewport.w = newViewport.x + newViewport.w - newX;
+        newViewport.h = Math.max(minSize, newViewport.h + deltaY);
         newViewport.x = newX;
       } else if (state.viewportDragState.handleType === 'se') {
-        newViewport.w = Math.max(minSize, init.w + deltaX);
-        newViewport.h = Math.max(minSize, init.h + deltaY);
+        newViewport.w = Math.max(minSize, newViewport.w + deltaX);
+        newViewport.h = Math.max(minSize, newViewport.h + deltaY);
       }
-      
+
       activeLayer.viewport = newViewport;
       activeLayer.viewportMode = 'custom';
       dispatchLayerViewportUpdate(activeLayer);
       requestRender();
       return;
     }
-    
-    const hovered = getHoveredViewportHandle(e.clientX, e.clientY, metrics, camera);
+
+    if (!isSelectToolActive()) {
+      canvas.style.cursor = '';
+      return;
+    }
+
+    const hovered = getHoveredViewportHandle(
+      e.clientX,
+      e.clientY,
+      metrics,
+      camera,
+      { anyLayer: !state.viewportEditMode }
+    );
+
     if (hovered) {
       const cursors = {
         nw: 'nwse-resize',
@@ -585,35 +720,49 @@ export function initDrawing({ editor }) {
   };
 
   const handleCanvasPointerDown = (e) => {
-    if (!state.viewportEditMode) return;
     if (state.spacebarPanning) return;
+    if (e.button !== 0) return;
+    if (!isSelectToolActive()) return;
+
     const camera = state.editor?.getCamera ? state.editor.getCamera() : { x: 0, y: 0, zoom: 1 };
     const metrics = ensureDisplayMetrics();
-    const hovered = getHoveredViewportHandle(e.clientX, e.clientY, metrics, camera);
-    if (hovered) {
-      e.preventDefault();
-      e.stopPropagation();
-      const activeLayer = state.streams.find(s => s.id === state.activeLayerId);
-      if (!activeLayer || !state.editor) return;
-      const rect = canvas.getBoundingClientRect();
-      const cssX = e.clientX - rect.left;
-      const cssY = e.clientY - rect.top;
-      const worldPoint = toWorldCoords(cssX, cssY, camera, metrics);
-      const scoreX = worldPoint.x;
-      const scoreY = worldPoint.y;
-      state.viewportDragState = {
-        handleType: hovered.handleType || hovered.type,
-        startScoreX: scoreX,
-        startScoreY: scoreY,
-        initialViewport: { ...activeLayer.viewport }
-      };
-      canvas.setPointerCapture(e.pointerId);
-    } else {
-      // Clicked outside viewport frame/handles: disable viewport edit mode
-      state.viewportEditMode = false;
-      applyViewportEditMode();
-      requestRender();
+    if (!metrics) return;
+
+    const hovered = getHoveredViewportHandle(e.clientX, e.clientY, metrics, camera, { anyLayer: true });
+    if (!hovered) {
+      if (state.viewportEditMode) {
+        setViewportEditMode(false, { broadcast: true });
+      }
+      canvas.style.cursor = '';
+      return;
     }
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (hovered.stream && hovered.stream.id !== state.activeLayerId) {
+      emitLayerSelection(hovered.stream.id);
+    }
+
+    if (!state.viewportEditMode) {
+      setViewportEditMode(true, { broadcast: true });
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    const cssX = metrics?.usesDomMatrix ? e.clientX : e.clientX - rect.left;
+    const cssY = metrics?.usesDomMatrix ? e.clientY : e.clientY - rect.top;
+    const worldPoint = toWorldCoords(cssX, cssY, camera, metrics);
+
+    const initialViewport = hovered.stream?.viewport ? { ...hovered.stream.viewport } : { x: 0, y: 0, w: 1, h: 1 };
+    state.viewportDragState = {
+      handleType: hovered.handleType || hovered.type,
+      layerId: hovered.stream?.id || state.activeLayerId,
+      startScoreX: worldPoint.x,
+      startScoreY: worldPoint.y,
+      initialViewport
+    };
+
+    canvas.setPointerCapture(e.pointerId);
   };
 
   const handleCanvasPointerUp = (e) => {
@@ -719,13 +868,14 @@ export function initDrawing({ editor }) {
 
   // Handle layer selection from layers panel
   const handleLayerSelection = (e) => {
-    state.activeLayerId = e.detail.layerId;
+    state.activeLayerId = e?.detail?.layerId || null;
     applyViewportEditMode();
     requestRender();
   };
 
   // Handle camera changes from editor (zoom/pan)
   const handleCameraChange = () => {
+    state.displayMetrics = null;
     requestRender();
   };
 
@@ -734,8 +884,7 @@ export function initDrawing({ editor }) {
     if (!mode || mode === state.editorMode) return;
     state.editorMode = mode;
     if (mode === 'perform' && state.viewportEditMode) {
-      state.viewportEditMode = false;
-      applyViewportEditMode();
+      setViewportEditMode(false, { broadcast: true });
     }
     requestRender();
   };
@@ -748,11 +897,13 @@ export function initDrawing({ editor }) {
 
   // Viewport edit mode from Layers panel
   const handleViewportEditMode = (e) => {
-    state.viewportEditMode = Boolean(e?.detail?.enabled);
-    // Optionally track layerId from the event
-    if (e?.detail?.layerId) state.activeLayerId = e.detail.layerId;
-    applyViewportEditMode();
-    requestRender();
+    const source = e?.detail?.source;
+    const enabled = Boolean(e?.detail?.enabled);
+    if (e?.detail?.layerId) {
+      state.activeLayerId = e.detail.layerId;
+    }
+    if (source === 'drawing') return;
+    setViewportEditMode(enabled);
   };
   window.addEventListener('mediamime:viewport-edit-mode', handleViewportEditMode);
 

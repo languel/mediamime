@@ -338,7 +338,8 @@ export function initLayers({ editor }) {
     const event = new CustomEvent('mediamime:viewport-edit-mode', {
       detail: {
         enabled: Boolean(enabled),
-        layerId: state.activeId
+        layerId: state.activeId,
+        source: 'layers'
       },
       bubbles: true
     });
@@ -718,7 +719,7 @@ export function initLayers({ editor }) {
     
     // Dispatch layer selection event
     const event2 = new CustomEvent('mediamime:layer-selected', {
-      detail: { layerId: id },
+      detail: { layerId: id, source: 'layers' },
       bubbles: true
     });
     window.dispatchEvent(event2);
@@ -852,13 +853,34 @@ export function initLayers({ editor }) {
   };
   window.addEventListener('mediamime:layer-viewport-changed', handleViewportUpdate);
 
-  // Ensure viewport edit mode follows active layer changes
-  window.addEventListener('mediamime:layer-selected', () => {
+  const handleExternalViewportMode = (event) => {
+    if (event?.detail?.source === 'layers') return;
+    const enabled = Boolean(event?.detail?.enabled);
+    if (viewportEditOn === enabled) return;
+    viewportEditOn = enabled;
+    if (editViewportBtn) {
+      editViewportBtn.setAttribute('aria-pressed', String(enabled));
+    }
+  };
+  window.addEventListener('mediamime:viewport-edit-mode', handleExternalViewportMode);
+
+  const handleLayerSelectedEvent = (event) => {
+    const source = event?.detail?.source;
+    const layerId = event?.detail?.layerId || null;
+    if (source !== 'layers') {
+      if (layerId && layerId !== state.activeId && state.streams.some((stream) => stream.id === layerId)) {
+        state.activeId = layerId;
+        updateUI();
+      } else if (!layerId && state.activeId) {
+        state.activeId = null;
+        updateUI();
+      }
+    }
     if (editViewportBtn && viewportEditOn) {
-      // Re-emit to ensure drawing module updates active layer id
       dispatchViewportEditMode(true);
     }
-  });
+  };
+  window.addEventListener('mediamime:layer-selected', handleLayerSelectedEvent);
 
   return {
     getStreams: () =>
@@ -874,6 +896,8 @@ export function initLayers({ editor }) {
         window.removeEventListener("mediamime:input-list-changed", inputListHandler);
       }
       window.removeEventListener('mediamime:layer-viewport-changed', handleViewportUpdate);
+      window.removeEventListener('mediamime:viewport-edit-mode', handleExternalViewportMode);
+      window.removeEventListener('mediamime:layer-selected', handleLayerSelectedEvent);
       if (state.colorPicker && typeof state.colorPicker.destroy === "function") {
         state.colorPicker.destroy();
       }
