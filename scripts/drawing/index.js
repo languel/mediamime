@@ -189,7 +189,11 @@ export function initDrawing({ editor }) {
     activeLayerId: null, // Track selected layer for viewport editing
     viewportDragState: null, // Track viewport drag interaction
     editor, // Store editor reference for camera transform
-    viewportEditMode: false // Controlled by Layers panel toggle
+    viewportEditMode: false, // Controlled by Layers panel toggle
+    spacebarPanning: false, // Track when editor is panning with spacebar
+    editorMode: editor?.getMode ? editor.getMode() : 'edit',
+    svg: document.getElementById('gesture-svg') || null,
+    displayMetrics: null
   };
 
   const getViewportPx = (viewport, width, height) => {
@@ -202,22 +206,87 @@ export function initDrawing({ editor }) {
     };
   };
 
-  const renderTo = (targetCtx, width, height, { isPreview = false } = {}) => {
-    targetCtx.clearRect(0, 0, width, height);
-    // Don't fill background - keep it transparent for layer compositing
-    if (!state.streams.length) return;
-    
-    // Apply camera transform for main canvas (not preview)
-    const camera = !isPreview && state.editor ? (state.editor.getCamera ? state.editor.getCamera() : null) : null;
-    const viewBox = !isPreview && state.editor ? (state.editor.getViewBox ? state.editor.getViewBox() : null) : null;
+  const ensureDisplayMetrics = () => {
     const dpr = window.devicePixelRatio || 1;
-    
-    if (camera && !isPreview) {
-      targetCtx.save();
-      targetCtx.translate(camera.x * dpr, camera.y * dpr);
-      targetCtx.scale(camera.zoom, camera.zoom);
+    const canvasRect = canvas.getBoundingClientRect();
+    const shouldRefresh =
+      !state.displayMetrics ||
+      state.displayMetrics.dpr !== dpr ||
+      state.displayMetrics.cssWidth !== canvasRect.width ||
+      state.displayMetrics.cssHeight !== canvasRect.height;
+
+    if (shouldRefresh) {
+      const svgElement = state.svg || document.getElementById('gesture-svg');
+      if (!state.svg && svgElement) {
+        state.svg = svgElement;
+      }
+      const svgRect = svgElement ? svgElement.getBoundingClientRect() : canvasRect;
+      const viewBox = state.editor?.getViewBox ? state.editor.getViewBox() : { width: canvasRect.width || 1, height: canvasRect.height || 1 };
+      const worldScaleX = viewBox.width ? svgRect.width / viewBox.width : 1;
+      const worldScaleY = viewBox.height ? svgRect.height / viewBox.height : 1;
+
+      state.displayMetrics = {
+        dpr,
+        cssWidth: canvasRect.width,
+        cssHeight: canvasRect.height,
+        worldScaleX,
+        worldScaleY,
+        offsetX: svgRect.left - canvasRect.left,
+        offsetY: svgRect.top - canvasRect.top,
+        viewBox
+      };
+    } else if (state.editor?.getViewBox) {
+      state.displayMetrics.viewBox = state.editor.getViewBox();
     }
-    
+
+    return state.displayMetrics;
+  };
+
+  const toWorldCoords = (cssX, cssY, camera, metrics) => {
+    const scaleX = (camera?.zoom || 1) * (metrics?.worldScaleX || 1);
+    const scaleY = (camera?.zoom || 1) * (metrics?.worldScaleY || 1);
+    const offsetX = metrics?.offsetX || 0;
+    const offsetY = metrics?.offsetY || 0;
+    const worldX = ((cssX - offsetX) / (scaleX || 1)) - (camera?.x || 0);
+    const worldY = ((cssY - offsetY) / (scaleY || 1)) - (camera?.y || 0);
+    return { x: worldX, y: worldY };
+  };
+
+  const renderTo = (targetCtx, width, height, metrics, { isPreview = false } = {}) => {
+    const globalDpr = window.devicePixelRatio || 1;
+    const cssWidth = width / globalDpr;
+    const cssHeight = height / globalDpr;
+
+    // Reset transform to identity and clear full buffer
+    targetCtx.setTransform(1, 0, 0, 1, 0, 0);
+    targetCtx.clearRect(0, 0, width, height);
+
+    // Keep canvas transparent when no streams
+    if (!state.streams.length) return;
+
+    // Apply camera transform for main canvas (not preview)
+  const camera = !isPreview && state.editor ? (state.editor.getCamera ? state.editor.getCamera() : null) : null;
+  const viewBox = !isPreview && state.editor ? (metrics?.viewBox || (state.editor.getViewBox ? state.editor.getViewBox() : null)) : null;
+
+    if (!isPreview && camera && viewBox && metrics) {
+      const baseScaleX = camera.zoom * (metrics.worldScaleX || 1);
+      const baseScaleY = camera.zoom * (metrics.worldScaleY || 1);
+      const translateX = (metrics.offsetX || 0) + camera.x * baseScaleX;
+      const translateY = (metrics.offsetY || 0) + camera.y * baseScaleY;
+      const appliedDpr = metrics.dpr || globalDpr;
+      targetCtx.setTransform(
+        baseScaleX * appliedDpr,
+        0,
+        0,
+        baseScaleY * appliedDpr,
+        translateX * appliedDpr,
+        translateY * appliedDpr
+      );
+    } else {
+      const appliedDpr = metrics?.dpr || globalDpr;
+      targetCtx.setTransform(appliedDpr, 0, 0, appliedDpr, 0, 0);
+    }
+
     state.streams.forEach((stream) => {
       if (!stream.enabled) return;
       // Only respect the preview toggle for the preview canvas; main canvas shows all enabled layers
@@ -228,17 +297,17 @@ export function initDrawing({ editor }) {
       // Calculate viewport in appropriate coordinate space
       let viewportPx;
       if (!isPreview && viewBox) {
-        // Main canvas: use score coordinates
+        // Main canvas: use score coordinates (world space)
         const normalized = normalizeViewport(stream.viewport);
         viewportPx = {
-          x: normalized.x * viewBox.width * dpr,
-          y: normalized.y * viewBox.height * dpr,
-          w: normalized.w * viewBox.width * dpr,
-          h: normalized.h * viewBox.height * dpr
+          x: normalized.x * viewBox.width,
+          y: normalized.y * viewBox.height,
+          w: normalized.w * viewBox.width,
+          h: normalized.h * viewBox.height
         };
       } else {
-        // Preview canvas: use canvas pixel coordinates
-        viewportPx = getViewportPx(stream.viewport, width, height);
+        // Preview canvas: use CSS pixel coordinates
+        viewportPx = getViewportPx(stream.viewport, cssWidth, cssHeight);
       }
       
       const strokeColor = toRgba(stream.color?.hex, 1);
@@ -280,74 +349,88 @@ export function initDrawing({ editor }) {
       }
       targetCtx.restore();
     });
-    
-    if (camera && !isPreview) {
-      targetCtx.restore();
-    }
+
+    // Restore identity matrix for downstream operations
+    targetCtx.setTransform(1, 0, 0, 1, 0, 0);
   };
 
   const render = () => {
     state.pendingRender = false;
-    renderTo(ctx, canvas.width, canvas.height, { isPreview: false });
-    renderViewportHandles(ctx, canvas.width, canvas.height);
+    const metrics = ensureDisplayMetrics();
+    renderTo(ctx, canvas.width, canvas.height, metrics, { isPreview: false });
+    renderViewportOverlay(ctx, metrics);
     if (state.previewCtx && state.previewCanvas) {
-      renderTo(state.previewCtx, state.previewCanvas.width, state.previewCanvas.height, { isPreview: true });
+      renderTo(state.previewCtx, state.previewCanvas.width, state.previewCanvas.height, null, { isPreview: true });
     }
   };
 
-  const renderViewportHandles = (targetCtx, width, height) => {
-    // Only render when explicit viewport edit mode is enabled
-    if (!state.viewportEditMode) return;
-    if (!state.activeLayerId || !state.editor) return;
-    const activeLayer = state.streams.find(s => s.id === state.activeLayerId);
-    if (!activeLayer || !activeLayer.enabled) return;
-    
-    // Get camera transform from editor
+  const renderViewportOverlay = (targetCtx, metrics) => {
+    if (!state.editor) return;
+    const mode = state.editorMode ?? (state.editor.getMode ? state.editor.getMode() : 'edit');
+    if (mode === 'perform') return;
+
+    const appliedMetrics = metrics || ensureDisplayMetrics();
     const camera = state.editor.getCamera ? state.editor.getCamera() : { x: 0, y: 0, zoom: 1 };
-    const viewBox = state.editor.getViewBox ? state.editor.getViewBox() : { width: 1000, height: 1000 };
-    const dpr = window.devicePixelRatio || 1;
-    
-    // Get viewport in score coordinates (0-1 normalized to viewBox)
-    const normalized = normalizeViewport(activeLayer.viewport);
-    const scoreX = normalized.x * viewBox.width;
-    const scoreY = normalized.y * viewBox.height;
-    const scoreW = normalized.w * viewBox.width;
-    const scoreH = normalized.h * viewBox.height;
-    
-    // Use layer color for handles
-    const layerColor = toRgba(activeLayer.color?.hex, 1) || '#00e0ff';
-    
+    const viewBox = appliedMetrics?.viewBox || (state.editor.getViewBox ? state.editor.getViewBox() : { width: 1000, height: 1000 });
+    const dpr = appliedMetrics?.dpr || window.devicePixelRatio || 1;
+    const worldScaleX = appliedMetrics?.worldScaleX || 1;
+    const worldScaleY = appliedMetrics?.worldScaleY || 1;
+    const translateX = (appliedMetrics?.offsetX || 0) + camera.x * camera.zoom * worldScaleX;
+    const translateY = (appliedMetrics?.offsetY || 0) + camera.y * camera.zoom * worldScaleY;
+
     targetCtx.save();
-    
-    // Apply camera transform (matching SVG shapesLayer transform)
-    targetCtx.translate(camera.x * dpr, camera.y * dpr);
-    targetCtx.scale(camera.zoom, camera.zoom);
-    
-    // Draw viewport rectangle outline
-    targetCtx.strokeStyle = layerColor;
-    targetCtx.lineWidth = 2 * dpr / camera.zoom;
-    targetCtx.setLineDash([8 * dpr / camera.zoom, 4 * dpr / camera.zoom]);
-    targetCtx.strokeRect(scoreX * dpr, scoreY * dpr, scoreW * dpr, scoreH * dpr);
-    
-    // Draw corner handles
-    const handleSize = 12 * dpr / camera.zoom;
-    const handles = [
-      { x: scoreX * dpr, y: scoreY * dpr },
-      { x: (scoreX + scoreW) * dpr, y: scoreY * dpr },
-      { x: scoreX * dpr, y: (scoreY + scoreH) * dpr },
-      { x: (scoreX + scoreW) * dpr, y: (scoreY + scoreH) * dpr }
-    ];
-    
-    handles.forEach(handle => {
-      targetCtx.fillStyle = layerColor;
-      targetCtx.fillRect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
-      targetCtx.strokeStyle = '#05070d';
-      targetCtx.lineWidth = 1.5 * dpr / camera.zoom;
-      targetCtx.setLineDash([]);
-      targetCtx.strokeRect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
+    targetCtx.setTransform(
+      camera.zoom * worldScaleX * dpr,
+      0,
+      0,
+      camera.zoom * worldScaleY * dpr,
+      translateX * dpr,
+      translateY * dpr
+    );
+
+    const dashPattern = [8 / camera.zoom, 4 / camera.zoom];
+
+    state.streams.forEach((stream) => {
+      if (!stream?.enabled) return;
+      const normalized = normalizeViewport(stream.viewport);
+      const scoreX = normalized.x * viewBox.width;
+      const scoreY = normalized.y * viewBox.height;
+      const scoreW = normalized.w * viewBox.width;
+      const scoreH = normalized.h * viewBox.height;
+
+      const layerColor = toRgba(stream.color?.hex, 1) || '#00e0ff';
+      const isActive = state.viewportEditMode && stream.id === state.activeLayerId;
+
+      targetCtx.save();
+      targetCtx.globalAlpha = isActive ? 1 : 0.6;
+      targetCtx.strokeStyle = layerColor;
+      targetCtx.lineWidth = 2 / camera.zoom;
+      targetCtx.setLineDash(dashPattern);
+      targetCtx.strokeRect(scoreX, scoreY, scoreW, scoreH);
+
+      if (isActive) {
+        const handleSize = 12 / camera.zoom;
+        const handles = [
+          { x: scoreX, y: scoreY },
+          { x: scoreX + scoreW, y: scoreY },
+          { x: scoreX, y: scoreY + scoreH },
+          { x: scoreX + scoreW, y: scoreY + scoreH }
+        ];
+        handles.forEach((handle) => {
+          targetCtx.fillStyle = layerColor;
+          targetCtx.fillRect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
+          targetCtx.strokeStyle = '#05070d';
+          targetCtx.lineWidth = 1.5 / camera.zoom;
+          targetCtx.setLineDash([]);
+          targetCtx.strokeRect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
+        });
+      }
+
+      targetCtx.restore();
     });
-    
+
     targetCtx.restore();
+    targetCtx.setTransform(1, 0, 0, 1, 0, 0);
   };
 
   const requestRender = () => {
@@ -371,22 +454,21 @@ export function initDrawing({ editor }) {
   };
 
   // Viewport handle interaction
-  const getHoveredViewportHandle = (clientX, clientY) => {
+  const getHoveredViewportHandle = (clientX, clientY, metricsOverride = null, cameraOverride = null) => {
     if (!state.viewportEditMode) return null;
     if (!state.activeLayerId || !state.editor) return null;
     const activeLayer = state.streams.find(s => s.id === state.activeLayerId);
     if (!activeLayer) return null;
     
-    const camera = state.editor.getCamera ? state.editor.getCamera() : { x: 0, y: 0, zoom: 1 };
-    const viewBox = state.editor.getViewBox ? state.editor.getViewBox() : { width: 1000, height: 1000 };
+    const camera = cameraOverride || (state.editor.getCamera ? state.editor.getCamera() : { x: 0, y: 0, zoom: 1 });
+    const metrics = metricsOverride || ensureDisplayMetrics();
+    const viewBox = metrics?.viewBox || (state.editor.getViewBox ? state.editor.getViewBox() : { width: 1000, height: 1000 });
     const rect = canvas.getBoundingClientRect();
-    const canvasX = clientX - rect.left;
-    const canvasY = clientY - rect.top;
-    const dpr = window.devicePixelRatio || 1;
-    
-    // Convert to score space
-    const scoreX = (canvasX * dpr - camera.x * dpr) / camera.zoom / dpr;
-    const scoreY = (canvasY * dpr - camera.y * dpr) / camera.zoom / dpr;
+    const cssX = clientX - rect.left;
+    const cssY = clientY - rect.top;
+    const worldPoint = toWorldCoords(cssX, cssY, camera, metrics);
+    const scoreX = worldPoint.x;
+    const scoreY = worldPoint.y;
     
     // Get viewport in score coordinates
     const normalized = normalizeViewport(activeLayer.viewport);
@@ -425,6 +507,11 @@ export function initDrawing({ editor }) {
 
   const handleCanvasPointerMove = (e) => {
     if (!state.viewportEditMode) return; // ignore when mode is off
+    // Allow editor pan when spacebar is held (pass through)
+    if (e.target !== canvas || state.spacebarPanning) return;
+    const camera = state.editor?.getCamera ? state.editor.getCamera() : { x: 0, y: 0, zoom: 1 };
+    const metrics = ensureDisplayMetrics();
+    const viewBox = metrics?.viewBox || (state.editor?.getViewBox ? state.editor.getViewBox() : { width: 1000, height: 1000 });
     if (state.viewportDragState) {
       e.preventDefault();
       e.stopPropagation();
@@ -432,15 +519,12 @@ export function initDrawing({ editor }) {
       const activeLayer = state.streams.find(s => s.id === state.activeLayerId);
       if (!activeLayer || !state.editor) return;
       
-      const camera = state.editor.getCamera ? state.editor.getCamera() : { x: 0, y: 0, zoom: 1 };
-      const viewBox = state.editor.getViewBox ? state.editor.getViewBox() : { width: 1000, height: 1000 };
       const rect = canvas.getBoundingClientRect();
-      const canvasX = e.clientX - rect.left;
-      const canvasY = e.clientY - rect.top;
-      const dpr = window.devicePixelRatio || 1;
-      
-      const scoreX = (canvasX * dpr - camera.x * dpr) / camera.zoom / dpr;
-      const scoreY = (canvasY * dpr - camera.y * dpr) / camera.zoom / dpr;
+      const cssX = e.clientX - rect.left;
+      const cssY = e.clientY - rect.top;
+      const worldPoint = toWorldCoords(cssX, cssY, camera, metrics);
+      const scoreX = worldPoint.x;
+      const scoreY = worldPoint.y;
       
       const dx = scoreX - state.viewportDragState.startScoreX;
       const dy = scoreY - state.viewportDragState.startScoreY;
@@ -452,28 +536,30 @@ export function initDrawing({ editor }) {
       const init = state.viewportDragState.initialViewport;
       
       if (state.viewportDragState.handleType === 'move') {
-        newViewport.x = Math.max(0, Math.min(1 - newViewport.w, init.x + deltaX));
-        newViewport.y = Math.max(0, Math.min(1 - newViewport.h, init.y + deltaY));
+        // Allow viewport to move anywhere (no clamping like editor shapes)
+        newViewport.x = init.x + deltaX;
+        newViewport.y = init.y + deltaY;
       } else if (state.viewportDragState.handleType === 'nw') {
-        const newX = Math.max(0, Math.min(init.x + init.w - minSize, init.x + deltaX));
-        const newY = Math.max(0, Math.min(init.y + init.h - minSize, init.y + deltaY));
+        // Allow unrestricted resize with minimum size enforcement only
+        const newX = Math.min(init.x + init.w - minSize, init.x + deltaX);
+        const newY = Math.min(init.y + init.h - minSize, init.y + deltaY);
         newViewport.w = init.x + init.w - newX;
         newViewport.h = init.y + init.h - newY;
         newViewport.x = newX;
         newViewport.y = newY;
       } else if (state.viewportDragState.handleType === 'ne') {
-        const newY = Math.max(0, Math.min(init.y + init.h - minSize, init.y + deltaY));
-        newViewport.w = Math.max(minSize, Math.min(1 - init.x, init.w + deltaX));
+        const newY = Math.min(init.y + init.h - minSize, init.y + deltaY);
+        newViewport.w = Math.max(minSize, init.w + deltaX);
         newViewport.h = init.y + init.h - newY;
         newViewport.y = newY;
       } else if (state.viewportDragState.handleType === 'sw') {
-        const newX = Math.max(0, Math.min(init.x + init.w - minSize, init.x + deltaX));
+        const newX = Math.min(init.x + init.w - minSize, init.x + deltaX);
         newViewport.w = init.x + init.w - newX;
-        newViewport.h = Math.max(minSize, Math.min(1 - init.y, init.h + deltaY));
+        newViewport.h = Math.max(minSize, init.h + deltaY);
         newViewport.x = newX;
       } else if (state.viewportDragState.handleType === 'se') {
-        newViewport.w = Math.max(minSize, Math.min(1 - init.x, init.w + deltaX));
-        newViewport.h = Math.max(minSize, Math.min(1 - init.y, init.h + deltaY));
+        newViewport.w = Math.max(minSize, init.w + deltaX);
+        newViewport.h = Math.max(minSize, init.h + deltaY);
       }
       
       activeLayer.viewport = newViewport;
@@ -483,7 +569,7 @@ export function initDrawing({ editor }) {
       return;
     }
     
-    const hovered = getHoveredViewportHandle(e.clientX, e.clientY);
+    const hovered = getHoveredViewportHandle(e.clientX, e.clientY, metrics, camera);
     if (hovered) {
       const cursors = {
         nw: 'nwse-resize',
@@ -499,24 +585,22 @@ export function initDrawing({ editor }) {
   };
 
   const handleCanvasPointerDown = (e) => {
-    if (!state.viewportEditMode) return; // ignore when mode is off
-    const hovered = getHoveredViewportHandle(e.clientX, e.clientY);
+    if (!state.viewportEditMode) return;
+    if (state.spacebarPanning) return;
+    const camera = state.editor?.getCamera ? state.editor.getCamera() : { x: 0, y: 0, zoom: 1 };
+    const metrics = ensureDisplayMetrics();
+    const hovered = getHoveredViewportHandle(e.clientX, e.clientY, metrics, camera);
     if (hovered) {
       e.preventDefault();
       e.stopPropagation();
-      
       const activeLayer = state.streams.find(s => s.id === state.activeLayerId);
       if (!activeLayer || !state.editor) return;
-      
-      const camera = state.editor.getCamera ? state.editor.getCamera() : { x: 0, y: 0, zoom: 1 };
       const rect = canvas.getBoundingClientRect();
-      const canvasX = e.clientX - rect.left;
-      const canvasY = e.clientY - rect.top;
-      const dpr = window.devicePixelRatio || 1;
-      
-      const scoreX = (canvasX * dpr - camera.x * dpr) / camera.zoom / dpr;
-      const scoreY = (canvasY * dpr - camera.y * dpr) / camera.zoom / dpr;
-      
+      const cssX = e.clientX - rect.left;
+      const cssY = e.clientY - rect.top;
+      const worldPoint = toWorldCoords(cssX, cssY, camera, metrics);
+      const scoreX = worldPoint.x;
+      const scoreY = worldPoint.y;
       state.viewportDragState = {
         handleType: hovered.handleType || hovered.type,
         startScoreX: scoreX,
@@ -525,11 +609,10 @@ export function initDrawing({ editor }) {
       };
       canvas.setPointerCapture(e.pointerId);
     } else {
-      if (state.activeLayerId) {
-        state.activeLayerId = null;
-        applyViewportEditMode();
-        requestRender();
-      }
+      // Clicked outside viewport frame/handles: disable viewport edit mode
+      state.viewportEditMode = false;
+      applyViewportEditMode();
+      requestRender();
     }
   };
 
@@ -568,6 +651,7 @@ export function initDrawing({ editor }) {
       canvas.width = nextWidth;
       canvas.height = nextHeight;
     }
+    state.displayMetrics = null;
     requestRender();
   };
 
@@ -645,10 +729,22 @@ export function initDrawing({ editor }) {
     requestRender();
   };
 
+  const handleEditorModeChange = (event) => {
+    const mode = event?.detail?.mode;
+    if (!mode || mode === state.editorMode) return;
+    state.editorMode = mode;
+    if (mode === 'perform' && state.viewportEditMode) {
+      state.viewportEditMode = false;
+      applyViewportEditMode();
+    }
+    requestRender();
+  };
+
   window.addEventListener(LAYERS_EVENT, handleLayerUpdate);
   window.addEventListener(HOLO_EVENT, handleHolisticResults);
   window.addEventListener('mediamime:layer-selected', handleLayerSelection);
   window.addEventListener('mediamime:camera-changed', handleCameraChange);
+  window.addEventListener('mediamime:editor-mode-changed', handleEditorModeChange);
 
   // Viewport edit mode from Layers panel
   const handleViewportEditMode = (e) => {
@@ -660,6 +756,20 @@ export function initDrawing({ editor }) {
   };
   window.addEventListener('mediamime:viewport-edit-mode', handleViewportEditMode);
 
+  // Track spacebar for editor pan pass-through
+  const handleKeyDown = (e) => {
+    if (e.code === 'Space' && !e.repeat) {
+      state.spacebarPanning = true;
+    }
+  };
+  const handleKeyUp = (e) => {
+    if (e.code === 'Space') {
+      state.spacebarPanning = false;
+    }
+  };
+  window.addEventListener('keydown', handleKeyDown);
+  window.addEventListener('keyup', handleKeyUp);
+
   // Initialize overlay interactivity state
   applyViewportEditMode();
 
@@ -669,8 +779,11 @@ export function initDrawing({ editor }) {
       window.removeEventListener(HOLO_EVENT, handleHolisticResults);
       window.removeEventListener('mediamime:layer-selected', handleLayerSelection);
       window.removeEventListener('mediamime:camera-changed', handleCameraChange);
-  window.removeEventListener('mediamime:viewport-edit-mode', handleViewportEditMode);
-  applyViewportEditMode();
+  window.removeEventListener('mediamime:editor-mode-changed', handleEditorModeChange);
+      window.removeEventListener('mediamime:viewport-edit-mode', handleViewportEditMode);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      applyViewportEditMode();
       
       // Clean up canvas listeners
       canvas.removeEventListener('pointermove', handleCanvasPointerMove);

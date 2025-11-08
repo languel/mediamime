@@ -241,19 +241,20 @@ class Editor {
         selection: Array.from(this.state.selectedShapeIds)
       }),
       // Add basic shape management APIs for import/export workflows
-      addShape: (shape) => this.addShape(shape),
+  addShape: (shape, options) => this.addShape(shape, options),
       replaceShapes: (shapes) => this.replaceShapes(shapes),
       setTool: (tool) => this.setTool(tool),
       updateShape: (shapeId, mutator) => this.updateShape(shapeId, mutator),
       selectShape: (shapeId) => this.selectShape(shapeId),
-      deleteShape: (shapeId) => this.deleteShape(shapeId),
+  deleteShape: (shapeId, options) => this.deleteShape(shapeId, options),
       on: (event, handler) => this.on(event, handler),
       off: (event, handler) => this.off(event, handler),
       normalizePoint: (clientPoint, options) => this.normalizeClientPoint(clientPoint, options),
       shapeContainsPoint: (shapeId, point, tolerance) => this.shapeContainsPoint(shapeId, point, tolerance),
       getShapeSnapshot: (shapeId) => cloneShape(this.shapeStore?.read(shapeId)),
       getCamera: () => ({ ...this.camera }),
-      getViewBox: () => ({ ...this.view })
+      getViewBox: () => ({ ...this.view }),
+      getMode: () => this.state.mode
     };
   }
 
@@ -514,6 +515,11 @@ class Editor {
     }
     this.updateModeUI();
     this.render();
+    const modeEvent = new CustomEvent('mediamime:editor-mode-changed', {
+      detail: { mode },
+      bubbles: false
+    });
+    window.dispatchEvent(modeEvent);
   }
 
   toggleMode() {
@@ -560,7 +566,7 @@ class Editor {
   }
 
   // New: programmatically add a shape
-  addShape(shape) {
+  addShape(shape, options = {}) {
     if (!shape || !this.shapeStore) return null;
     const normalized = this.normalizeImportedShape(shape);
     if (!normalized) return null;
@@ -571,7 +577,9 @@ class Editor {
     this.shapeStore.write(normalized);
     this.renderShapes();
     this.notifyShapesChanged();
-    this.commitHistory("addShape");
+    if (!options?.skipHistory) {
+      this.commitHistory("addShape");
+    }
     return normalized.id;
   }
 
@@ -2082,14 +2090,16 @@ class Editor {
     }
   }
 
-  deleteShape(shapeId) {
+  deleteShape(shapeId, options = {}) {
     if (!shapeId) return;
     if (!this.shapeStore?.read(shapeId)) return;
     this.removeShape(shapeId);
     this.render();
     this.notifyShapesChanged();
-    // Make single deletions undoable
-    this.commitHistory("delete-shape");
+    if (!options?.skipHistory) {
+      // Make single deletions undoable
+      this.commitHistory("delete-shape");
+    }
   }
 
   updateShape(shapeId, mutator) {

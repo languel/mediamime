@@ -111,7 +111,8 @@ html, body {
       font-size: 18px;
       line-height: 1;
     }
-    .icon-button.is-active {
+    .icon-button.is-active,
+    .icon-button[aria-pressed="true"] {
       color: var(--accent-strong);
     }
     .visually-hidden {
