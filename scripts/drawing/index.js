@@ -191,10 +191,7 @@ const drawViewportBounds = (ctx, viewportPx, strokeColor, fillAlpha = 0, fillCol
   ctx.restore();
 };
 
-const drawRawViewportFrame = (ctx, frame, viewportPx, tintColor, opacity = 1) => {
-  if (!frame) return;
-  const alpha = Math.min(1, Math.max(0, opacity));
-  if (alpha <= 0) return;
+const drawRawViewportFrame = (ctx, frame, viewportPx, tintColor, alpha) => {
   ctx.save();
   ctx.beginPath();
   ctx.rect(viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
@@ -204,6 +201,162 @@ const drawRawViewportFrame = (ctx, frame, viewportPx, tintColor, opacity = 1) =>
   ctx.globalCompositeOperation = "color";
   ctx.fillStyle = tintColor;
   ctx.fillRect(viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
+  ctx.restore();
+};
+
+const calculateFPS = (fpsTracker) => {
+  const now = performance.now ? performance.now() : Date.now();
+  
+  if (fpsTracker.lastFrameTime > 0) {
+    const delta = now - fpsTracker.lastFrameTime;
+    fpsTracker.frameTimes.push(delta);
+    
+    // Keep only the last N samples
+    if (fpsTracker.frameTimes.length > fpsTracker.maxSamples) {
+      fpsTracker.frameTimes.shift();
+    }
+  }
+  
+  fpsTracker.lastFrameTime = now;
+  
+  // Calculate average FPS from frame times
+  if (fpsTracker.frameTimes.length === 0) return 0;
+  
+  const avgDelta = fpsTracker.frameTimes.reduce((a, b) => a + b, 0) / fpsTracker.frameTimes.length;
+  return avgDelta > 0 ? 1000 / avgDelta : 0;
+};
+
+const drawMetrics = (ctx, viewportPx, strokeColor, frame, results, stream, zoom = 1, fpsTracker = null) => {
+  ctx.save();
+  
+  // Draw viewport bounds
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = 2 / zoom;
+  ctx.strokeRect(viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
+  
+  // Calculate FPS
+  const fps = fpsTracker ? calculateFPS(fpsTracker) : 0;
+  
+  // Gather metrics
+  const metrics = [];
+  
+  // FPS at the top - prominently displayed
+  metrics.push(`FPS: ${fps.toFixed(1)}`);
+  metrics.push(''); // Blank line for separation
+  
+  // Stream info
+  metrics.push(`Stream: ${stream.name || 'Unnamed'}`);
+  metrics.push(`Source: ${stream.source || 'none'}`);
+  
+  // Input resolution
+  if (frame) {
+    const width = frame.width || frame.videoWidth || 0;
+    const height = frame.height || frame.videoHeight || 0;
+    metrics.push(`Input Res: ${width}×${height}`);
+  } else {
+    metrics.push(`Input Res: N/A`);
+  }
+  
+  // Viewport coordinates (normalized 0-1)
+  const viewport = stream.viewport || { x: 0, y: 0, w: 1, h: 1 };
+  metrics.push(`Viewport (norm):`);
+  metrics.push(`  x: ${viewport.x.toFixed(3)}  y: ${viewport.y.toFixed(3)}`);
+  metrics.push(`  w: ${viewport.w.toFixed(3)}  h: ${viewport.h.toFixed(3)}`);
+  
+  // Display viewport pixel dimensions
+  metrics.push(`Display (px): ${Math.round(viewportPx.w)}×${Math.round(viewportPx.h)}`);
+  metrics.push(`Position (px): ${Math.round(viewportPx.x)}, ${Math.round(viewportPx.y)}`);
+  
+  // MediaPipe processing info
+  if (results) {
+    // Timestamp
+    if (results.updatedAt !== undefined) {
+      const now = performance.now ? performance.now() : Date.now();
+      const age = now - results.updatedAt;
+      metrics.push(`Frame Age: ${age.toFixed(0)}ms`);
+    }
+    
+    // Landmarks detected
+    if (results.poseLandmarks) {
+      metrics.push(`Pose: ${results.poseLandmarks.length} landmarks`);
+    }
+    if (results.leftHandLandmarks || results.rightHandLandmarks) {
+      const left = results.leftHandLandmarks ? results.leftHandLandmarks.length : 0;
+      const right = results.rightHandLandmarks ? results.rightHandLandmarks.length : 0;
+      metrics.push(`Hands: L${left} R${right}`);
+    }
+    if (results.faceLandmarks) {
+      metrics.push(`Face: ${results.faceLandmarks.length} landmarks`);
+    }
+    if (results.segmentationMask) {
+      metrics.push(`Segmentation: Active`);
+    }
+  } else {
+    metrics.push(`MediaPipe: No results`);
+  }
+  
+  // Stream state
+  metrics.push(`Enabled: ${stream.enabled !== false ? 'Yes' : 'No'}`);
+  metrics.push(`Color: ${stream.color?.hex || '#52d5ff'} α${((stream.color?.alpha || 0) * 100).toFixed(0)}%`);
+  
+  // Draw text
+  const padding = 10 / zoom;
+  const lineHeight = 14 / zoom;
+  const fontSize = 11 / zoom;
+  const fpsFontSize = 18 / zoom;
+  const fpsLineHeight = 22 / zoom;
+  
+  // First, draw FPS prominently with larger font
+  ctx.font = `bold ${fpsFontSize}px "SF Mono", "Monaco", "Menlo", "Courier New", monospace`;
+  ctx.textBaseline = "top";
+  const fpsText = `FPS: ${fps.toFixed(1)}`;
+  const fpsWidth = ctx.measureText(fpsText).width;
+  
+  // Calculate overall background size
+  ctx.font = `${fontSize}px "SF Mono", "Monaco", "Menlo", "Courier New", monospace`;
+  const regularMetrics = metrics.slice(2); // Skip FPS and blank line
+  const maxWidth = Math.max(fpsWidth, ...regularMetrics.map(m => ctx.measureText(m).width));
+  const bgWidth = maxWidth + padding * 2;
+  const bgHeight = fpsLineHeight + padding + regularMetrics.length * lineHeight + padding * 2;
+  
+  // Draw semi-transparent background
+  ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+  ctx.fillRect(viewportPx.x + 6 / zoom, viewportPx.y + 6 / zoom, bgWidth, bgHeight);
+  
+  // Draw border
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = 1 / zoom;
+  ctx.strokeRect(viewportPx.x + 6 / zoom, viewportPx.y + 6 / zoom, bgWidth, bgHeight);
+  
+  // Draw FPS prominently
+  ctx.font = `bold ${fpsFontSize}px "SF Mono", "Monaco", "Menlo", "Courier New", monospace`;
+  ctx.fillStyle = fps > 24 ? '#52ff52' : fps > 15 ? '#ffaa00' : '#ff5252';
+  ctx.fillText(
+    fpsText,
+    viewportPx.x + padding + 6 / zoom,
+    viewportPx.y + padding + 6 / zoom
+  );
+  
+  // Draw separator line
+  const separatorY = viewportPx.y + padding + 6 / zoom + fpsLineHeight;
+  ctx.strokeStyle = `${strokeColor}40`;
+  ctx.lineWidth = 1 / zoom;
+  ctx.beginPath();
+  ctx.moveTo(viewportPx.x + padding + 6 / zoom, separatorY);
+  ctx.lineTo(viewportPx.x + bgWidth - padding + 6 / zoom, separatorY);
+  ctx.stroke();
+  
+  // Draw regular metrics
+  ctx.font = `${fontSize}px "SF Mono", "Monaco", "Menlo", "Courier New", monospace`;
+  ctx.fillStyle = strokeColor;
+  regularMetrics.forEach((metric, index) => {
+    ctx.fillText(
+      metric,
+      viewportPx.x + padding + 6 / zoom,
+      viewportPx.y + padding + 6 / zoom + fpsLineHeight + padding / 2 + index * lineHeight
+    );
+  });
+  
   ctx.restore();
 };
 
@@ -277,7 +430,12 @@ export function initDrawing({ editor }) {
     editorMode: editor?.getMode ? editor.getMode() : 'edit',
     svg: document.getElementById('gesture-svg') || null,
     shapesLayer: null,
-    displayMetrics: null
+    displayMetrics: null,
+    fpsTracker: {
+      lastFrameTime: 0,
+      frameTimes: [],
+      maxSamples: 30
+    }
   };
 
   const isSelectToolActive = () => {
@@ -491,6 +649,13 @@ export function initDrawing({ editor }) {
         return;
       }
 
+      if (stream.process === "metrics") {
+        // Metrics can be drawn even without MediaPipe results
+        drawMetrics(targetCtx, viewportPx, strokeColor, frame, results, stream, zoom, state.fpsTracker);
+        targetCtx.restore();
+        return;
+      }
+
     if (!results) {
       // Skip drawing for data-driven processes until we have results
       if (DATA_DEPENDENT_PROCESSES.has(stream.process)) {
@@ -540,6 +705,9 @@ export function initDrawing({ editor }) {
         }
         case "depth":
           drawViewportBounds(targetCtx, viewportPx, strokeColor, fillAlpha, fillColor);
+          break;
+        case "metrics":
+          drawMetrics(targetCtx, viewportPx, strokeColor, frame, results, stream, zoom, state.fpsTracker);
           break;
         case "raw":
         default:

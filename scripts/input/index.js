@@ -31,7 +31,7 @@ export function initInput({ editor }) {
   
   // Detail form elements
   const inputSourceName = document.getElementById('input-source-name');
-  const inputSourceType = document.getElementById('input-source-type');
+  const inputSourceTypeIcon = document.getElementById('input-source-type-icon');
   const inputPreviewVideo = document.getElementById('input-preview-video');
   const inputPreviewCanvas = document.getElementById('input-preview-canvas');
   const previewCtx = inputPreviewCanvas ? inputPreviewCanvas.getContext('2d') : null;
@@ -581,7 +581,11 @@ export function initInput({ editor }) {
     state.isSyncing = true;
 
     inputSourceName.value = input.name || '';
-    inputSourceType.textContent = input.type === 'camera' ? 'Camera' : 'Video';
+    // Update icon based on type
+    if (inputSourceTypeIcon) {
+      inputSourceTypeIcon.textContent = input.type === 'camera' ? 'videocam' : 'video_library';
+      inputSourceTypeIcon.title = input.type === 'camera' ? 'Camera' : 'Video';
+    }
   if (cropX) cropX.value = input.crop.x.toFixed(2);
   if (cropY) cropY.value = input.crop.y.toFixed(2);
   if (cropW) cropW.value = input.crop.w.toFixed(2);

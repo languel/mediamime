@@ -6,7 +6,8 @@ const PROCESS_OPTIONS = [
   { id: "face", label: "Face (MP)" },
   { id: "segmentation", label: "Segmentation" },
   { id: "depth", label: "Depth Map" },
-  { id: "raw", label: "Raw Source" }
+  { id: "raw", label: "Raw Source" },
+  { id: "metrics", label: "Metrics" }
 ];
 
 const DEFAULT_STREAM_COLOR = "#52d5ff";

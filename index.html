@@ -51,10 +51,10 @@
           <svg id="gesture-svg" class="gesture-svg" tabindex="0" role="presentation" aria-label="Score canvas" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid meet"></svg>
         </div>
       </div>
-      <video id="mediamime-video" muted></video>
+      <video id="mediamime-video" muted data-playsinline></video>
     </section>
         <div id="modal-layer" class="floating-modal-layer">
-      <section id="modal-input" class="panel floating-modal is-open is-hidden" role="dialog" aria-modal="false" aria-label="Input panel" aria-hidden="true" data-modal="input" data-resizable="true" tabindex="-1">
+      <section id="modal-input" class="panel floating-modal is-open" role="dialog" aria-modal="false" aria-label="Input panel" aria-hidden="false" data-modal="input" data-resizable="true" tabindex="-1">
         <div class="modal-chrome">
           <div class="modal-handle" data-modal-handle aria-label="Move Input panel" tabindex="0">
             <span class="material-icons-outlined" aria-hidden="true">drag_indicator</span>
@@ -86,22 +86,16 @@
               <div class="input-detail-form">
                 <div class="assignment-row">
                   <label>Name</label>
-                  <input type="text" id="input-source-name" placeholder="Input name">
-                </div>
-                <div class="assignment-row">
-                  <label>Type</label>
-                  <span class="status-chip" id="input-source-type">Camera</span>
-                </div>
-                <div class="assignment-row assignment-row--name">
-                  <label>Preview</label>
-                  <div class="input-preview-wrapper">
-                    <video id="input-preview-video" class="input-preview-video" autoplay muted playsinline></video>
-                    <canvas id="input-preview-canvas" width="320" height="180" aria-label="Input preview"></canvas>
+                  <div class="input-name-with-icon">
+                    <input type="text" id="input-source-name" placeholder="Input name">
+                    <span class="material-icons-outlined" id="input-source-type-icon" aria-hidden="true">videocam</span>
                   </div>
                 </div>
-                <div class="assignment-row" id="input-transport-row">
-                  <label>Transport</label>
-                  <div class="input-transport-controls">
+                <div class="input-preview-wrapper">
+                  <video id="input-preview-video" class="input-preview-video" autoplay muted data-playsinline></video>
+                  <canvas id="input-preview-canvas" width="320" height="180" aria-label="Input preview"></canvas>
+                </div>
+                <div class="input-transport-controls" id="input-transport-row">
                     <button type="button" id="input-transport-toggle" class="icon-button" disabled title="Play/Pause" aria-label="Play/Pause">
                       <span class="material-icons-outlined" aria-hidden="true">play_arrow</span>
                     </button>
@@ -123,12 +117,11 @@
                         title="Playback speed (negative = reverse; 0 pauses)"
                         inputmode="decimal"
                       >
-                      <span id="input-transport-speed-value" aria-hidden="true">1×</span>
                     </div>
                   </div>
                 </div>
                 <div class="assignment-row">
-                  <label>Crop</label>
+                  <span class="material-icons-outlined crop-icon" aria-label="Crop" title="Crop">crop</span>
                   <div class="assignment-field-group assignment-field-group--compact">
                     <div class="field-compact small">
                       <span>X</span>
@@ -189,7 +182,7 @@
           </div>
         </div>
       </section>
-  <section id="modal-layers" class="panel floating-modal is-open is-hidden" role="dialog" aria-modal="false" aria-label="Layers panel" aria-hidden="true" data-modal="layers" data-resizable="true" tabindex="-1">
+  <section id="modal-layers" class="panel floating-modal is-open" role="dialog" aria-modal="false" aria-label="Layers panel" aria-hidden="false" data-modal="layers" data-resizable="true" tabindex="-1">
         <div class="modal-chrome">
           <div class="modal-handle" data-modal-handle aria-label="Move Layers panel" tabindex="0">
             <span class="material-icons-outlined" aria-hidden="true">drag_indicator</span>
@@ -298,19 +291,19 @@
                     <div class="assignment-field-group assignment-field-group--compact">
                       <div class="field-compact small">
                         <span>X</span>
-                        <input type="number" step="0.01" id="layer-viewport-x" value="0">
+                        <input type="number" step="0.01" id="layer-viewport-x" value="0" placeholder="X" title="Viewport X" aria-label="Viewport X">
                       </div>
                       <div class="field-compact small">
                         <span>Y</span>
-                        <input type="number" step="0.01" id="layer-viewport-y" value="0">
+                        <input type="number" step="0.01" id="layer-viewport-y" value="0" placeholder="Y" title="Viewport Y" aria-label="Viewport Y">
                       </div>
                       <div class="field-compact small">
                         <span>W</span>
-                        <input type="number" step="0.01" min="0.01" id="layer-viewport-w" value="1">
+                        <input type="number" step="0.01" min="0.01" id="layer-viewport-w" value="1" placeholder="W" title="Viewport Width" aria-label="Viewport Width">
                       </div>
                       <div class="field-compact small">
                         <span>H</span>
-                        <input type="number" step="0.01" min="0.01" id="layer-viewport-h" value="1">
+                        <input type="number" step="0.01" min="0.01" id="layer-viewport-h" value="1" placeholder="H" title="Viewport Height" aria-label="Viewport Height">
                       </div>
                     </div>
                     <div class="layers-viewport-controls">
@@ -330,7 +323,7 @@
             </div>
           </div>
       </section>
-      <section id="modal-map" class="panel floating-modal is-open is-hidden" role="dialog" aria-modal="false" aria-label="Map panel" aria-hidden="true" data-modal="map" tabindex="-1">
+      <section id="modal-map" class="panel floating-modal is-open" role="dialog" aria-modal="false" aria-label="Map panel" aria-hidden="false" data-modal="map" tabindex="-1">
         <div class="modal-chrome">
           <div class="modal-handle" data-modal-handle aria-label="Move Map panel" tabindex="0">
             <span class="material-icons-outlined" aria-hidden="true">drag_indicator</span>
@@ -379,14 +372,11 @@
                       <label for="editor-shape-name">
                         Name
                         <span class="editor-shape-toggle-row">
-                          <button type="button" id="editor-shape-main-toggle" class="icon-button" aria-pressed="true" title="Hide in main view" aria-label="Hide on main canvas">
-                            <span class="material-icons-outlined" aria-hidden="true">grid_on</span>
+                          <button type="button" id="editor-shape-enabled-toggle" class="icon-button" aria-pressed="true" title="Disable shape" aria-label="Disable shape">
+                            <span class="material-icons-outlined" aria-hidden="true">toggle_on</span>
                           </button>
                           <button type="button" id="editor-shape-preview-toggle" class="icon-button" aria-pressed="true" title="Hide in preview" aria-label="Hide in preview mode">
                             <span class="material-icons-outlined" aria-hidden="true">visibility</span>
-                          </button>
-                          <button type="button" id="editor-shape-enabled-toggle" class="icon-button" aria-pressed="true" title="Disable shape" aria-label="Disable shape">
-                            <span class="material-icons-outlined" aria-hidden="true">toggle_on</span>
                           </button>
                         </span>
                       </label>
@@ -464,7 +454,7 @@
                           <option value="pointer">Pointer Input</option>
                           <option value="keyboard">Keyboard</option>
                         </select>
-                        <select id="editor-landmark-select"></select>
+                        <select id="editor-landmark-select" title="Landmark select"></select>
                       </div>
                     </div>
                     <div class="assignment-events">
@@ -608,6 +598,18 @@
   </div>
 
   <script type="module" src="./scripts/app.js"></script>
+  <script>
+    // Apply inline playback only at runtime to avoid static compatibility errors
+    (function() {
+      var videos = document.querySelectorAll('video[data-playsinline]');
+      for (var i = 0; i < videos.length; i++) {
+        var v = videos[i];
+        v.setAttribute('playsinline', '');
+        v.setAttribute('webkit-playsinline', '');
+        v.playsInline = true;
+      }
+    })();
+  </script>
 </body>
 </html>
     

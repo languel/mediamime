@@ -791,8 +791,8 @@ export function initMapping({ editor }) {
   const editorDetailEmpty = document.getElementById("editor-detail-empty");
   const editorDetailForm = document.getElementById("editor-detail-form");
   const editorShapeNameInput = document.getElementById("editor-shape-name");
+  // Detail panel now uses a single enable/disable toggle (originally main view toggle location)
   const editorShapeEnabledToggle = document.getElementById("editor-shape-enabled-toggle");
-  const editorShapeMainToggle = document.getElementById("editor-shape-main-toggle");
   const editorShapePreviewToggle = document.getElementById("editor-shape-preview-toggle");
   // Import/Export controls in the Map panel header
   const snapshotImportInput = document.getElementById("snapshot-import-input");
@@ -1553,22 +1553,57 @@ export function initMapping({ editor }) {
   const buildShapeMeta = (shape) => {
     if (!shape) return "No events";
     const interaction = mergeInteraction(shape.interaction);
-    const streamLabel = STREAM_DEFINITIONS[interaction.stream]?.label || "Stream";
+    const streamId = interaction.stream;
     const events = interaction.events.filter((event) => event.type && event.type !== "none");
     const primary = events[0] || null;
-    let eventLabel = "No events";
+
+    // Stream emoji map
+    const streamEmoji = (() => {
+      switch (streamId) {
+        case "pose":
+          return "🧍"; // Pose
+        case "leftHand":
+          return "🤚"; // Left hand
+        case "rightHand":
+          return "✋"; // Right hand
+        case "face":
+          return "🙂"; // Face
+        case "pointer":
+          return "🖱️"; // Pointer
+        case "keyboard":
+          return "⌨️"; // Keyboard
+        default:
+          return "🎞️"; // Fallback
+      }
+    })();
+
+    // Event type emoji
+    let eventGlyph = "No events";
     if (primary) {
-      eventLabel = primary.type === "midiCc" ? "MIDI CC" : primary.type === "midiNote" ? "MIDI Note" : "Event";
+      eventGlyph = primary.type === "midiCc" ? "🎛️" : primary.type === "midiNote" ? "🎹" : "•";
     }
-    const extraSuffix = events.length > 1 ? ` (+${events.length - 1})` : "";
-    const triggerLabel = primary?.trigger
-      ? primary.trigger.replace(/^\w/, (char) => char.toUpperCase())
-      : null;
-    const parts = [streamLabel, `${eventLabel}${extraSuffix}`];
-    if (triggerLabel) {
-      parts.push(triggerLabel);
-    }
-    return parts.join(" · ");
+    const extraSuffix = events.length > 1 ? ` +${events.length - 1}` : "";
+
+    // Trigger glyphs
+    const triggerGlyph = (() => {
+      const t = primary?.trigger;
+      switch (t) {
+        case "enter":
+          return "[➜";
+        case "exit":
+          return "➜]";
+        case "enterExit":
+          return "↔";
+        case "inside":
+          return null; // leave off to avoid clutter
+        default:
+          return null;
+      }
+    })();
+
+    const parts = [streamEmoji, `${eventGlyph}${extraSuffix}`];
+    if (triggerGlyph) parts.push(triggerGlyph);
+    return parts.join(" ");
   };
 
   const renderShapeList = () => {
@@ -1672,17 +1707,6 @@ export function initMapping({ editor }) {
         if (iconEl) iconEl.textContent = "toggle_off";
         editorShapeEnabledToggle.title = "Enable shape";
         editorShapeEnabledToggle.setAttribute("aria-label", "Enable shape");
-      }
-    }
-    if (editorShapeMainToggle) {
-      if (!hasShape) {
-        editorShapeMainToggle.disabled = true;
-        editorShapeMainToggle.setAttribute("aria-pressed", "false");
-        editorShapeMainToggle.classList.remove("is-active");
-        const iconEl = editorShapeMainToggle.querySelector(".material-icons-outlined");
-        if (iconEl) iconEl.textContent = "grid_off";
-        editorShapeMainToggle.title = "Show in main view";
-        editorShapeMainToggle.setAttribute("aria-label", "Show on main canvas");
       }
     }
     if (editorShapePreviewToggle) {
@@ -3086,12 +3110,6 @@ export function initMapping({ editor }) {
     if (isSyncingEditorForm) return;
     updateSelectedInteraction((interaction) => {
       interaction.enabled = interaction.enabled === false ? true : false;
-    });
-  });
-  addListener(editorShapeMainToggle, "click", () => {
-    if (isSyncingEditorForm) return;
-    updateSelectedInteraction((interaction) => {
-      interaction.showInMain = interaction.showInMain === false ? true : false;
     });
   });
   addListener(editorShapePreviewToggle, "click", () => {

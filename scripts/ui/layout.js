@@ -335,6 +335,8 @@ export function initLayout() {
     modalState.set(id, open);
     applyModalVisibility(modal, open);
     updateModalLayout(id, { open });
+    // Update the pre-perform visibility state when user manually changes it
+    modal.dataset.prePerformVisible = open ? "true" : "false";
     if (open) {
       bringModalToFront(modal);
       if (!skipFocus) {
@@ -355,6 +357,8 @@ export function initLayout() {
     const open = saved.open ?? !modal.classList.contains("is-hidden");
     modalState.set(id, open);
     applyModalVisibility(modal, open);
+    // Store initial visibility state for perform mode restoration
+    modal.dataset.prePerformVisible = open ? "true" : "false";
     if (open) {
       bringModalToFront(modal);
     }
@@ -414,11 +418,36 @@ export function initLayout() {
 
   window.addEventListener("resize", resizeListener);
 
+  // Listen for editor mode changes to hide/show all panels in performance mode
+  const handleEditorModeChange = (event) => {
+    const { mode } = event.detail;
+    const isPerformMode = mode === "perform";
+    
+    // Hide all panels when entering perform mode, show them when exiting
+    modals.forEach((modal) => {
+      const id = modal.dataset.modal;
+      if (isPerformMode) {
+        // Store the current visibility state before hiding
+        const wasVisible = isModalVisible(id);
+        modal.dataset.prePerformVisible = wasVisible ? "true" : "false";
+        applyModalVisibility(modal, false);
+      } else {
+        // Restore the visibility state from before perform mode
+        const shouldBeVisible = modal.dataset.prePerformVisible === "true";
+        applyModalVisibility(modal, shouldBeVisible);
+        modalState.set(id, shouldBeVisible);
+      }
+    });
+  };
+
+  window.addEventListener('mediamime:editor-mode-changed', handleEditorModeChange);
+
   return {
     setModalVisibility,
     toggleModal,
     dispose() {
       window.removeEventListener("resize", resizeListener);
+      window.removeEventListener('mediamime:editor-mode-changed', handleEditorModeChange);
     }
   };
 }
