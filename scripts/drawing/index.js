@@ -597,6 +597,7 @@ export function initDrawing({ editor }) {
 
     state.streams.forEach((stream) => {
       if (!stream?.enabled) return;
+      if (stream.showInMain === false) return;
       const normalized = normalizeViewport(stream.viewport);
       const scoreX = normalized.x * viewBox.width;
       const scoreY = normalized.y * viewBox.height;
