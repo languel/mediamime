@@ -7,6 +7,13 @@ const HOLISTIC_CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/holistic/";
 const DEFAULT_CROP = { x: 0, y: 0, w: 1, h: 1 };
 const DEFAULT_FLIP = { horizontal: false, vertical: false };
 
+const clamp01 = (value, fallback = 0) => {
+  const number = Number.isFinite(value) ? value : fallback;
+  if (number <= 0) return 0;
+  if (number >= 1) return 1;
+  return number;
+};
+
 const hasHolisticSupport = () => typeof window !== "undefined" && typeof window.Holistic === "function";
 
 const dispatchCustomEvent = (type, detail) => {
@@ -82,10 +89,24 @@ const emitResults = (sourceId, results, frame = null) => {
     const vw = video.videoWidth;
     const vh = video.videoHeight;
     if (!vw || !vh) return false;
-    const cropW = Math.max(1, crop.w * vw);
-    const cropH = Math.max(1, crop.h * vh);
-    const cropX = crop.x * vw;
-    const cropY = crop.y * vh;
+    const cropXNorm = clamp01(crop.x, 0);
+    const cropYNorm = clamp01(crop.y, 0);
+    const cropWNorm = Math.max(0.01, Math.min(1 - cropXNorm, clamp01(crop.w, 1)));
+    const cropHNorm = Math.max(0.01, Math.min(1 - cropYNorm, clamp01(crop.h, 1)));
+    let sourceXNorm = cropXNorm;
+    let sourceYNorm = cropYNorm;
+    const sourceWNorm = cropWNorm;
+    const sourceHNorm = cropHNorm;
+    if (flip.horizontal) {
+      sourceXNorm = Math.max(0, Math.min(1 - sourceWNorm, 1 - cropXNorm - sourceWNorm));
+    }
+    if (flip.vertical) {
+      sourceYNorm = Math.max(0, Math.min(1 - sourceHNorm, 1 - cropYNorm - sourceHNorm));
+    }
+    const cropW = Math.max(1, sourceWNorm * vw);
+    const cropH = Math.max(1, sourceHNorm * vh);
+    const cropX = sourceXNorm * vw;
+    const cropY = sourceYNorm * vh;
     if (canvas.width !== cropW || canvas.height !== cropH) {
       canvas.width = cropW;
       canvas.height = cropH;

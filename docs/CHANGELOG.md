@@ -76,3 +76,11 @@
 - Efficient per-node DOM updates during drawing
 - Deep-equal filtering for history snapshots
 - 3-step history limit to prevent memory bloat
+
+### Layers, Streams & Inputs (2025-11-07)
+- Added re-order controls for both stream and MIDI map lists; drag arrows update rendering order immediately.
+- Raw source streams now show the tinted cropped feed, while the new Segmentation stream renders the subject alone with transparent background.
+- Segmentation mask option temporarily removed from the UI to reduce confusion.
+- Layer viewports no longer paint placeholder rectangles when Holistic data is missing.
+- Input crop edits emit real-time state so connected streams update instantly.
+- Crop overlay sticks to the cursor regardless of horizontal/vertical flips, and crops are applied after flip transforms inside the pipeline.

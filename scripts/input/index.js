@@ -502,13 +502,22 @@ export function initInput({ editor }) {
   };
 
   // Helper: Update UI
+  const emitInputState = (activeInputOverride = undefined) => {
+    const serialized = state.inputs.map((input) => serializeInput(input));
+    dispatchInputEvent(INPUT_LIST_EVENT, { inputs: serialized });
+    let activeInput = activeInputOverride;
+    if (typeof activeInput === "undefined") {
+      activeInput = state.inputs.find((input) => input.id === state.activeInputId) || null;
+    }
+    dispatchInputEvent(ACTIVE_INPUT_EVENT, { input: serializeInput(activeInput) });
+  };
+
   const updateUI = () => {
     if (state.inputs.length === 0) {
       inputEmpty.style.display = 'block';
       inputDetail.style.display = 'none';
       inputList.innerHTML = '';
-      dispatchInputEvent(INPUT_LIST_EVENT, { inputs: [] });
-      dispatchInputEvent(ACTIVE_INPUT_EVENT, { input: null });
+      emitInputState(null);
       return;
     }
 
@@ -555,12 +564,7 @@ export function initInput({ editor }) {
       updateTransportUI(null);
     }
 
-    dispatchInputEvent(INPUT_LIST_EVENT, {
-      inputs: state.inputs.map((input) => serializeInput(input))
-    });
-    dispatchInputEvent(ACTIVE_INPUT_EVENT, {
-      input: serializeInput(activeInput)
-    });
+    emitInputState(activeInput);
   };
 
   const updateSourceStatus = (input, message, tone = STATUS_TYPES.info) => {
@@ -595,11 +599,8 @@ export function initInput({ editor }) {
     }
 
     // Reflect flips by applying CSS transform to both video and canvas overlay
-    const scaleX = input.flip?.horizontal ? -1 : 1;
-    const scaleY = input.flip?.vertical ? -1 : 1;
-    const transform = `scale(${scaleX}, ${scaleY})`;
-    if (inputPreviewVideo) inputPreviewVideo.style.transform = transform;
-    if (inputPreviewCanvas) inputPreviewCanvas.style.transform = transform;
+    if (inputPreviewVideo) inputPreviewVideo.style.transform = '';
+    if (inputPreviewCanvas) inputPreviewCanvas.style.transform = '';
 
     updateTransportUI(input);
     state.isSyncing = false;
@@ -1041,6 +1042,40 @@ export function initInput({ editor }) {
       inputPreviewCanvas.height = nextHeight;
     }
   };
+  const toDisplayCrop = (crop, flipH, flipV) => {
+    const safeX = Math.max(0, Math.min(1, crop.x));
+    const safeY = Math.max(0, Math.min(1, crop.y));
+    const safeW = Math.max(0.01, Math.min(1 - safeX, crop.w));
+    const safeH = Math.max(0.01, Math.min(1 - safeY, crop.h));
+    const maxX = 1 - safeW;
+    const maxY = 1 - safeH;
+    const displayX = flipH ? Math.max(0, Math.min(maxX, 1 - safeX - safeW)) : safeX;
+    const displayY = flipV ? Math.max(0, Math.min(maxY, 1 - safeY - safeH)) : safeY;
+    return {
+      x: displayX,
+      y: displayY,
+      w: safeW,
+      h: safeH
+    };
+  };
+
+  const fromDisplayCrop = (displayCrop, flipH, flipV) => {
+    const safeX = Math.max(0, Math.min(1, displayCrop.x));
+    const safeY = Math.max(0, Math.min(1, displayCrop.y));
+    const safeW = Math.max(0.01, Math.min(1 - safeX, displayCrop.w));
+    const safeH = Math.max(0.01, Math.min(1 - safeY, displayCrop.h));
+    const maxX = 1 - safeW;
+    const maxY = 1 - safeH;
+    const canonicalX = flipH ? Math.max(0, Math.min(maxX, 1 - safeX - safeW)) : safeX;
+    const canonicalY = flipV ? Math.max(0, Math.min(maxY, 1 - safeY - safeH)) : safeY;
+    return {
+      x: canonicalX,
+      y: canonicalY,
+      w: safeW,
+      h: safeH
+    };
+  };
+
   const renderPreview = () => {
     if (!previewCtx || !inputPreviewCanvas) return;
     const active = state.inputs.find(i => i.id === state.activeInputId);
@@ -1069,17 +1104,21 @@ export function initInput({ editor }) {
     const offsetY = (h - drawH) / 2;
     previewCtx.save();
     previewCtx.imageSmoothingEnabled = true;
-    previewCtx.drawImage(video, offsetX, offsetY, drawW, drawH);
+    const flipH = Boolean(active.flip?.horizontal);
+    const flipV = Boolean(active.flip?.vertical);
+    previewCtx.save();
+    const centerX = offsetX + drawW / 2;
+    const centerY = offsetY + drawH / 2;
+    previewCtx.translate(centerX, centerY);
+    previewCtx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+    previewCtx.drawImage(video, -drawW / 2, -drawH / 2, drawW, drawH);
     previewCtx.restore();
     // Draw crop rectangle overlay with handles
-    const cropX = Math.max(0, Math.min(1, active.crop.x));
-    const cropY = Math.max(0, Math.min(1, active.crop.y));
-    const cropW = Math.max(0.01, Math.min(1 - cropX, active.crop.w));
-    const cropH = Math.max(0.01, Math.min(1 - cropY, active.crop.h));
-    const rectX = offsetX + cropX * drawW;
-    const rectY = offsetY + cropY * drawH;
-    const rectW = cropW * drawW;
-    const rectH = cropH * drawH;
+    const displayCrop = toDisplayCrop(active.crop, flipH, flipV);
+    const rectX = offsetX + displayCrop.x * drawW;
+    const rectY = offsetY + displayCrop.y * drawH;
+    const rectW = displayCrop.w * drawW;
+    const rectH = displayCrop.h * drawH;
     
     // Store preview geometry for drag handlers (in CSS pixels)
     const dpr = window.devicePixelRatio || 1;
@@ -1206,45 +1245,43 @@ export function initInput({ editor }) {
       const geo = state.previewGeometry;
       const dx = canvasX - cropDragState.startX;
       const dy = canvasY - cropDragState.startY;
-      
-      let newCrop = { ...input.crop };
+      const deltaX = dx / geo.drawW;
+      const deltaY = dy / geo.drawH;
+      let newDisplay = { ...cropDragState.initialDisplayCrop };
       
       if (cropDragState.handleType === 'move') {
         // Move entire crop rect
-        const deltaX = dx / geo.drawW;
-        const deltaY = dy / geo.drawH;
-        newCrop.x = Math.max(0, Math.min(1 - newCrop.w, cropDragState.initialCrop.x + deltaX));
-        newCrop.y = Math.max(0, Math.min(1 - newCrop.h, cropDragState.initialCrop.y + deltaY));
+        newDisplay.x = Math.max(0, Math.min(1 - newDisplay.w, cropDragState.initialDisplayCrop.x + deltaX));
+        newDisplay.y = Math.max(0, Math.min(1 - newDisplay.h, cropDragState.initialDisplayCrop.y + deltaY));
       } else {
         // Resize from corner
-        const deltaX = dx / geo.drawW;
-        const deltaY = dy / geo.drawH;
-        
         if (cropDragState.handleType === 'nw') {
-          const newX = Math.max(0, Math.min(cropDragState.initialCrop.x + cropDragState.initialCrop.w - 0.01, cropDragState.initialCrop.x + deltaX));
-          const newY = Math.max(0, Math.min(cropDragState.initialCrop.y + cropDragState.initialCrop.h - 0.01, cropDragState.initialCrop.y + deltaY));
-          newCrop.w = cropDragState.initialCrop.x + cropDragState.initialCrop.w - newX;
-          newCrop.h = cropDragState.initialCrop.y + cropDragState.initialCrop.h - newY;
-          newCrop.x = newX;
-          newCrop.y = newY;
+          const newX = Math.max(0, Math.min(cropDragState.initialDisplayCrop.x + cropDragState.initialDisplayCrop.w - 0.01, cropDragState.initialDisplayCrop.x + deltaX));
+          const newY = Math.max(0, Math.min(cropDragState.initialDisplayCrop.y + cropDragState.initialDisplayCrop.h - 0.01, cropDragState.initialDisplayCrop.y + deltaY));
+          newDisplay.w = cropDragState.initialDisplayCrop.x + cropDragState.initialDisplayCrop.w - newX;
+          newDisplay.h = cropDragState.initialDisplayCrop.y + cropDragState.initialDisplayCrop.h - newY;
+          newDisplay.x = newX;
+          newDisplay.y = newY;
         } else if (cropDragState.handleType === 'ne') {
-          const newY = Math.max(0, Math.min(cropDragState.initialCrop.y + cropDragState.initialCrop.h - 0.01, cropDragState.initialCrop.y + deltaY));
-          newCrop.w = Math.max(0.01, Math.min(1 - cropDragState.initialCrop.x, cropDragState.initialCrop.w + deltaX));
-          newCrop.h = cropDragState.initialCrop.y + cropDragState.initialCrop.h - newY;
-          newCrop.y = newY;
+          const newY = Math.max(0, Math.min(cropDragState.initialDisplayCrop.y + cropDragState.initialDisplayCrop.h - 0.01, cropDragState.initialDisplayCrop.y + deltaY));
+          newDisplay.w = Math.max(0.01, Math.min(1 - cropDragState.initialDisplayCrop.x, cropDragState.initialDisplayCrop.w + deltaX));
+          newDisplay.h = cropDragState.initialDisplayCrop.y + cropDragState.initialDisplayCrop.h - newY;
+          newDisplay.y = newY;
         } else if (cropDragState.handleType === 'sw') {
-          const newX = Math.max(0, Math.min(cropDragState.initialCrop.x + cropDragState.initialCrop.w - 0.01, cropDragState.initialCrop.x + deltaX));
-          newCrop.w = cropDragState.initialCrop.x + cropDragState.initialCrop.w - newX;
-          newCrop.h = Math.max(0.01, Math.min(1 - cropDragState.initialCrop.y, cropDragState.initialCrop.h + deltaY));
-          newCrop.x = newX;
+          const newX = Math.max(0, Math.min(cropDragState.initialDisplayCrop.x + cropDragState.initialDisplayCrop.w - 0.01, cropDragState.initialDisplayCrop.x + deltaX));
+          newDisplay.w = cropDragState.initialDisplayCrop.x + cropDragState.initialDisplayCrop.w - newX;
+          newDisplay.h = Math.max(0.01, Math.min(1 - cropDragState.initialDisplayCrop.y, cropDragState.initialDisplayCrop.h + deltaY));
+          newDisplay.x = newX;
         } else if (cropDragState.handleType === 'se') {
-          newCrop.w = Math.max(0.01, Math.min(1 - cropDragState.initialCrop.x, cropDragState.initialCrop.w + deltaX));
-          newCrop.h = Math.max(0.01, Math.min(1 - cropDragState.initialCrop.y, cropDragState.initialCrop.h + deltaY));
+          newDisplay.w = Math.max(0.01, Math.min(1 - cropDragState.initialDisplayCrop.x, cropDragState.initialDisplayCrop.w + deltaX));
+          newDisplay.h = Math.max(0.01, Math.min(1 - cropDragState.initialDisplayCrop.y, cropDragState.initialDisplayCrop.h + deltaY));
         }
       }
       
+      const newCrop = fromDisplayCrop(newDisplay, cropDragState.flipH, cropDragState.flipV);
       // Update crop (will trigger UI sync via updateInputMeta)
       Object.assign(input.crop, newCrop);
+      emitInputState(input);
       if (!state.isSyncing) {
         syncDetailForm(input);
       }
@@ -1273,11 +1310,16 @@ export function initInput({ editor }) {
       const input = state.inputs.find(i => i.id === state.activeInputId);
       if (!input) return;
       
+      const flipH = Boolean(input.flip?.horizontal);
+      const flipV = Boolean(input.flip?.vertical);
       cropDragState = {
         handleType: hovered.handleType || hovered.type,
         startX: canvasX,
         startY: canvasY,
-        initialCrop: { ...input.crop }
+        initialCrop: { ...input.crop },
+        initialDisplayCrop: toDisplayCrop(input.crop, flipH, flipV),
+        flipH,
+        flipV
       };
       inputPreviewCanvas.setPointerCapture(e.pointerId);
     }
@@ -1352,8 +1394,7 @@ export function initInput({ editor }) {
         }
       });
       state.inputs = [];
-      dispatchInputEvent(INPUT_LIST_EVENT, { inputs: [] });
-      dispatchInputEvent(ACTIVE_INPUT_EVENT, { input: null });
+      emitInputState(null);
       stopPreviewLoop();
       window.removeEventListener('resize', handleWindowResize);
       if (inputPreviewVideo) {

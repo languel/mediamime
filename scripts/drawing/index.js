@@ -41,6 +41,8 @@ const HAND_CONNECTIONS_FALLBACK = [
   [0, 17]
 ];
 
+const DATA_DEPENDENT_PROCESSES = new Set(["pose", "hands", "face", "segmentation", "segmentationStream"]);
+
 const MIN_VIEWPORT_SIZE = 0.05;
 
 const clampUnit = (value) => Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
@@ -489,9 +491,8 @@ export function initDrawing({ editor }) {
       }
 
     if (!results) {
-      // Skip drawing for pose-like processes when no data yet to keep viewport transparent
-      const processesThatNeedData = new Set(["pose", "hands", "face", "segmentation", "segmentationStream"]);
-      if (processesThatNeedData.has(stream.process)) {
+      // Skip drawing for data-driven processes until we have results
+      if (DATA_DEPENDENT_PROCESSES.has(stream.process)) {
         targetCtx.restore();
         return;
       }
