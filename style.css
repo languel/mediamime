@@ -1523,6 +1523,8 @@ html, body {
       justify-content: space-between;
       align-items: center;
       gap: 0.18rem;
+      width: 100%;
+      text-align: left;
       border: 1px solid rgba(255, 255, 255, 0.07);
       border-radius: 2px;
       background: rgba(255, 255, 255, calc(var(--surface-opacity) * 0.02));
@@ -1531,6 +1533,7 @@ html, body {
       cursor: pointer;
       font-size: 0.8rem;
       transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+      appearance: none;
     }
     .editor-shape-list .shape-label {
       display: inline-flex;
@@ -1581,7 +1584,21 @@ html, body {
       border: none;
       background: transparent;
       padding: 0;
+      width: 1.8rem;
+      height: 1.8rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(245, 247, 255, 0.75);
+      border-radius: 3px;
       box-shadow: none;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .editor-shape-list .icon-button.is-active {
+      color: #52d5ff;
+    }
+    .editor-shape-list .icon-button .material-icons-outlined {
+      font-size: 18px;
     }
     .editor-shape-list button.is-disabled {
       opacity: 0.55;
@@ -1605,6 +1622,12 @@ html, body {
     .editor-shape-list .icon-button:focus-visible {
       transform: none;
       background: rgba(255, 255, 255, 0.08);
+    }
+    .editor-shape-toggle-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.2rem;
+      margin-left: 0.5rem;
     }
     .editor-detail {
       display: flex;

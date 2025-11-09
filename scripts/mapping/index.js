@@ -792,6 +792,8 @@ export function initMapping({ editor }) {
   const editorDetailForm = document.getElementById("editor-detail-form");
   const editorShapeNameInput = document.getElementById("editor-shape-name");
   const editorShapeEnabledToggle = document.getElementById("editor-shape-enabled-toggle");
+  const editorShapeMainToggle = document.getElementById("editor-shape-main-toggle");
+  const editorShapePreviewToggle = document.getElementById("editor-shape-preview-toggle");
   // Import/Export controls in the Map panel header
   const snapshotImportInput = document.getElementById("snapshot-import-input");
   const snapshotImportButton = document.getElementById("snapshot-import-button");
@@ -1670,6 +1672,28 @@ export function initMapping({ editor }) {
         if (iconEl) iconEl.textContent = "toggle_off";
         editorShapeEnabledToggle.title = "Enable shape";
         editorShapeEnabledToggle.setAttribute("aria-label", "Enable shape");
+      }
+    }
+    if (editorShapeMainToggle) {
+      if (!hasShape) {
+        editorShapeMainToggle.disabled = true;
+        editorShapeMainToggle.setAttribute("aria-pressed", "false");
+        editorShapeMainToggle.classList.remove("is-active");
+        const iconEl = editorShapeMainToggle.querySelector(".material-icons-outlined");
+        if (iconEl) iconEl.textContent = "grid_off";
+        editorShapeMainToggle.title = "Show in main view";
+        editorShapeMainToggle.setAttribute("aria-label", "Show on main canvas");
+      }
+    }
+    if (editorShapePreviewToggle) {
+      if (!hasShape) {
+        editorShapePreviewToggle.disabled = true;
+        editorShapePreviewToggle.setAttribute("aria-pressed", "false");
+        editorShapePreviewToggle.classList.remove("is-active");
+        const iconEl = editorShapePreviewToggle.querySelector(".material-icons-outlined");
+        if (iconEl) iconEl.textContent = "visibility_off";
+        editorShapePreviewToggle.title = "Show in preview";
+        editorShapePreviewToggle.setAttribute("aria-label", "Show in preview mode");
       }
     }
     if (!hasShape) {
@@ -3062,6 +3086,18 @@ export function initMapping({ editor }) {
     if (isSyncingEditorForm) return;
     updateSelectedInteraction((interaction) => {
       interaction.enabled = interaction.enabled === false ? true : false;
+    });
+  });
+  addListener(editorShapeMainToggle, "click", () => {
+    if (isSyncingEditorForm) return;
+    updateSelectedInteraction((interaction) => {
+      interaction.showInMain = interaction.showInMain === false ? true : false;
+    });
+  });
+  addListener(editorShapePreviewToggle, "click", () => {
+    if (isSyncingEditorForm) return;
+    updateSelectedInteraction((interaction) => {
+      interaction.showInPreview = interaction.showInPreview === false ? true : false;
     });
   });
   addListener(editorDeleteShapeButton, "click", handleDeleteShape);

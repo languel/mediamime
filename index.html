@@ -378,9 +378,17 @@
                     <div class="assignment-row assignment-row--name">
                       <label for="editor-shape-name">
                         Name
-                        <button type="button" id="editor-shape-enabled-toggle" class="icon-button" aria-pressed="true" title="Disable shape" aria-label="Disable shape">
-                          <span class="material-icons-outlined" aria-hidden="true">toggle_on</span>
-                        </button>
+                        <span class="editor-shape-toggle-row">
+                          <button type="button" id="editor-shape-main-toggle" class="icon-button" aria-pressed="true" title="Hide in main view" aria-label="Hide on main canvas">
+                            <span class="material-icons-outlined" aria-hidden="true">grid_on</span>
+                          </button>
+                          <button type="button" id="editor-shape-preview-toggle" class="icon-button" aria-pressed="true" title="Hide in preview" aria-label="Hide in preview mode">
+                            <span class="material-icons-outlined" aria-hidden="true">visibility</span>
+                          </button>
+                          <button type="button" id="editor-shape-enabled-toggle" class="icon-button" aria-pressed="true" title="Disable shape" aria-label="Disable shape">
+                            <span class="material-icons-outlined" aria-hidden="true">toggle_on</span>
+                          </button>
+                        </span>
                       </label>
                       <div class="assignment-field-group assignment-field-group--name">
                         <input id="editor-shape-name" type="text" name="editorShapeName" placeholder="Untitled shape">
