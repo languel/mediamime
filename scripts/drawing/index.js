@@ -455,6 +455,7 @@ export function initDrawing({ editor }) {
       if (!stream.enabled) return;
       // Only respect the preview toggle for the preview canvas; main canvas shows all enabled layers
       if (isPreview && stream.preview === false) return;
+      if (!isPreview && stream.showInMain === false) return;
       if (!stream.sourceId) return;
       const resultsEntry = state.resultsBySource.get(stream.sourceId) ?? null;
       let results = null;

@@ -104,7 +104,8 @@ const createStream = (overrides = {}, inputs = []) => {
       alpha: clampUnit(overrides.color?.alpha ?? DEFAULT_STREAM_ALPHA)
     },
     viewport: clampViewport(overrides.viewport ?? DEFAULT_VIEWPORT),
-    viewportMode: overrides.viewportMode || "fit"
+    viewportMode: overrides.viewportMode || "fit",
+    showInMain: overrides.showInMain !== false
   };
 };
 
@@ -118,7 +119,8 @@ const dispatchLayersEvent = (streams) => {
         streams: streams.map((stream) => ({
           ...stream,
           viewport: clampViewport(stream.viewport),
-          color: { ...stream.color }
+          color: { ...stream.color },
+          showInMain: stream.showInMain !== false
         }))
       }
     })
@@ -142,7 +144,8 @@ const persistStreams = (streams) => {
           alpha: clampUnit(stream.color?.alpha ?? DEFAULT_STREAM_ALPHA)
         },
         viewport: safeViewport,
-        viewportMode: stream.viewportMode === "custom" ? "custom" : "fit"
+        viewportMode: stream.viewportMode === "custom" ? "custom" : "fit",
+        showInMain: stream.showInMain !== false
       };
     });
     localStorage.setItem(LAYERS_STORAGE_KEY, JSON.stringify(payload));
@@ -170,7 +173,8 @@ const loadStoredStreams = () => {
         alpha: clampUnit(entry.color?.alpha ?? DEFAULT_STREAM_ALPHA)
       },
       viewport: clampViewport(entry.viewport || DEFAULT_VIEWPORT),
-      viewportMode: entry.viewportMode === "custom" ? "custom" : "fit"
+      viewportMode: entry.viewportMode === "custom" ? "custom" : "fit",
+      showInMain: entry.showInMain !== false
     }));
   } catch (error) {
     console.warn("[mediamime] Failed to load stored streams", error);
@@ -186,6 +190,7 @@ export function initLayers({ editor }) {
   const nameInput = document.getElementById("layer-stream-name");
   const enabledToggleBtn = document.getElementById("layer-stream-enabled-toggle");
   const previewToggleBtn = document.getElementById("layer-stream-preview-toggle");
+  const mainToggleBtn = document.getElementById("layer-stream-main-toggle");
   const sourceSelect = document.getElementById("layer-stream-source");
   const processSelect = document.getElementById("layer-stream-process");
   const fitToggle = document.getElementById("layer-viewport-fit");
@@ -411,10 +416,12 @@ export function initLayers({ editor }) {
     if (!stream) {
       if (colorChip) colorChip.disabled = true;
       if (sourceSelect) sourceSelect.disabled = true;
+      if (mainToggleBtn) mainToggleBtn.disabled = true;
       updateActionButtons();
       return;
     }
     state.isSyncing = true;
+    if (mainToggleBtn) mainToggleBtn.disabled = false;
     if (nameInput) nameInput.value = stream.name || "";
     if (enabledToggleBtn) {
       const on = Boolean(stream.enabled);
@@ -433,6 +440,15 @@ export function initLayers({ editor }) {
       if (iconEl) iconEl.textContent = show ? "visibility" : "visibility_off";
       previewToggleBtn.title = show ? "Hide in Preview" : "Show in Preview";
       previewToggleBtn.setAttribute("aria-label", show ? "Hide in preview panel" : "Show in preview panel");
+    }
+    if (mainToggleBtn) {
+      const showMain = stream.showInMain !== false;
+      mainToggleBtn.setAttribute("aria-pressed", String(showMain));
+      mainToggleBtn.classList.toggle("is-active", showMain);
+      const iconEl = mainToggleBtn.querySelector(".material-icons-outlined");
+      if (iconEl) iconEl.textContent = showMain ? "grid_on" : "grid_off";
+      mainToggleBtn.title = showMain ? "Hide in main view" : "Show in main view";
+      mainToggleBtn.setAttribute("aria-label", showMain ? "Hide on main canvas" : "Show on main canvas");
     }
     populateSourceOptions(stream);
     if (processSelect) {
@@ -477,6 +493,8 @@ export function initLayers({ editor }) {
         const enabledIcon = stream.enabled ? "toggle_on" : "toggle_off";
         const previewOn = stream.preview !== false;
         const previewIcon = previewOn ? "visibility" : "visibility_off";
+        const showMain = stream.showInMain !== false;
+        const mainIcon = showMain ? "grid_on" : "grid_off";
         const canMoveUp = index > 0;
         const canMoveDown = index < total - 1;
         return `
@@ -498,6 +516,9 @@ export function initLayers({ editor }) {
                 canMoveDown ? "" : "disabled"
               }>
                 <span class="material-icons-outlined" aria-hidden="true">arrow_downward</span>
+              </button>
+              <button type="button" class="icon-button ${showMain ? "is-active" : ""}" data-action="toggle-main" data-stream-id="${stream.id}" title="${showMain ? "Hide in main view" : "Show in main view"}" aria-label="${showMain ? "Hide on main canvas" : "Show on main canvas"}" aria-pressed="${String(showMain)}">
+                <span class="material-icons-outlined" aria-hidden="true">${mainIcon}</span>
               </button>
               <button type="button" class="icon-button ${previewOn ? "is-active" : ""}" data-action="toggle-preview" data-stream-id="${stream.id}" title="${previewOn ? "Hide in Preview" : "Show in Preview"}" aria-label="${previewOn ? "Hide in preview panel" : "Show in preview panel"}" aria-pressed="${String(previewOn)}">
                 <span class="material-icons-outlined" aria-hidden="true">${previewIcon}</span>
@@ -579,7 +600,8 @@ export function initLayers({ editor }) {
         process: active.process,
         color: { ...active.color },
         viewport: { ...active.viewport },
-        viewportMode: active.viewportMode
+        viewportMode: active.viewportMode,
+        showInMain: active.showInMain
       },
       state.inputs
     );
@@ -684,6 +706,18 @@ export function initLayers({ editor }) {
       if (id) moveStreamBy(id, 1);
       return;
     }
+    // Handle main visibility toggle
+    const mainBtn = event.target.closest('[data-action="toggle-main"]');
+    if (mainBtn) {
+      event.stopPropagation();
+      const id = mainBtn.dataset.streamId;
+      const stream = state.streams.find((s) => s.id === id);
+      if (stream) {
+        stream.showInMain = !(stream.showInMain !== false);
+        updateUI();
+      }
+      return;
+    }
     // Handle preview toggle
     const previewBtn = event.target.closest('[data-action="toggle-preview"]');
     if (previewBtn) {
@@ -762,6 +796,13 @@ export function initLayers({ editor }) {
     const stream = getActiveStream();
     if (!stream) return;
     stream.preview = !(stream.preview !== false);
+    updateUI();
+  });
+  addListener(mainToggleBtn, "click", () => {
+    if (state.isSyncing) return;
+    const stream = getActiveStream();
+    if (!stream) return;
+    stream.showInMain = !(stream.showInMain !== false);
     updateUI();
   });
 
@@ -884,7 +925,8 @@ export function initLayers({ editor }) {
       state.streams.map((stream) => ({
         ...stream,
         viewport: { ...stream.viewport },
-        color: { ...stream.color }
+        color: { ...stream.color },
+        showInMain: stream.showInMain !== false
       })),
     dispose() {
       listeners.forEach((off) => off());
