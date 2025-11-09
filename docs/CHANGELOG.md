@@ -78,7 +78,7 @@
 - 3-step history limit to prevent memory bloat
 
 ### Layers, Streams & Inputs (2025-11-07)
-- Added re-order controls for both stream and MIDI map lists; drag arrows update rendering order immediately.
+- Added re-order controls for both stream and MIDI map lists; drag arrows update rendering order immediately, plus per-layer “hide in main/preview” and enable toggles with matching UI in the mapping panel.
 - Raw source streams now show the tinted cropped feed, while the new Segmentation stream renders the subject alone with transparent background.
 - Segmentation mask option temporarily removed from the UI to reduce confusion.
 - Added per-stream “Hide in Main” toggle so layers can stay active in the preview while being muted on the primary canvas.

@@ -500,7 +500,10 @@ const createDefaultInteraction = () => ({
   stream: "pose",
   landmark: "left_wrist",
   midiPort: "broadcast",
-  events: [createDefaultEvent("midiNote")]
+  events: [createDefaultEvent("midiNote")],
+  enabled: true,
+  showInMain: true,
+  showInPreview: true
 });
 
 const mergeInteraction = (input) => {
@@ -519,7 +522,10 @@ const mergeInteraction = (input) => {
     stream: streamDefinition?.id || defaults.stream,
     landmark: landmarkValid ? candidateLandmark : fallbackLandmark,
     midiPort: typeof source.midiPort === "string" && source.midiPort.trim() ? source.midiPort.trim() : defaults.midiPort,
-    events
+    events,
+    enabled: source.enabled !== false,
+    showInMain: source.showInMain !== false,
+    showInPreview: source.showInPreview !== false
   };
 };
 
@@ -785,6 +791,7 @@ export function initMapping({ editor }) {
   const editorDetailEmpty = document.getElementById("editor-detail-empty");
   const editorDetailForm = document.getElementById("editor-detail-form");
   const editorShapeNameInput = document.getElementById("editor-shape-name");
+  const editorShapeEnabledToggle = document.getElementById("editor-shape-enabled-toggle");
   // Import/Export controls in the Map panel header
   const snapshotImportInput = document.getElementById("snapshot-import-input");
   const snapshotImportButton = document.getElementById("snapshot-import-button");
@@ -988,10 +995,13 @@ export function initMapping({ editor }) {
   const applyShapeHighlight = (shapeId) => {
     const active = isShapeActive(shapeId);
     const shape = shapesById.get(shapeId);
+    const interaction = shape ? mergeInteraction(shape.interaction) : createDefaultInteraction();
     if (svg) {
       const node = svg.querySelector(`[data-shape-id="${shapeId}"]`);
       if (node) {
         node.classList.toggle("is-mapping-active", active);
+        node.classList.toggle("is-disabled", interaction.enabled === false);
+        node.classList.toggle("is-hidden-main", interaction.showInMain === false);
         if (active && shape) {
           const color = getShapeColor(shape, DEFAULT_SHAPE_COLOR);
           const opacity = Math.min(getShapeOpacity(shape, DEFAULT_SHAPE_OPACITY) + 0.3, 1);
@@ -1009,6 +1019,9 @@ export function initMapping({ editor }) {
         } else {
           button.removeAttribute("data-active");
         }
+        button.classList.toggle("is-disabled", interaction.enabled === false);
+        button.classList.toggle("is-main-hidden", interaction.showInMain === false);
+        button.classList.toggle("is-preview-hidden", interaction.showInPreview === false);
       }
     }
   };
@@ -1026,6 +1039,13 @@ export function initMapping({ editor }) {
   };
 
   const getDefaultMidiPort = () => editorConfig.midiPort || "broadcast";
+
+  const handleEditorModeChange = (event) => {
+    const mode = event?.detail?.mode;
+    if (!mode || mode === state.editorMode) return;
+    state.editorMode = mode;
+    evaluateShapeInteractions();
+  };
 
   const populateMidiPortSelect = (selectEl, selectedId) => {
     if (!selectEl) return;
@@ -1435,7 +1455,8 @@ export function initMapping({ editor }) {
     draftColor: DEFAULT_SHAPE_COLOR,
     draftOpacity: DEFAULT_SHAPE_OPACITY,
     isSyncing: false,
-    modalOpen: false
+    modalOpen: false,
+    editorMode: typeof editor.getMode === "function" ? editor.getMode() : "edit"
   };
 
   const getShapeSnapshot = (shapeId) => {
@@ -1567,14 +1588,22 @@ export function initMapping({ editor }) {
         const fillAlpha = computeFillAlpha(opacity);
         const backgroundColor = hexToRgba(color, Math.min(fillAlpha + 0.08, 0.45));
         const borderColor = hexToRgba(color, Math.min(fillAlpha + 0.25, 0.9));
+        const interaction = mergeInteraction(shape.interaction);
+        const isEnabled = interaction.enabled !== false;
+        const showMain = interaction.showInMain !== false;
+        const showPreview = interaction.showInPreview !== false;
+        const mainIcon = showMain ? "grid_on" : "grid_off";
+        const previewIcon = showPreview ? "visibility" : "visibility_off";
+        const enabledIcon = isEnabled ? "toggle_on" : "toggle_off";
         const isActive = id === state.activeShapeId;
         const canMoveUp = index > 0;
         const canMoveDown = index < total - 1;
         const runtime = runtimeState.get(id);
         const isRunning = Boolean(runtime?.inside || runtime?.hoverInside);
         const activeAttr = isRunning ? ` data-active="true"` : "";
+        const disabledClass = isEnabled ? "" : " is-disabled";
         const styleAttr = ` style="--shape-color:${escapeHtml(color)};--shape-color-bg:${escapeHtml(backgroundColor)};--shape-color-border:${escapeHtml(borderColor)}"`;
-        return `<button type="button" id="editor-shape-${id}" class="editor-shape-item${isActive ? " is-active" : ""}" data-shape-id="${id}"${activeAttr}${styleAttr} role="option" aria-selected="${isActive ? "true" : "false"}">
+        return `<button type="button" id="editor-shape-${id}" class="editor-shape-item${isActive ? " is-active" : ""}${disabledClass}" data-shape-id="${id}"${activeAttr}${styleAttr} role="option" aria-selected="${isActive ? "true" : "false"}">
             <span class="shape-label"><span class="shape-color-indicator" style="--shape-color:${escapeHtml(color)}" aria-hidden="true"></span><span class="shape-label-text">${escapeHtml(label)}</span></span>
             <span class="shape-meta">${escapeHtml(meta)}</span>
             <span class="shape-row-actions">
@@ -1583,6 +1612,15 @@ export function initMapping({ editor }) {
               </button>
               <button type="button" class="icon-button" data-action="move-shape-down" title="Move shape down" aria-label="Move shape down" ${canMoveDown ? "" : "disabled"}>
                 <span class="material-icons-outlined" aria-hidden="true">arrow_downward</span>
+              </button>
+              <button type="button" class="icon-button ${showMain ? "is-active" : ""}" data-action="toggle-shape-main" aria-pressed="${String(showMain)}" title="${showMain ? "Hide in main view" : "Show in main view"}" aria-label="${showMain ? "Hide on main canvas" : "Show on main canvas"}">
+                <span class="material-icons-outlined" aria-hidden="true">${mainIcon}</span>
+              </button>
+              <button type="button" class="icon-button ${showPreview ? "is-active" : ""}" data-action="toggle-shape-preview" aria-pressed="${String(showPreview)}" title="${showPreview ? "Hide in preview" : "Show in preview"}" aria-label="${showPreview ? "Hide in preview mode" : "Show in preview mode"}">
+                <span class="material-icons-outlined" aria-hidden="true">${previewIcon}</span>
+              </button>
+              <button type="button" class="icon-button ${isEnabled ? "is-active" : ""}" data-action="toggle-shape-enabled" aria-pressed="${String(isEnabled)}" title="${isEnabled ? "Disable shape" : "Enable shape"}" aria-label="${isEnabled ? "Disable shape" : "Enable shape"}">
+                <span class="material-icons-outlined" aria-hidden="true">${enabledIcon}</span>
               </button>
               <button type="button" class="icon-button" data-action="delete-shape" title="Delete shape" aria-label="Delete shape">
                 <span class="material-icons-outlined" aria-hidden="true">delete</span>
@@ -1623,6 +1661,17 @@ export function initMapping({ editor }) {
     if (editorShapeMidiSelect) {
       editorShapeMidiSelect.disabled = !hasShape;
     }
+    if (editorShapeEnabledToggle) {
+      if (!hasShape) {
+        editorShapeEnabledToggle.disabled = true;
+        editorShapeEnabledToggle.setAttribute("aria-pressed", "false");
+        editorShapeEnabledToggle.classList.remove("is-active");
+        const iconEl = editorShapeEnabledToggle.querySelector(".material-icons-outlined");
+        if (iconEl) iconEl.textContent = "toggle_off";
+        editorShapeEnabledToggle.title = "Enable shape";
+        editorShapeEnabledToggle.setAttribute("aria-label", "Enable shape");
+      }
+    }
     if (!hasShape) {
       if (editorStreamSelect) {
         editorStreamSelect.disabled = true;
@@ -1654,6 +1703,16 @@ export function initMapping({ editor }) {
       return;
     }
     const interaction = mergeInteraction(shape.interaction);
+    if (editorShapeEnabledToggle) {
+      const enabled = interaction.enabled !== false;
+      editorShapeEnabledToggle.disabled = false;
+      editorShapeEnabledToggle.setAttribute("aria-pressed", String(enabled));
+      editorShapeEnabledToggle.classList.toggle("is-active", enabled);
+      const iconEl = editorShapeEnabledToggle.querySelector(".material-icons-outlined");
+      if (iconEl) iconEl.textContent = enabled ? "toggle_on" : "toggle_off";
+      editorShapeEnabledToggle.title = enabled ? "Disable shape" : "Enable shape";
+      editorShapeEnabledToggle.setAttribute("aria-label", enabled ? "Disable shape" : "Enable shape");
+    }
     isSyncingEditorForm = true;
     if (editorStreamSelect) {
       editorStreamSelect.disabled = false;
@@ -1687,15 +1746,21 @@ export function initMapping({ editor }) {
     applyMidiSelections();
   };
 
-  const updateSelectedInteraction = (mutator) => {
-    if (!state.activeShapeId || typeof editor.updateShape !== "function") return;
-    editor.updateShape(state.activeShapeId, (shape) => {
+  const updateShapeInteractionById = (shapeId, mutator) => {
+    if (!shapeId || typeof editor.updateShape !== "function" || typeof mutator !== "function") return;
+    editor.updateShape(shapeId, (shape) => {
+      if (!shape) return shape;
       const interaction = mergeInteraction(shape.interaction);
       mutator(interaction, shape);
       shape.interaction = interaction;
       return shape;
     });
     evaluateShapeInteractions();
+  };
+
+  const updateSelectedInteraction = (mutator) => {
+    if (!state.activeShapeId) return;
+    updateShapeInteractionById(state.activeShapeId, mutator);
   };
 
   const commitDraftInteraction = () => {
@@ -2416,6 +2481,8 @@ export function initMapping({ editor }) {
     const holisticResults = inputState.holistic;
     const pointCache = new Map();
 
+    const isPreviewMode = state.editorMode === "perform";
+
     shapeOrder.forEach((shapeId) => {
       const shape = shapesById.get(shapeId);
       if (!shape) {
@@ -2425,6 +2492,13 @@ export function initMapping({ editor }) {
       }
       shape.interaction = mergeInteraction(shape.interaction);
       const interaction = shape.interaction;
+      const isEnabled = interaction.enabled !== false;
+      const showPreview = interaction.showInPreview !== false;
+      if (!isEnabled || (isPreviewMode && !showPreview)) {
+        clearRuntimeState(shapeId);
+        applyShapeHighlight(shapeId);
+        return;
+      }
       const resolvedMidiPort = interaction.midiPort && interaction.midiPort.trim()
         ? interaction.midiPort.trim()
         : getDefaultMidiPort();
@@ -2843,6 +2917,39 @@ export function initMapping({ editor }) {
       }
       return;
     }
+    const toggleMainTarget = event.target?.closest?.("[data-action='toggle-shape-main']");
+    if (toggleMainTarget) {
+      event.stopPropagation();
+      const shapeId = toggleMainTarget.closest("[data-shape-id]")?.dataset.shapeId;
+      if (shapeId) {
+        updateShapeInteractionById(shapeId, (interaction) => {
+          interaction.showInMain = interaction.showInMain === false ? true : false;
+        });
+      }
+      return;
+    }
+    const togglePreviewTarget = event.target?.closest?.("[data-action='toggle-shape-preview']");
+    if (togglePreviewTarget) {
+      event.stopPropagation();
+      const shapeId = togglePreviewTarget.closest("[data-shape-id]")?.dataset.shapeId;
+      if (shapeId) {
+        updateShapeInteractionById(shapeId, (interaction) => {
+          interaction.showInPreview = interaction.showInPreview === false ? true : false;
+        });
+      }
+      return;
+    }
+    const toggleEnabledTarget = event.target?.closest?.("[data-action='toggle-shape-enabled']");
+    if (toggleEnabledTarget) {
+      event.stopPropagation();
+      const shapeId = toggleEnabledTarget.closest("[data-shape-id]")?.dataset.shapeId;
+      if (shapeId) {
+        updateShapeInteractionById(shapeId, (interaction) => {
+          interaction.enabled = interaction.enabled === false ? true : false;
+        });
+      }
+      return;
+    }
     const deleteTarget = event.target?.closest?.("[data-action='delete-shape']");
     if (deleteTarget) {
       const button = deleteTarget.closest("[data-shape-id]");
@@ -2951,6 +3058,12 @@ export function initMapping({ editor }) {
   addListener(editorShapeNameInput, "input", handleEditorShapeNameInput);
   addListener(editorShapeNameInput, "change", normalizeEditorShapeName);
   addListener(editorShapeNameInput, "blur", normalizeEditorShapeName);
+  addListener(editorShapeEnabledToggle, "click", () => {
+    if (isSyncingEditorForm) return;
+    updateSelectedInteraction((interaction) => {
+      interaction.enabled = interaction.enabled === false ? true : false;
+    });
+  });
   addListener(editorDeleteShapeButton, "click", handleDeleteShape);
   addListener(editorAddEventButton, "click", handleEditorAddEvent);
   addListener(editorEventList, "click", handleEditorEventListClick);
@@ -2976,6 +3089,7 @@ export function initMapping({ editor }) {
   addListener(window, "keydown", handleInputKeyDown, true);
   addListener(window, "keyup", handleInputKeyUp, true);
   addListener(window, "mediamime:holistic-results", handleHolisticResults);
+  addListener(window, "mediamime:editor-mode-changed", handleEditorModeChange);
 
   if (typeof editor.on === "function") {
     editor.on("selectionchange", handleSelectionChange);

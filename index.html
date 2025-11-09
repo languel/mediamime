@@ -376,7 +376,12 @@
                   </div>
                   <form id="editor-detail-form" class="editor-detail-form assignment-body" autocomplete="off">
                     <div class="assignment-row assignment-row--name">
-                      <label for="editor-shape-name">Name</label>
+                      <label for="editor-shape-name">
+                        Name
+                        <button type="button" id="editor-shape-enabled-toggle" class="icon-button" aria-pressed="true" title="Disable shape" aria-label="Disable shape">
+                          <span class="material-icons-outlined" aria-hidden="true">toggle_on</span>
+                        </button>
+                      </label>
                       <div class="assignment-field-group assignment-field-group--name">
                         <input id="editor-shape-name" type="text" name="editorShapeName" placeholder="Untitled shape">
                         <div class="color-chip-wrapper" data-color-picker="editor">

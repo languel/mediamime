@@ -1575,12 +1575,31 @@ html, body {
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      gap: 0.1rem;
     }
     .editor-shape-list .icon-button {
       border: none;
       background: transparent;
       padding: 0;
       box-shadow: none;
+    }
+    .editor-shape-list button.is-disabled {
+      opacity: 0.55;
+    }
+    .editor-shape-list button.is-main-hidden .shape-label-text,
+    .editor-shape-list button.is-preview-hidden .shape-label-text {
+      position: relative;
+    }
+    .editor-shape-list button.is-main-hidden .shape-label-text::after,
+    .editor-shape-list button.is-preview-hidden .shape-label-text::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.35);
+      transform: translateY(-50%);
+      pointer-events: none;
     }
     .editor-shape-list .icon-button:hover,
     .editor-shape-list .icon-button:focus-visible {
@@ -1766,6 +1785,12 @@ html, body {
     }
     .editor-shape.is-mapping-active {
       filter: drop-shadow(0 0 16px var(--shape-glow-color, rgba(255, 255, 255, 0.5)));
+    }
+    .editor-shape.is-disabled {
+      opacity: 0.35;
+    }
+    .editor-shape.is-hidden-main {
+      display: none;
     }
     @media (max-width: 1200px) {
       .editor-detail,

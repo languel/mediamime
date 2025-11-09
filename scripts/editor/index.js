@@ -3137,6 +3137,14 @@ function applyShapeNode(node, shape, view) {
   node.dataset.shapeId = shape.id;
   node.dataset.shapeType = shape.type;
   node.dataset.shapeName = shape.name || "";
+  const interactionData = shape.interaction && typeof shape.interaction === "object" ? shape.interaction : null;
+  const showInMain = interactionData ? interactionData.showInMain !== false : true;
+  const enabledInMain = interactionData ? interactionData.enabled !== false : true;
+  node.dataset.showInMain = String(showInMain);
+  node.dataset.shapeEnabled = String(enabledInMain);
+  node.classList.toggle("is-disabled", !enabledInMain);
+  node.classList.toggle("is-hidden-main", !showInMain);
+  node.style.display = showInMain ? "" : "none";
   if (shape.interaction) {
     try {
       node.dataset.shapeInteraction = JSON.stringify(shape.interaction);
