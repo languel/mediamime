@@ -11,7 +11,7 @@ const PROCESS_OPTIONS = [
 ];
 
 const DEFAULT_STREAM_COLOR = "#52d5ff";
-const DEFAULT_STREAM_ALPHA = 0;
+const DEFAULT_STREAM_ALPHA = 0.5;
 const DEFAULT_VIEWPORT = Object.freeze({ x: 0, y: 0, w: 1, h: 1 });
 const MIN_VIEWPORT_SIZE = 0.05;
 const LAYERS_STATE_EVENT = "mediamime:layers-changed";

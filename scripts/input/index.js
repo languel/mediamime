@@ -1140,7 +1140,7 @@ export function initInput({ editor }) {
     previewCtx.save();
     previewCtx.strokeStyle = '#00e0ff';
     previewCtx.lineWidth = Math.max(1, 2 * dpr);
-    previewCtx.setLineDash([10, 6]);
+    previewCtx.setLineDash([1, 12]);
     previewCtx.strokeRect(rectX, rectY, rectW, rectH);
     previewCtx.restore();
     

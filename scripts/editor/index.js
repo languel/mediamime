@@ -2266,7 +2266,7 @@ class Editor {
       stroke: '#ffffff',
       'stroke-opacity': '0.9',
       'stroke-width': '2',
-      'stroke-dasharray': '2,3',
+      'stroke-dasharray': '1,12',
       'pointer-events': 'none'
     });
     frameGroup.appendChild(rect);

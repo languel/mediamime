@@ -1551,7 +1551,7 @@ export function initMapping({ editor }) {
   };
 
   const buildShapeMeta = (shape) => {
-    if (!shape) return "No events";
+    if (!shape) return " ";
     const interaction = mergeInteraction(shape.interaction);
     const streamId = interaction.stream;
     const events = interaction.events.filter((event) => event.type && event.type !== "none");
@@ -1578,7 +1578,7 @@ export function initMapping({ editor }) {
     })();
 
     // Event type emoji
-    let eventGlyph = "No events";
+    let eventGlyph = " ";
     if (primary) {
       eventGlyph = primary.type === "midiCc" ? "🎛️" : primary.type === "midiNote" ? "🎹" : "•";
     }
@@ -1595,7 +1595,7 @@ export function initMapping({ editor }) {
         case "enterExit":
           return "↔";
         case "inside":
-          return null; // leave off to avoid clutter
+          return "◻"; // leave off to avoid clutter
         default:
           return null;
       }

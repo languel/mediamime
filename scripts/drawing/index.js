@@ -186,7 +186,7 @@ const drawViewportBounds = (ctx, viewportPx, strokeColor, fillAlpha = 0, fillCol
   }
   ctx.strokeStyle = strokeColor;
   ctx.lineWidth = 1;
-  ctx.setLineDash([6, 4]);
+  ctx.setLineDash([1, 12]);
   ctx.strokeRect(viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
   ctx.restore();
 };
@@ -228,11 +228,6 @@ const calculateFPS = (fpsTracker) => {
 
 const drawMetrics = (ctx, viewportPx, strokeColor, frame, results, stream, zoom = 1, fpsTracker = null) => {
   ctx.save();
-  
-  // Draw viewport bounds
-  ctx.strokeStyle = strokeColor;
-  ctx.lineWidth = 2 / zoom;
-  ctx.strokeRect(viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
   
   // Calculate FPS
   const fps = fpsTracker ? calculateFPS(fpsTracker) : 0;
@@ -319,16 +314,22 @@ const drawMetrics = (ctx, viewportPx, strokeColor, frame, results, stream, zoom 
   const bgWidth = maxWidth + padding * 2;
   const bgHeight = fpsLineHeight + padding + regularMetrics.length * lineHeight + padding * 2;
   
-  // Draw semi-transparent background
-  ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+  // Draw background using layer color with alpha
+  const layerAlpha = stream.color?.alpha ?? 0.5;
+  const layerColor = stream.color?.hex || '#52d5ff';
+  // Convert hex to rgb and apply alpha
+  const hexMatch = layerColor.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+  if (hexMatch) {
+    const r = parseInt(hexMatch[1], 16);
+    const g = parseInt(hexMatch[2], 16);
+    const b = parseInt(hexMatch[3], 16);
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${layerAlpha})`;
+  } else {
+    ctx.fillStyle = `rgba(82, 213, 255, ${layerAlpha})`;
+  }
   ctx.fillRect(viewportPx.x + 6 / zoom, viewportPx.y + 6 / zoom, bgWidth, bgHeight);
   
-  // Draw border
-  ctx.strokeStyle = strokeColor;
-  ctx.lineWidth = 1 / zoom;
-  ctx.strokeRect(viewportPx.x + 6 / zoom, viewportPx.y + 6 / zoom, bgWidth, bgHeight);
-  
-  // Draw FPS prominently
+  // Draw FPS prominently with white text
   ctx.font = `bold ${fpsFontSize}px "SF Mono", "Monaco", "Menlo", "Courier New", monospace`;
   ctx.fillStyle = fps > 24 ? '#52ff52' : fps > 15 ? '#ffaa00' : '#ff5252';
   ctx.fillText(
@@ -346,9 +347,9 @@ const drawMetrics = (ctx, viewportPx, strokeColor, frame, results, stream, zoom 
   ctx.lineTo(viewportPx.x + bgWidth - padding + 6 / zoom, separatorY);
   ctx.stroke();
   
-  // Draw regular metrics
+  // Draw regular metrics with white text
   ctx.font = `${fontSize}px "SF Mono", "Monaco", "Menlo", "Courier New", monospace`;
-  ctx.fillStyle = strokeColor;
+  ctx.fillStyle = '#ffffff';
   regularMetrics.forEach((metric, index) => {
     ctx.fillText(
       metric,
@@ -761,7 +762,7 @@ export function initDrawing({ editor }) {
       );
     }
 
-    const dashPattern = [8 / camera.zoom, 4 / camera.zoom];
+    const dashPattern = [2 / camera.zoom, 8 / camera.zoom];
 
     state.streams.forEach((stream) => {
       if (!stream?.enabled) return;

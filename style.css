@@ -911,7 +911,7 @@ html, body {
       fill: rgba(82, 213, 255, 0.05);
       stroke: rgba(82, 213, 255, 0.45);
       stroke-width: 2;
-      stroke-dasharray: 10 6;
+      stroke-dasharray: 1 12;
     }
     .editor-selection__handle {
       pointer-events: all;
@@ -937,7 +937,7 @@ html, body {
       fill: rgba(82, 213, 255, 0.08);
       stroke: rgba(82, 213, 255, 0.35);
       stroke-width: 1;
-      stroke-dasharray: 6 4;
+      stroke-dasharray: 1 12;
       pointer-events: none;
     }
     .editor-selection__marquee.is-hidden {
