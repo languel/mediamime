@@ -23,7 +23,13 @@ const clampRange = (value, min, max) => {
 
 const clampUnit = (value) => clampRange(value, 0, 1);
 
-const formatUnit = (value) => clampUnit(Number.isFinite(value) ? value : 0).toFixed(2);
+const toFiniteNumber = (value, fallback = 0) => {
+  if (Number.isFinite(value)) return value;
+  const parsed = Number.parseFloat(`${value}`);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const formatUnit = (value) => (Number.isFinite(value) ? value : 0).toFixed(2);
 
 const normalizeHex = (value) => {
   if (typeof value !== "string") return DEFAULT_STREAM_COLOR;
@@ -70,24 +76,18 @@ const cloneViewport = (viewport = DEFAULT_VIEWPORT) => ({
   h: viewport.h ?? DEFAULT_VIEWPORT.h
 });
 
-const clampViewport = (viewport) => {
-  let x = clampUnit(viewport.x);
-  let y = clampUnit(viewport.y);
-  let w = clampRange(viewport.w, MIN_VIEWPORT_SIZE, 1);
-  let h = clampRange(viewport.h, MIN_VIEWPORT_SIZE, 1);
-  if (x + w > 1) {
-    x = clampUnit(1 - w);
-  }
-  if (y + h > 1) {
-    y = clampUnit(1 - h);
-  }
-  if (x + w > 1) {
-    w = clampRange(1 - x, MIN_VIEWPORT_SIZE, 1);
-  }
-  if (y + h > 1) {
-    h = clampRange(1 - y, MIN_VIEWPORT_SIZE, 1);
-  }
-  return { x, y, w, h };
+const clampViewport = (viewport = DEFAULT_VIEWPORT) => {
+  const safe = viewport || DEFAULT_VIEWPORT;
+  const clampSize = (value, fallback) => {
+    const number = toFiniteNumber(value, fallback);
+    return clampRange(number, MIN_VIEWPORT_SIZE, Number.POSITIVE_INFINITY);
+  };
+  return {
+    x: toFiniteNumber(safe.x, DEFAULT_VIEWPORT.x),
+    y: toFiniteNumber(safe.y, DEFAULT_VIEWPORT.y),
+    w: clampSize(safe.w, DEFAULT_VIEWPORT.w),
+    h: clampSize(safe.h, DEFAULT_VIEWPORT.h)
+  };
 };
 
 const createStream = (overrides = {}, inputs = []) => {
@@ -117,7 +117,7 @@ const dispatchLayersEvent = (streams) => {
       detail: {
         streams: streams.map((stream) => ({
           ...stream,
-          viewport: { ...stream.viewport },
+          viewport: clampViewport(stream.viewport),
           color: { ...stream.color }
         }))
       }
@@ -128,25 +128,23 @@ const dispatchLayersEvent = (streams) => {
 const persistStreams = (streams) => {
   if (typeof localStorage === "undefined") return;
   try {
-    const payload = streams.map((stream) => ({
-      id: stream.id,
-      name: stream.name,
-      enabled: Boolean(stream.enabled),
-      preview: Boolean(stream.preview),
-      sourceId: stream.sourceId || null,
-      process: stream.process,
-      color: {
-        hex: normalizeHex(stream.color?.hex ?? DEFAULT_STREAM_COLOR),
-        alpha: clampUnit(stream.color?.alpha ?? DEFAULT_STREAM_ALPHA)
-      },
-      viewport: {
-        x: clampUnit(stream.viewport?.x ?? DEFAULT_VIEWPORT.x),
-        y: clampUnit(stream.viewport?.y ?? DEFAULT_VIEWPORT.y),
-        w: clampUnit(stream.viewport?.w ?? DEFAULT_VIEWPORT.w),
-        h: clampUnit(stream.viewport?.h ?? DEFAULT_VIEWPORT.h)
-      },
-      viewportMode: stream.viewportMode === "custom" ? "custom" : "fit"
-    }));
+    const payload = streams.map((stream) => {
+      const safeViewport = clampViewport(stream.viewport || DEFAULT_VIEWPORT);
+      return {
+        id: stream.id,
+        name: stream.name,
+        enabled: Boolean(stream.enabled),
+        preview: Boolean(stream.preview),
+        sourceId: stream.sourceId || null,
+        process: stream.process,
+        color: {
+          hex: normalizeHex(stream.color?.hex ?? DEFAULT_STREAM_COLOR),
+          alpha: clampUnit(stream.color?.alpha ?? DEFAULT_STREAM_ALPHA)
+        },
+        viewport: safeViewport,
+        viewportMode: stream.viewportMode === "custom" ? "custom" : "fit"
+      };
+    });
     localStorage.setItem(LAYERS_STORAGE_KEY, JSON.stringify(payload));
   } catch (error) {
     console.warn("[mediamime] Failed to persist streams", error);
@@ -605,9 +603,8 @@ export function initLayers({ editor }) {
     const input = viewportInputs[key];
     if (!input) return;
     const raw = input.value.trim();
-    let parsed = Number.parseFloat(raw);
-    if (!Number.isFinite(parsed)) parsed = stream.viewport[key];
-    parsed = clampUnit(parsed);
+    const fallbackValue = Number.isFinite(stream.viewport[key]) ? stream.viewport[key] : DEFAULT_VIEWPORT[key];
+    const parsed = toFiniteNumber(raw, fallbackValue);
     const nextViewport = { ...stream.viewport, [key]: parsed };
     stream.viewportMode = "custom";
     if (fitToggle) fitToggle.checked = false;
@@ -845,7 +842,7 @@ export function initLayers({ editor }) {
     const { layerId, viewport, viewportMode } = e.detail;
     const stream = state.streams.find(s => s.id === layerId);
     if (stream) {
-      stream.viewport = viewport;
+      stream.viewport = clampViewport(viewport);
       stream.viewportMode = viewportMode;
       persistStreams(state.streams);
       updateUI();

@@ -41,13 +41,21 @@ const HAND_CONNECTIONS_FALLBACK = [
   [0, 17]
 ];
 
+const MIN_VIEWPORT_SIZE = 0.05;
+
 const clampUnit = (value) => Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
 
+const toFiniteNumber = (value, fallback = 0) => {
+  if (Number.isFinite(value)) return value;
+  const parsed = Number.parseFloat(`${value}`);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
 const normalizeViewport = (viewport = {}) => ({
-  x: clampUnit(viewport.x ?? 0),
-  y: clampUnit(viewport.y ?? 0),
-  w: clampUnit(viewport.w ?? 1) || 1,
-  h: clampUnit(viewport.h ?? 1) || 1
+  x: toFiniteNumber(viewport.x, 0),
+  y: toFiniteNumber(viewport.y, 0),
+  w: Math.max(MIN_VIEWPORT_SIZE, toFiniteNumber(viewport.w, 1)),
+  h: Math.max(MIN_VIEWPORT_SIZE, toFiniteNumber(viewport.h, 1))
 });
 
 const hexToRgb = (hex) => {
@@ -658,7 +666,7 @@ export function initDrawing({ editor }) {
       const deltaY = dy / viewBox.height;
 
       let newViewport = { ...state.viewportDragState.initialViewport };
-      const minSize = 0.05;
+      const minSize = MIN_VIEWPORT_SIZE;
 
       if (state.viewportDragState.handleType === 'move') {
         newViewport.x = newViewport.x + deltaX;
@@ -753,7 +761,9 @@ export function initDrawing({ editor }) {
     const cssY = metrics?.usesDomMatrix ? e.clientY : e.clientY - rect.top;
     const worldPoint = toWorldCoords(cssX, cssY, camera, metrics);
 
-    const initialViewport = hovered.stream?.viewport ? { ...hovered.stream.viewport } : { x: 0, y: 0, w: 1, h: 1 };
+    const initialViewport = hovered.stream?.viewport
+      ? normalizeViewport(hovered.stream.viewport)
+      : { x: 0, y: 0, w: 1, h: 1 };
     state.viewportDragState = {
       handleType: hovered.handleType || hovered.type,
       layerId: hovered.stream?.id || state.activeLayerId,
