@@ -224,7 +224,6 @@ export function initDrawing({ editor }) {
     activeLayerId: null, // Track selected layer for viewport editing
     viewportDragState: null, // Track viewport drag interaction
     editor, // Store editor reference for camera transform
-    viewportEditMode: false, // Controlled by Layers panel toggle
     spacebarPanning: false, // Track when editor is panning with spacebar
     editorMode: editor?.getMode ? editor.getMode() : 'edit',
     svg: document.getElementById('gesture-svg') || null,
@@ -510,7 +509,7 @@ export function initDrawing({ editor }) {
       const scoreH = normalized.h * viewBox.height;
 
       const layerColor = toRgba(stream.color?.hex, 1) || '#00e0ff';
-      const isActive = state.viewportEditMode && stream.id === state.activeLayerId;
+      const isActive = state.activeLayerId === stream.id;
 
       targetCtx.save();
       targetCtx.globalAlpha = isActive ? 1 : 0.6;
@@ -550,38 +549,16 @@ export function initDrawing({ editor }) {
     requestAnimationFrame(render);
   };
 
-  // Toggle gesture editor interactivity based on explicit edit mode
-  const applyViewportEditMode = () => {
+  // Toggle gesture editor interactivity based on active layer selection
+  const updateViewportInteractionState = () => {
     const overlay = document.getElementById('gesture-editor');
-    if (!overlay) return;
-    if (state.viewportEditMode && state.activeLayerId) {
-      overlay.classList.add('is-viewport-edit');
-      // Ensure canvas can receive events
-      canvas.style.pointerEvents = 'auto';
-    } else {
-      overlay.classList.remove('is-viewport-edit');
-      canvas.style.pointerEvents = '';
+    const hasActiveLayer = Boolean(state.activeLayerId);
+    if (overlay) {
+      overlay.classList.toggle('is-viewport-edit', hasActiveLayer);
     }
-  };
-
-  const setViewportEditMode = (enabled, { broadcast = false } = {}) => {
-    const next = Boolean(enabled);
-    const changed = state.viewportEditMode !== next;
-    if (changed) {
-      state.viewportEditMode = next;
-      applyViewportEditMode();
-      requestRender();
-    }
-    if (broadcast) {
-      const event = new CustomEvent('mediamime:viewport-edit-mode', {
-        detail: {
-          enabled: next,
-          layerId: state.activeLayerId,
-          source: 'drawing'
-        },
-        bubbles: true
-      });
-      window.dispatchEvent(event);
+    if (canvas) {
+      canvas.classList.toggle('is-viewport-edit', hasActiveLayer);
+      canvas.style.pointerEvents = hasActiveLayer ? 'auto' : 'none';
     }
   };
 
@@ -640,6 +617,10 @@ export function initDrawing({ editor }) {
 
   const handleCanvasPointerMove = (e) => {
     if (e.target !== canvas || state.spacebarPanning) return;
+    if (!state.activeLayerId) {
+      canvas.style.cursor = '';
+      return;
+    }
     const camera = state.editor?.getCamera ? state.editor.getCamera() : { x: 0, y: 0, zoom: 1 };
     const metrics = ensureDisplayMetrics();
     if (!metrics) return;
@@ -710,7 +691,7 @@ export function initDrawing({ editor }) {
       e.clientY,
       metrics,
       camera,
-      { anyLayer: !state.viewportEditMode }
+      { anyLayer: true }
     );
 
     if (hovered) {
@@ -738,8 +719,8 @@ export function initDrawing({ editor }) {
 
     const hovered = getHoveredViewportHandle(e.clientX, e.clientY, metrics, camera, { anyLayer: true });
     if (!hovered) {
-      if (state.viewportEditMode) {
-        setViewportEditMode(false, { broadcast: true });
+      if (state.activeLayerId) {
+        emitLayerSelection(null);
       }
       canvas.style.cursor = '';
       return;
@@ -752,10 +733,6 @@ export function initDrawing({ editor }) {
       emitLayerSelection(hovered.stream.id);
     }
 
-    if (!state.viewportEditMode) {
-      setViewportEditMode(true, { broadcast: true });
-    }
-
     const rect = canvas.getBoundingClientRect();
     const cssX = metrics?.usesDomMatrix ? e.clientX : e.clientX - rect.left;
     const cssY = metrics?.usesDomMatrix ? e.clientY : e.clientY - rect.top;
@@ -765,6 +742,7 @@ export function initDrawing({ editor }) {
       ? normalizeViewport(hovered.stream.viewport)
       : { x: 0, y: 0, w: 1, h: 1 };
     state.viewportDragState = {
+      pointerId: e.pointerId,
       handleType: hovered.handleType || hovered.type,
       layerId: hovered.stream?.id || state.activeLayerId,
       startScoreX: worldPoint.x,
@@ -775,11 +753,23 @@ export function initDrawing({ editor }) {
     canvas.setPointerCapture(e.pointerId);
   };
 
-  const handleCanvasPointerUp = (e) => {
-    if (state.viewportDragState) {
-      canvas.releasePointerCapture(e.pointerId);
-      state.viewportDragState = null;
+  const clearViewportDragState = () => {
+    if (!state.viewportDragState) return;
+    const pointerId = state.viewportDragState.pointerId;
+    if (typeof pointerId === "number" && typeof canvas.releasePointerCapture === "function") {
+      try {
+        if (!canvas.hasPointerCapture || canvas.hasPointerCapture(pointerId)) {
+          canvas.releasePointerCapture(pointerId);
+        }
+      } catch (error) {
+        // Ignore invalid pointer release attempts
+      }
     }
+    state.viewportDragState = null;
+  };
+
+  const handleCanvasPointerUp = () => {
+    clearViewportDragState();
   };
 
   // Attach canvas interaction handlers
@@ -879,7 +869,11 @@ export function initDrawing({ editor }) {
   // Handle layer selection from layers panel
   const handleLayerSelection = (e) => {
     state.activeLayerId = e?.detail?.layerId || null;
-    applyViewportEditMode();
+    if (!state.activeLayerId) {
+      clearViewportDragState();
+      canvas.style.cursor = '';
+    }
+    updateViewportInteractionState();
     requestRender();
   };
 
@@ -893,8 +887,8 @@ export function initDrawing({ editor }) {
     const mode = event?.detail?.mode;
     if (!mode || mode === state.editorMode) return;
     state.editorMode = mode;
-    if (mode === 'perform' && state.viewportEditMode) {
-      setViewportEditMode(false, { broadcast: true });
+    if (mode === 'perform' && state.activeLayerId) {
+      emitLayerSelection(null);
     }
     requestRender();
   };
@@ -904,18 +898,6 @@ export function initDrawing({ editor }) {
   window.addEventListener('mediamime:layer-selected', handleLayerSelection);
   window.addEventListener('mediamime:camera-changed', handleCameraChange);
   window.addEventListener('mediamime:editor-mode-changed', handleEditorModeChange);
-
-  // Viewport edit mode from Layers panel
-  const handleViewportEditMode = (e) => {
-    const source = e?.detail?.source;
-    const enabled = Boolean(e?.detail?.enabled);
-    if (e?.detail?.layerId) {
-      state.activeLayerId = e.detail.layerId;
-    }
-    if (source === 'drawing') return;
-    setViewportEditMode(enabled);
-  };
-  window.addEventListener('mediamime:viewport-edit-mode', handleViewportEditMode);
 
   // Track spacebar for editor pan pass-through
   const handleKeyDown = (e) => {
@@ -932,7 +914,7 @@ export function initDrawing({ editor }) {
   window.addEventListener('keyup', handleKeyUp);
 
   // Initialize overlay interactivity state
-  applyViewportEditMode();
+  updateViewportInteractionState();
 
   return {
     dispose() {
@@ -941,10 +923,10 @@ export function initDrawing({ editor }) {
       window.removeEventListener('mediamime:layer-selected', handleLayerSelection);
       window.removeEventListener('mediamime:camera-changed', handleCameraChange);
   window.removeEventListener('mediamime:editor-mode-changed', handleEditorModeChange);
-      window.removeEventListener('mediamime:viewport-edit-mode', handleViewportEditMode);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
-      applyViewportEditMode();
+      clearViewportDragState();
+      updateViewportInteractionState();
       
       // Clean up canvas listeners
       canvas.removeEventListener('pointermove', handleCanvasPointerMove);

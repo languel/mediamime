@@ -197,8 +197,6 @@ export function initLayers({ editor }) {
     h: document.getElementById("layer-viewport-h")
   };
   const fitButton = document.getElementById("layer-fit-viewport");
-  const editViewportBtn = document.getElementById("layer-viewport-edit");
-  let viewportEditOn = false; // explicit local toggle state
   const addButton = document.getElementById("layer-add-stream");
   const duplicateButton = document.getElementById("layer-duplicate-stream");
   const colorChip = document.getElementById("layer-color-chip");
@@ -330,18 +328,6 @@ export function initLayers({ editor }) {
     isSyncing: false,
     colorPicker: null,
     viewportEditing: { x: null, y: null, w: null, h: null }
-  };
-
-  const dispatchViewportEditMode = (enabled) => {
-    const event = new CustomEvent('mediamime:viewport-edit-mode', {
-      detail: {
-        enabled: Boolean(enabled),
-        layerId: state.activeId,
-        source: 'layers'
-      },
-      bubbles: true
-    });
-    window.dispatchEvent(event);
   };
 
   const getActiveStream = () => state.streams.find((stream) => stream.id === state.activeId) || null;
@@ -517,41 +503,45 @@ export function initLayers({ editor }) {
     listEl.innerHTML = markup;
   };
 
-  const ensureActiveStream = () => {
-    if (state.streams.length === 0) {
-      state.activeId = null;
-      return;
-    }
-    if (!state.streams.some((stream) => stream.id === state.activeId)) {
-      state.activeId = state.streams[0].id;
-    }
-  };
-
   const updateUI = () => {
-    ensureActiveStream();
     renderList();
     updateEmptyState();
     syncDetailForm();
     persistStreams(state.streams);
     dispatchLayersEvent(state.streams);
-    // Keep edit button state in sync (disabled when no active layer)
-    if (editViewportBtn) {
-      const hasActive = Boolean(getActiveStream());
-      editViewportBtn.disabled = !hasActive;
-      // If active layer disappeared, turn off mode
-      if (!hasActive && viewportEditOn) {
-        viewportEditOn = false;
-        editViewportBtn.setAttribute('aria-pressed', 'false');
-        dispatchViewportEditMode(false);
-      }
-    }
   };
+
+  function dispatchLayerSelectionEvent(layerId, source = "layers") {
+    const event = new CustomEvent("mediamime:layer-selected", {
+      detail: { layerId, source },
+      bubbles: true
+    });
+    window.dispatchEvent(event);
+  }
+
+  function setActiveStream(layerId, { source = "layers", emit = true } = {}) {
+    let nextId = null;
+    if (typeof layerId === "string") {
+      const exists = state.streams.some((stream) => stream.id === layerId);
+      if (!exists) return;
+      nextId = layerId;
+    } else if (layerId === null) {
+      nextId = null;
+    } else {
+      nextId = null;
+    }
+    if (state.activeId === nextId) return;
+    state.activeId = nextId;
+    updateUI();
+    if (emit) {
+      dispatchLayerSelectionEvent(nextId, source);
+    }
+  }
 
   const addStream = () => {
     const stream = createStream({}, state.inputs);
     state.streams.push(stream);
-    state.activeId = stream.id;
-    updateUI();
+    setActiveStream(stream.id);
   };
 
   const duplicateStream = () => {
@@ -570,8 +560,7 @@ export function initLayers({ editor }) {
       state.inputs
     );
     state.streams.push(clone);
-    state.activeId = clone.id;
-    updateUI();
+    setActiveStream(clone.id);
   };
 
   const deleteStream = () => {
@@ -579,14 +568,8 @@ export function initLayers({ editor }) {
     const index = state.streams.findIndex((stream) => stream.id === state.activeId);
     if (index === -1) return;
     state.streams.splice(index, 1);
-    if (state.streams[index]) {
-      state.activeId = state.streams[index].id;
-    } else if (state.streams[index - 1]) {
-      state.activeId = state.streams[index - 1].id;
-    } else {
-      state.activeId = null;
-    }
-    updateUI();
+    const fallback = state.streams[index]?.id || state.streams[index - 1]?.id || null;
+    setActiveStream(fallback);
   };
 
   const toggleEnabled = (value) => {
@@ -693,15 +676,15 @@ export function initLayers({ editor }) {
       event.stopPropagation();
       const id = deleteBtn.dataset.streamId;
       if (id) {
-        const stream = state.streams.find(s => s.id === id);
-        if (stream) {
-          state.streams = state.streams.filter(s => s.id !== id);
+        const index = state.streams.findIndex((stream) => stream.id === id);
+        if (index !== -1) {
+          state.streams.splice(index, 1);
           if (state.activeId === id) {
-            ensureActiveStream();
+            const fallback = state.streams[index]?.id || state.streams[index - 1]?.id || null;
+            setActiveStream(fallback);
+          } else {
+            updateUI();
           }
-          updateUI();
-          persistStreams(state.streams);
-          dispatchLayersEvent(state.streams);
         }
       }
       return;
@@ -712,16 +695,7 @@ export function initLayers({ editor }) {
     if (!button) return;
     const id = button.dataset.streamId;
     if (!id || id === state.activeId) return;
-    state.activeId = id;
-    
-    // Dispatch layer selection event
-    const event2 = new CustomEvent('mediamime:layer-selected', {
-      detail: { layerId: id, source: 'layers' },
-      bubbles: true
-    });
-    window.dispatchEvent(event2);
-    
-    updateUI();
+    setActiveStream(id);
   });
 
   addListener(addButton, "click", () => addStream());
@@ -802,14 +776,6 @@ export function initLayers({ editor }) {
     handleFitToggle(next);
   });
 
-  // Toggle viewport edit mode
-  addListener(editViewportBtn, "click", () => {
-    if (editViewportBtn.disabled) return;
-    viewportEditOn = !viewportEditOn;
-    editViewportBtn.setAttribute('aria-pressed', String(viewportEditOn));
-    dispatchViewportEditMode(viewportEditOn);
-  });
-
   if (colorChip && colorPanel) {
     registerColorPopover(colorChip, colorPanel);
   }
@@ -829,10 +795,11 @@ export function initLayers({ editor }) {
   const storedStreams = loadStoredStreams();
   if (storedStreams.length) {
     state.streams = storedStreams;
-    state.activeId = storedStreams[0].id;
+    setActiveStream(storedStreams[0].id);
+  } else {
+    state.streams = [];
+    updateUI();
   }
-  updateUI();
-  updateActionButtons();
 
   inputListHandler = (event) => handleInputListChanged(event);
   window.addEventListener("mediamime:input-list-changed", inputListHandler);
@@ -850,34 +817,29 @@ export function initLayers({ editor }) {
   };
   window.addEventListener('mediamime:layer-viewport-changed', handleViewportUpdate);
 
-  const handleExternalViewportMode = (event) => {
-    if (event?.detail?.source === 'layers') return;
-    const enabled = Boolean(event?.detail?.enabled);
-    if (viewportEditOn === enabled) return;
-    viewportEditOn = enabled;
-    if (editViewportBtn) {
-      editViewportBtn.setAttribute('aria-pressed', String(enabled));
-    }
-  };
-  window.addEventListener('mediamime:viewport-edit-mode', handleExternalViewportMode);
-
   const handleLayerSelectedEvent = (event) => {
     const source = event?.detail?.source;
-    const layerId = event?.detail?.layerId || null;
-    if (source !== 'layers') {
-      if (layerId && layerId !== state.activeId && state.streams.some((stream) => stream.id === layerId)) {
-        state.activeId = layerId;
-        updateUI();
-      } else if (!layerId && state.activeId) {
-        state.activeId = null;
-        updateUI();
-      }
-    }
-    if (editViewportBtn && viewportEditOn) {
-      dispatchViewportEditMode(true);
-    }
+    if (source === "layers") return;
+    const layerId = typeof event?.detail?.layerId === "string" ? event.detail.layerId : null;
+    if (layerId && !state.streams.some((stream) => stream.id === layerId)) return;
+    setActiveStream(layerId, { emit: false, source: source || "external" });
   };
   window.addEventListener('mediamime:layer-selected', handleLayerSelectedEvent);
+
+  const handleEscapeKey = (event) => {
+    if (event.key !== "Escape") return;
+    if (event.defaultPrevented) return;
+    const target = event.target;
+    if (target) {
+      const tagName = target.tagName ? target.tagName.toLowerCase() : "";
+      if (tagName === "input" || tagName === "textarea" || target.isContentEditable) {
+        return;
+      }
+    }
+    if (!state.activeId) return;
+    setActiveStream(null);
+  };
+  window.addEventListener("keydown", handleEscapeKey);
 
   return {
     getStreams: () =>
@@ -893,8 +855,8 @@ export function initLayers({ editor }) {
         window.removeEventListener("mediamime:input-list-changed", inputListHandler);
       }
       window.removeEventListener('mediamime:layer-viewport-changed', handleViewportUpdate);
-      window.removeEventListener('mediamime:viewport-edit-mode', handleExternalViewportMode);
       window.removeEventListener('mediamime:layer-selected', handleLayerSelectedEvent);
+      window.removeEventListener("keydown", handleEscapeKey);
       if (state.colorPicker && typeof state.colorPicker.destroy === "function") {
         state.colorPicker.destroy();
       }
