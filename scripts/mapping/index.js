@@ -1555,6 +1555,7 @@ export function initMapping({ editor }) {
       editorShapeList.removeAttribute("aria-activedescendant");
       return;
     }
+    const total = shapeOrder.length;
     const markup = shapeOrder
       .map((id, index) => {
         const shape = shapesById.get(id);
@@ -1567,6 +1568,8 @@ export function initMapping({ editor }) {
         const backgroundColor = hexToRgba(color, Math.min(fillAlpha + 0.08, 0.45));
         const borderColor = hexToRgba(color, Math.min(fillAlpha + 0.25, 0.9));
         const isActive = id === state.activeShapeId;
+        const canMoveUp = index > 0;
+        const canMoveDown = index < total - 1;
         const runtime = runtimeState.get(id);
         const isRunning = Boolean(runtime?.inside || runtime?.hoverInside);
         const activeAttr = isRunning ? ` data-active="true"` : "";
@@ -1575,6 +1578,12 @@ export function initMapping({ editor }) {
             <span class="shape-label"><span class="shape-color-indicator" style="--shape-color:${escapeHtml(color)}" aria-hidden="true"></span><span class="shape-label-text">${escapeHtml(label)}</span></span>
             <span class="shape-meta">${escapeHtml(meta)}</span>
             <span class="shape-row-actions">
+              <button type="button" class="icon-button" data-action="move-shape-up" title="Move shape up" aria-label="Move shape up" ${canMoveUp ? "" : "disabled"}>
+                <span class="material-icons-outlined" aria-hidden="true">arrow_upward</span>
+              </button>
+              <button type="button" class="icon-button" data-action="move-shape-down" title="Move shape down" aria-label="Move shape down" ${canMoveDown ? "" : "disabled"}>
+                <span class="material-icons-outlined" aria-hidden="true">arrow_downward</span>
+              </button>
               <button type="button" class="icon-button" data-action="delete-shape" title="Delete shape" aria-label="Delete shape">
                 <span class="material-icons-outlined" aria-hidden="true">delete</span>
               </button>
@@ -2816,6 +2825,24 @@ export function initMapping({ editor }) {
   };
 
   const handleShapeListClick = (event) => {
+    const moveUpTarget = event.target?.closest?.("[data-action='move-shape-up']");
+    if (moveUpTarget && !moveUpTarget.disabled) {
+      event.stopPropagation();
+      const shapeId = moveUpTarget.closest("[data-shape-id]")?.dataset.shapeId;
+      if (shapeId && typeof editor.moveShapeInOrder === "function") {
+        editor.moveShapeInOrder(shapeId, -1);
+      }
+      return;
+    }
+    const moveDownTarget = event.target?.closest?.("[data-action='move-shape-down']");
+    if (moveDownTarget && !moveDownTarget.disabled) {
+      event.stopPropagation();
+      const shapeId = moveDownTarget.closest("[data-shape-id]")?.dataset.shapeId;
+      if (shapeId && typeof editor.moveShapeInOrder === "function") {
+        editor.moveShapeInOrder(shapeId, 1);
+      }
+      return;
+    }
     const deleteTarget = event.target?.closest?.("[data-action='delete-shape']");
     if (deleteTarget) {
       const button = deleteTarget.closest("[data-shape-id]");

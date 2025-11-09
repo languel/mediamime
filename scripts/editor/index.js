@@ -137,6 +137,16 @@ class SvgShapeStore {
     this.order = this.order.filter((value) => value !== id);
   }
 
+  move(id, targetIndex) {
+    const currentIndex = this.order.indexOf(id);
+    if (currentIndex === -1) return;
+    const clampedIndex = Math.max(0, Math.min(this.order.length - 1, targetIndex));
+    if (currentIndex === clampedIndex) return;
+    this.order.splice(currentIndex, 1);
+    this.order.splice(clampedIndex, 0, id);
+    this.ensureOrder();
+  }
+
   clear() {
     Array.from(this.nodes.values()).forEach((node) => {
       if (node.parentNode) {
@@ -246,7 +256,8 @@ class Editor {
       setTool: (tool) => this.setTool(tool),
       updateShape: (shapeId, mutator) => this.updateShape(shapeId, mutator),
       selectShape: (shapeId) => this.selectShape(shapeId),
-  deleteShape: (shapeId, options) => this.deleteShape(shapeId, options),
+      deleteShape: (shapeId, options) => this.deleteShape(shapeId, options),
+      moveShapeInOrder: (shapeId, delta) => this.moveShapeInOrder(shapeId, delta),
       on: (event, handler) => this.on(event, handler),
       off: (event, handler) => this.off(event, handler),
       normalizePoint: (clientPoint, options) => this.normalizeClientPoint(clientPoint, options),
@@ -2100,6 +2111,18 @@ class Editor {
       // Make single deletions undoable
       this.commitHistory("delete-shape");
     }
+  }
+  
+  moveShapeInOrder(shapeId, delta) {
+    if (!this.shapeStore || !Number.isFinite(delta) || delta === 0) return;
+    const currentIndex = this.shapeStore.order.indexOf(shapeId);
+    if (currentIndex === -1) return;
+    const targetIndex = Math.max(0, Math.min(this.shapeStore.order.length - 1, currentIndex + delta));
+    if (targetIndex === currentIndex) return;
+    this.shapeStore.move(shapeId, targetIndex);
+    this.render();
+    this.notifyShapesChanged();
+    this.commitHistory("reorder-shape");
   }
 
   updateShape(shapeId, mutator) {

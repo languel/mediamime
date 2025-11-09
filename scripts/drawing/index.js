@@ -128,21 +128,52 @@ const drawLandmarks = (ctx, landmarks, viewportPx, color, size = 4, zoom = 1) =>
   });
 };
 
-const drawSegmentation = (ctx, mask, viewportPx, color, alpha = 0) => {
+const drawSegmentation = (ctx, mask, viewportPx, color, alpha = 0, { overlay = false } = {}) => {
   if (!mask || !color || alpha <= 0) return;
   try {
     ctx.save();
-    // Draw mask as layer color: use globalCompositeOperation to tint
+    ctx.beginPath();
+    ctx.rect(viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
+    ctx.clip();
     ctx.globalAlpha = Math.min(1, Math.max(0, alpha));
-    ctx.drawImage(mask, viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
-    ctx.globalCompositeOperation = "source-in";
-    ctx.fillStyle = color;
-    ctx.fillRect(viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
+    if (overlay) {
+      ctx.fillStyle = color;
+      ctx.fillRect(viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
+      ctx.globalCompositeOperation = "destination-in";
+      ctx.drawImage(mask, viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
+    } else {
+      ctx.drawImage(mask, viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
+      ctx.globalCompositeOperation = "source-in";
+      ctx.fillStyle = color;
+      ctx.fillRect(viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
+    }
     ctx.globalCompositeOperation = "source-over";
     ctx.restore();
   } catch (error) {
     console.warn("[mediamime] Failed to draw segmentation mask", error);
   }
+};
+
+const drawSegmentedFrame = (ctx, frame, mask, viewportPx, tintColor, tintAlpha = 0) => {
+  if (!mask) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
+  ctx.clip();
+  if (frame) {
+    ctx.globalAlpha = 1;
+    ctx.drawImage(frame, viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
+  }
+  if (tintColor && tintAlpha > 0) {
+    ctx.globalAlpha = Math.min(1, Math.max(0, tintAlpha));
+    ctx.fillStyle = tintColor;
+    ctx.globalCompositeOperation = "source-atop";
+    ctx.fillRect(viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
+  }
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "destination-in";
+  ctx.drawImage(mask, viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
+  ctx.restore();
 };
 
 const drawViewportBounds = (ctx, viewportPx, strokeColor, fillAlpha = 0, fillColor = null) => {
@@ -457,11 +488,17 @@ export function initDrawing({ editor }) {
         return;
       }
 
-      if (!results) {
-        drawViewportBounds(targetCtx, viewportPx, strokeColor, fillAlpha, fillColor);
+    if (!results) {
+      // Skip drawing for pose-like processes when no data yet to keep viewport transparent
+      const processesThatNeedData = new Set(["pose", "hands", "face", "segmentation", "segmentationStream"]);
+      if (processesThatNeedData.has(stream.process)) {
         targetCtx.restore();
         return;
       }
+      drawViewportBounds(targetCtx, viewportPx, strokeColor, fillAlpha, fillColor);
+      targetCtx.restore();
+      return;
+    }
       switch (stream.process) {
         case "pose":
           drawConnectorList(targetCtx, results.poseLandmarks, getPoseConnections(), viewportPx, strokeColor, zoom);
@@ -476,9 +513,29 @@ export function initDrawing({ editor }) {
         case "face":
           drawLandmarks(targetCtx, results.faceLandmarks, viewportPx, strokeColor, 2, zoom);
           break;
-        case "segmentation":
-          drawSegmentation(targetCtx, results.segmentationMask, viewportPx, fillColor, fillAlpha);
+        case "segmentationStream": {
+          const mask = results.segmentationMask || null;
+          if (!mask) {
+            targetCtx.restore();
+            return;
+          }
+          const alphaValue = fillAlpha > 0 ? fillAlpha : 0.6;
+          if (frame) {
+            drawSegmentedFrame(targetCtx, frame, mask, viewportPx, strokeColor, alphaValue);
+          } else {
+            drawSegmentation(targetCtx, mask, viewportPx, strokeColor, alphaValue, { overlay: true });
+          }
           break;
+        }
+        case "segmentation": {
+          const mask = results.segmentationMask || null;
+          if (!mask) {
+            targetCtx.restore();
+            return;
+          }
+          drawSegmentation(targetCtx, mask, viewportPx, fillColor || strokeColor, fillAlpha, { overlay: false });
+          break;
+        }
         case "depth":
           drawViewportBounds(targetCtx, viewportPx, strokeColor, fillAlpha, fillColor);
           break;

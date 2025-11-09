@@ -4,7 +4,7 @@ const PROCESS_OPTIONS = [
   { id: "pose", label: "Pose (MP)" },
   { id: "hands", label: "Hands (MP)" },
   { id: "face", label: "Face (MP)" },
-  { id: "segmentation", label: "Segmentation Mask" },
+  { id: "segmentation", label: "Segmentation" },
   { id: "depth", label: "Depth Map" },
   { id: "raw", label: "Raw Source" }
 ];
@@ -465,8 +465,9 @@ export function initLayers({ editor }) {
       listEl.innerHTML = "";
       return;
     }
+    const total = state.streams.length;
     const markup = state.streams
-      .map((stream) => {
+      .map((stream, index) => {
         const isActive = stream.id === state.activeId;
         const statusClass = stream.enabled ? "is-on" : "";
         const sourceLabel = getSourceLabel(stream);
@@ -476,6 +477,8 @@ export function initLayers({ editor }) {
         const enabledIcon = stream.enabled ? "toggle_on" : "toggle_off";
         const previewOn = stream.preview !== false;
         const previewIcon = previewOn ? "visibility" : "visibility_off";
+        const canMoveUp = index > 0;
+        const canMoveDown = index < total - 1;
         return `
           <button type="button" role="option" aria-selected="${isActive ? "true" : "false"}" class="layers-stream-item ${isActive ? "is-active" : ""} ${
             stream.enabled ? "" : "is-disabled"
@@ -486,6 +489,16 @@ export function initLayers({ editor }) {
             </span>
             <span class="layers-stream-meta">${escapeHtml(metaLabel)}</span>
             <span class="layers-stream-actions">
+              <button type="button" class="icon-button" data-action="move-up" data-stream-id="${stream.id}" title="Move layer up" aria-label="Move layer up" ${
+                canMoveUp ? "" : "disabled"
+              }>
+                <span class="material-icons-outlined" aria-hidden="true">arrow_upward</span>
+              </button>
+              <button type="button" class="icon-button" data-action="move-down" data-stream-id="${stream.id}" title="Move layer down" aria-label="Move layer down" ${
+                canMoveDown ? "" : "disabled"
+              }>
+                <span class="material-icons-outlined" aria-hidden="true">arrow_downward</span>
+              </button>
               <button type="button" class="icon-button ${previewOn ? "is-active" : ""}" data-action="toggle-preview" data-stream-id="${stream.id}" title="${previewOn ? "Hide in Preview" : "Show in Preview"}" aria-label="${previewOn ? "Hide in preview panel" : "Show in preview panel"}" aria-pressed="${String(previewOn)}">
                 <span class="material-icons-outlined" aria-hidden="true">${previewIcon}</span>
               </button>
@@ -509,6 +522,17 @@ export function initLayers({ editor }) {
     syncDetailForm();
     persistStreams(state.streams);
     dispatchLayersEvent(state.streams);
+  };
+
+  const moveStreamBy = (streamId, delta) => {
+    if (!streamId || !Number.isInteger(delta) || delta === 0) return;
+    const index = state.streams.findIndex((stream) => stream.id === streamId);
+    if (index === -1) return;
+    const targetIndex = index + delta;
+    if (targetIndex < 0 || targetIndex >= state.streams.length) return;
+    const [entry] = state.streams.splice(index, 1);
+    state.streams.splice(targetIndex, 0, entry);
+    updateUI();
   };
 
   function dispatchLayerSelectionEvent(layerId, source = "layers") {
@@ -646,6 +670,20 @@ export function initLayers({ editor }) {
 
   // Event bindings
   addListener(listEl, "click", (event) => {
+    const moveUpBtn = event.target.closest('[data-action="move-up"]');
+    if (moveUpBtn && !moveUpBtn.disabled) {
+      event.stopPropagation();
+      const id = moveUpBtn.dataset.streamId || moveUpBtn.closest("[data-stream-id]")?.dataset.streamId;
+      if (id) moveStreamBy(id, -1);
+      return;
+    }
+    const moveDownBtn = event.target.closest('[data-action="move-down"]');
+    if (moveDownBtn && !moveDownBtn.disabled) {
+      event.stopPropagation();
+      const id = moveDownBtn.dataset.streamId || moveDownBtn.closest("[data-stream-id]")?.dataset.streamId;
+      if (id) moveStreamBy(id, 1);
+      return;
+    }
     // Handle preview toggle
     const previewBtn = event.target.closest('[data-action="toggle-preview"]');
     if (previewBtn) {
