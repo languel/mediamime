@@ -66,13 +66,14 @@ export function initMediaPipeline({ editor }) {
     });
   };
 
-  const emitResults = (sourceId, results) => {
-    dispatchCustomEvent(HOLISTIC_RESULTS_EVENT, {
-      results,
-      source: buildSourceMeta(sourceId),
-      updatedAt: typeof performance !== "undefined" && performance.now ? performance.now() : Date.now()
-    });
-  };
+const emitResults = (sourceId, results, frame = null) => {
+  dispatchCustomEvent(HOLISTIC_RESULTS_EVENT, {
+    results,
+    frame,
+    source: buildSourceMeta(sourceId),
+    updatedAt: typeof performance !== "undefined" && performance.now ? performance.now() : Date.now()
+  });
+};
 
   const drawFrameToCanvas = (processor) => {
     const { video, canvas, ctx, input } = processor;
@@ -104,7 +105,7 @@ export function initMediaPipeline({ editor }) {
     video.play().catch(() => {});
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
-    const holistic = createHolisticInstance((results) => emitResults(input.id, results));
+    const holistic = createHolisticInstance((results) => emitResults(input.id, results, canvas));
     if (!holistic) {
       console.warn("[mediamime] Holistic not available; skipping processor.");
       return null;
@@ -187,7 +188,7 @@ export function initMediaPipeline({ editor }) {
       if (processor.holistic && typeof processor.holistic.close === "function") {
         processor.holistic.close();
       }
-      emitResults(processor.sourceId, null);
+      emitResults(processor.sourceId, null, null);
     };
 
     processor.start();

@@ -381,7 +381,12 @@ export function initLayout() {
         toggleModal(targetModal);
       }
     }
-    if (event.key === "Escape" && lastActiveModalId && isModalVisible(lastActiveModalId)) {
+    if (
+      event.key === "Escape" &&
+      event.shiftKey &&
+      lastActiveModalId &&
+      isModalVisible(lastActiveModalId)
+    ) {
       event.preventDefault();
       setModalVisibility(lastActiveModalId, false, { skipFocus: true });
     }

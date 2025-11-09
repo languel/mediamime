@@ -158,6 +158,22 @@ const drawViewportBounds = (ctx, viewportPx, strokeColor, fillAlpha = 0, fillCol
   ctx.restore();
 };
 
+const drawRawViewportFrame = (ctx, frame, viewportPx, tintColor, opacity = 1) => {
+  if (!frame) return;
+  const alpha = Math.min(1, Math.max(0, opacity));
+  if (alpha <= 0) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
+  ctx.clip();
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(frame, viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
+  ctx.globalCompositeOperation = "color";
+  ctx.fillStyle = tintColor;
+  ctx.fillRect(viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
+  ctx.restore();
+};
+
 const SUPPORTS_DOM_MATRIX = typeof DOMMatrix === "function" && typeof DOMPoint === "function";
 
 const toDomMatrix = (matrix) => {
@@ -407,7 +423,17 @@ export function initDrawing({ editor }) {
       // Only respect the preview toggle for the preview canvas; main canvas shows all enabled layers
       if (isPreview && stream.preview === false) return;
       if (!stream.sourceId) return;
-      const results = state.resultsBySource.get(stream.sourceId);
+      const resultsEntry = state.resultsBySource.get(stream.sourceId) ?? null;
+      let results = null;
+      let frame = null;
+      if (resultsEntry) {
+        if (typeof resultsEntry === "object" && Object.prototype.hasOwnProperty.call(resultsEntry, "data")) {
+          results = resultsEntry.data || null;
+          frame = resultsEntry.frame || null;
+        } else {
+          results = resultsEntry;
+        }
+      }
       
       // Calculate viewport in appropriate coordinate space
       const viewportPx = (!isPreview && viewBox)
@@ -421,6 +447,16 @@ export function initDrawing({ editor }) {
       
       targetCtx.save();
       
+      if (stream.process === "raw") {
+        if (frame) {
+          drawRawViewportFrame(targetCtx, frame, viewportPx, strokeColor, fillAlpha);
+        } else {
+          drawViewportBounds(targetCtx, viewportPx, strokeColor, fillAlpha, fillColor);
+        }
+        targetCtx.restore();
+        return;
+      }
+
       if (!results) {
         drawViewportBounds(targetCtx, viewportPx, strokeColor, fillAlpha, fillColor);
         targetCtx.restore();
@@ -852,16 +888,17 @@ export function initDrawing({ editor }) {
 
   const handleHolisticResults = (event) => {
     const sourceId = event?.detail?.source?.id;
-    const results = event?.detail?.results || null;
+    const results = event?.detail?.results ?? null;
+    const frame = event?.detail?.frame ?? null;
     if (!sourceId) {
       state.resultsBySource.clear();
       requestRender();
       return;
     }
-    if (!results) {
+    if (!results && !frame) {
       state.resultsBySource.delete(sourceId);
     } else {
-      state.resultsBySource.set(sourceId, results);
+      state.resultsBySource.set(sourceId, { data: results, frame });
     }
     requestRender();
   };
