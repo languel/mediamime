@@ -443,6 +443,13 @@ export function initDrawing({ editor }) {
       targetFPS: 60,
       frameCount: 0,
       skippedFrames: 0
+    },
+    // Output resolution scaling
+    outputResolution: {
+      preset: 'raw',
+      width: null,
+      height: null,
+      appliedScale: 1.0
     }
   };
 
@@ -1084,8 +1091,33 @@ export function initDrawing({ editor }) {
   const resizeCanvas = () => {
     const { width, height } = container.getBoundingClientRect();
     const pixelRatio = window.devicePixelRatio || 1;
-    const nextWidth = Math.max(1, Math.floor(width * pixelRatio));
-    const nextHeight = Math.max(1, Math.floor(height * pixelRatio));
+    let nextWidth = Math.max(1, Math.floor(width * pixelRatio));
+    let nextHeight = Math.max(1, Math.floor(height * pixelRatio));
+
+    // Apply output resolution scaling if configured
+    const outputRes = state.outputResolution;
+    if (outputRes.preset !== 'raw') {
+      // Apply preset or custom resolution scaling
+      if (outputRes.width && outputRes.height) {
+        // Custom resolution: scale based on aspect ratio
+        const containerAspect = width / height;
+        const targetAspect = outputRes.width / outputRes.height;
+
+        if (containerAspect > targetAspect) {
+          // Container is wider, constrain by height
+          nextHeight = Math.max(1, Math.floor(outputRes.height * pixelRatio));
+          nextWidth = Math.max(1, Math.floor(nextHeight * containerAspect));
+        } else {
+          // Container is taller or square, constrain by width
+          nextWidth = Math.max(1, Math.floor(outputRes.width * pixelRatio));
+          nextHeight = Math.max(1, Math.floor(nextWidth / containerAspect));
+        }
+      }
+      state.outputResolution.appliedScale = nextWidth / (width * pixelRatio);
+    } else {
+      state.outputResolution.appliedScale = 1.0;
+    }
+
     if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
       canvas.width = nextWidth;
       canvas.height = nextHeight;
@@ -1184,11 +1216,29 @@ export function initDrawing({ editor }) {
     requestRender();
   };
 
+  // Handle active input changes to apply output resolution settings
+  const handleActiveInputChange = (event) => {
+    const input = event?.detail?.input;
+    if (!input) return;
+
+    const outputRes = input.outputResolution || { preset: 'raw', width: null, height: null };
+    state.outputResolution = {
+      preset: outputRes.preset || 'raw',
+      width: outputRes.width || null,
+      height: outputRes.height || null,
+      appliedScale: state.outputResolution.appliedScale || 1.0
+    };
+
+    // Trigger canvas resize to apply new resolution
+    scheduleResize();
+  };
+
   window.addEventListener(LAYERS_EVENT, handleLayerUpdate);
   window.addEventListener(HOLO_EVENT, handleHolisticResults);
   window.addEventListener('mediamime:layer-selected', handleLayerSelection);
   window.addEventListener('mediamime:camera-changed', handleCameraChange);
   window.addEventListener('mediamime:editor-mode-changed', handleEditorModeChange);
+  window.addEventListener('mediamime:active-input-changed', handleActiveInputChange);
 
   // Track spacebar for editor pan pass-through
   const handleKeyDown = (e) => {
@@ -1213,7 +1263,8 @@ export function initDrawing({ editor }) {
       window.removeEventListener(HOLO_EVENT, handleHolisticResults);
       window.removeEventListener('mediamime:layer-selected', handleLayerSelection);
       window.removeEventListener('mediamime:camera-changed', handleCameraChange);
-  window.removeEventListener('mediamime:editor-mode-changed', handleEditorModeChange);
+      window.removeEventListener('mediamime:editor-mode-changed', handleEditorModeChange);
+      window.removeEventListener('mediamime:active-input-changed', handleActiveInputChange);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       clearViewportDragState();
