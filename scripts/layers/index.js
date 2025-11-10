@@ -187,6 +187,7 @@ export function initLayers({ editor }) {
   void editor;
   const panel = document.getElementById("modal-layers");
   const panelHandle = panel?.querySelector("[data-modal-handle]");
+  const panelChrome = panel?.querySelector(".modal-chrome");
   const listEl = document.getElementById("layer-stream-list");
   const emptyEl = document.getElementById("layer-empty");
   const detailForm = document.getElementById("layer-detail");
@@ -780,12 +781,12 @@ export function initLayers({ editor }) {
   addListener(addButton, "click", () => addStream());
   addListener(duplicateButton, "click", () => duplicateStream());
 
-  // Clear selection when clicking panel handle
-  addListener(panelHandle, "click", (event) => {
-    // Only clear if clicking directly on the handle, not when dragging
-    if (event.target === panelHandle || panelHandle.contains(event.target)) {
-      setActiveStream(null);
-    }
+  // Clear selection when double-clicking the panel chrome (title bar)
+  // Ignore double-clicks on action buttons to avoid accidental clears
+  addListener(panelChrome || panelHandle, "dblclick", (event) => {
+    const isButtonClick = event.target && event.target.closest && event.target.closest("button, .panel-actions");
+    if (isButtonClick) return;
+    setActiveStream(null);
   });
 
   addListener(nameInput, "input", (event) => {

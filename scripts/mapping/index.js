@@ -918,6 +918,7 @@ export function initMapping({ editor }) {
 
   const mapPanel = document.getElementById("modal-map");
   const mapPanelHandle = mapPanel?.querySelector("[data-modal-handle]");
+  const mapPanelChrome = mapPanel?.querySelector('.modal-chrome');
   const modal = document.getElementById("assignment-modal");
   const backdrop = document.getElementById("assignment-backdrop");
   const shapeNameInput = document.getElementById("assignment-shape-name");
@@ -3456,16 +3457,16 @@ export function initMapping({ editor }) {
   addListener(svg, "dblclick", handleDoubleClick);
   addListener(editorShapeList, "click", handleShapeListClick);
 
-  // Clear selection when clicking map panel handle
-  addListener(mapPanelHandle, "click", (event) => {
-    // Only clear if clicking directly on the handle
-    if (event.target === mapPanelHandle || mapPanelHandle.contains(event.target)) {
-      if (typeof editor.clearSelection === "function") {
-        editor.clearSelection();
-      }
-      state.activeShapeId = null;
-      syncEditorDetailForm();
+  // Clear shape selection when double-clicking the Map panel chrome (header).
+  // Ignores double-clicks on buttons/action areas to prevent accidental clears.
+  addListener(mapPanelChrome || mapPanelHandle, 'dblclick', (event) => {
+    const isAction = event.target?.closest?.('.panel-actions, button');
+    if (isAction) return;
+    if (typeof editor.selectShape === 'function') {
+      editor.selectShape(null); // Clears editor selection
     }
+    state.activeShapeId = null;
+    syncEditorDetailForm();
   });
 
   addListener(editorShapeNameInput, "input", handleEditorShapeNameInput);
