@@ -8,6 +8,7 @@ const createId = () => `input-${Date.now()}-${Math.random().toString(36).slice(2
 const DEFAULT_CROP = { x: 0, y: 0, w: 1, h: 1 };
 const DEFAULT_FLIP = { horizontal: false, vertical: false };
 const DEFAULT_OUTPUT_RESOLUTION = { preset: 'raw', width: null, height: null };
+const DEFAULT_INPUT_RESOLUTION = { preset: 'full', width: null, height: null };
 const INPUT_STORAGE_KEY = 'mediamime:inputs';
 const INPUT_BOOKMARKS_KEY = 'mediamime:url-bookmarks';
 const DEFAULT_URL_SOURCE = {
@@ -103,6 +104,7 @@ export function initInput({ editor }) {
       crop: { ...input.crop },
       flip: { ...input.flip },
       outputResolution: input.outputResolution ? { ...input.outputResolution } : { ...DEFAULT_OUTPUT_RESOLUTION },
+      inputResolution: input.inputResolution ? { ...input.inputResolution } : { ...DEFAULT_INPUT_RESOLUTION },
       origin: input.origin,
       sourceUrl: input.sourceUrl || null,
       sourceKind: input.sourceKind || null,
@@ -685,7 +687,8 @@ export function initInput({ editor }) {
         persistable: true,
         crop: { ...DEFAULT_CROP },
         flip: { ...DEFAULT_FLIP },
-        outputResolution: { ...DEFAULT_OUTPUT_RESOLUTION }
+        outputResolution: { ...DEFAULT_OUTPUT_RESOLUTION },
+        inputResolution: { ...DEFAULT_INPUT_RESOLUTION }
       };
 
       ensureTransportState(input);
@@ -735,7 +738,8 @@ export function initInput({ editor }) {
         videoElement: video, // Keep reference to video element
         crop: { ...DEFAULT_CROP },
         flip: { ...DEFAULT_FLIP },
-        outputResolution: { ...DEFAULT_OUTPUT_RESOLUTION }
+        outputResolution: { ...DEFAULT_OUTPUT_RESOLUTION },
+        inputResolution: { ...DEFAULT_INPUT_RESOLUTION }
       };
 
       ensureTransportState(input);
@@ -789,7 +793,8 @@ export function initInput({ editor }) {
         stopRender,
         crop: { ...DEFAULT_CROP },
         flip: { ...DEFAULT_FLIP },
-        outputResolution: { ...DEFAULT_OUTPUT_RESOLUTION }
+        outputResolution: { ...DEFAULT_OUTPUT_RESOLUTION },
+        inputResolution: { ...DEFAULT_INPUT_RESOLUTION }
       };
       ensureTransportState(input);
       applyPlaybackState(input);
@@ -1520,6 +1525,45 @@ export function initInput({ editor }) {
         previewResizeObserver = null;
       }
       console.log('[mediamime] Input system disposed');
+    },
+    // Input Resolution API (Phase 4)
+    setInputResolution: (inputId, preset, width = null, height = null) => {
+      const input = state.inputs.find(i => i.id === inputId);
+      if (!input) return false;
+      input.inputResolution = {
+        preset: preset || 'full',
+        width: width ? Math.max(1, Math.floor(width)) : null,
+        height: height ? Math.max(1, Math.floor(height)) : null
+      };
+      dispatchInputEvent(INPUT_LIST_EVENT, { inputs: state.inputs });
+      console.log(`[mediamime] Set input resolution for "${input.name}": ${preset} (${width}x${height})`);
+      return true;
+    },
+    getInputResolution: (inputId) => {
+      const input = state.inputs.find(i => i.id === inputId);
+      if (!input) return null;
+      return { ...input.inputResolution };
+    },
+    // Preset helper for common resolutions
+    applyInputResolutionPreset: (inputId, presetName) => {
+      const presets = {
+        'full': { width: null, height: null },
+        '720p': { width: 1280, height: 720 },
+        '480p': { width: 854, height: 480 },
+        '360p': { width: 640, height: 360 },
+        '240p': { width: 426, height: 240 }
+      };
+      const config = presets[presetName] || presets['full'];
+      const input = state.inputs.find(i => i.id === inputId);
+      if (!input) return false;
+      input.inputResolution = {
+        preset: presetName,
+        width: config.width,
+        height: config.height
+      };
+      dispatchInputEvent(INPUT_LIST_EVENT, { inputs: state.inputs });
+      console.log(`[mediamime] Applied input resolution preset "${presetName}" to "${input.name}"`);
+      return true;
     }
   };
 }

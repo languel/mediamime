@@ -86,6 +86,7 @@ const emitResults = (sourceId, results, frame = null) => {
     const { video, canvas, ctx, input } = processor;
     const crop = input?.crop || DEFAULT_CROP;
     const flip = input?.flip || DEFAULT_FLIP;
+    const inputResolution = input?.inputResolution || { preset: 'full', width: null, height: null };
     const vw = video.videoWidth;
     const vh = video.videoHeight;
     if (!vw || !vh) return false;
@@ -103,10 +104,27 @@ const emitResults = (sourceId, results, frame = null) => {
     if (flip.vertical) {
       sourceYNorm = Math.max(0, Math.min(1 - sourceHNorm, 1 - cropYNorm - sourceHNorm));
     }
-    const cropW = Math.max(1, sourceWNorm * vw);
-    const cropH = Math.max(1, sourceHNorm * vh);
+    let cropW = Math.max(1, sourceWNorm * vw);
+    let cropH = Math.max(1, sourceHNorm * vh);
     const cropX = sourceXNorm * vw;
     const cropY = sourceYNorm * vh;
+
+    // Phase 4: Input resolution scaling for MediaPipe
+    // Reduce input resolution before sending to MediaPipe to save processing time
+    if (inputResolution.preset !== 'full' && inputResolution.width && inputResolution.height) {
+      const containerAspect = cropW / cropH;
+      const targetAspect = inputResolution.width / inputResolution.height;
+
+      // Scale while maintaining aspect ratio
+      if (containerAspect > targetAspect) {
+        cropH = Math.max(1, Math.floor(inputResolution.height));
+        cropW = Math.max(1, Math.floor(cropH * containerAspect));
+      } else {
+        cropW = Math.max(1, Math.floor(inputResolution.width));
+        cropH = Math.max(1, Math.floor(cropW / containerAspect));
+      }
+    }
+
     if (canvas.width !== cropW || canvas.height !== cropH) {
       canvas.width = cropW;
       canvas.height = cropH;
@@ -115,7 +133,7 @@ const emitResults = (sourceId, results, frame = null) => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.translate(flip.horizontal ? canvas.width : 0, flip.vertical ? canvas.height : 0);
     ctx.scale(flip.horizontal ? -1 : 1, flip.vertical ? -1 : 1);
-    ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(video, cropX, cropY, sourceWNorm * vw, sourceHNorm * vh, 0, 0, canvas.width, canvas.height);
     ctx.restore();
     return true;
   };
