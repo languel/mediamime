@@ -517,6 +517,16 @@ export function initDrawing({ editor }) {
       cachedFillColor: null,
       cachedFillAlpha: null,
       cachedViewport: null
+    },
+    // OffscreenCanvas caching for viewport overlay (Phase 3B)
+    viewportOverlayCache: {
+      enabled: typeof OffscreenCanvas !== 'undefined',
+      offscreenCanvas: null,
+      offscreenCtx: null,
+      lastCameraZoom: null,
+      lastActiveLayerId: null,
+      lastStreamStates: new Map(), // Map<streamId, {color, viewport, isActive}>
+      lastViewBox: null
     }
   };
 
@@ -902,20 +912,77 @@ export function initDrawing({ editor }) {
     const translateX = (appliedMetrics.offsetX || 0) + camera.x * camera.zoom * worldScaleX;
     const translateY = (appliedMetrics.offsetY || 0) + camera.y * camera.zoom * worldScaleY;
 
-    targetCtx.save();
-    if (appliedMetrics.usesDomMatrix && appliedMetrics.worldToCanvasMatrix) {
-      const m = appliedMetrics.worldToCanvasMatrix;
-      targetCtx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
+    // Phase 3B Optimization: Cache viewport overlay to OffscreenCanvas
+    // Only redraw when stream colors, viewports, active state, or zoom changes
+    const cache = state.viewportOverlayCache;
+    const shouldUseCacheOptimization = cache.enabled;
+
+    // Check if cache is still valid
+    let cacheValid = shouldUseCacheOptimization &&
+                     cache.offscreenCanvas &&
+                     cache.offscreenCtx &&
+                     cache.lastCameraZoom === camera.zoom &&
+                     cache.lastActiveLayerId === state.activeLayerId &&
+                     cache.lastViewBox?.width === viewBox.width &&
+                     cache.lastViewBox?.height === viewBox.height;
+
+    if (cacheValid && cache.lastStreamStates.size === state.streams.length) {
+      // Verify each stream's state hasn't changed
+      for (const stream of state.streams) {
+        if (!stream?.enabled || stream.showInMain === false) continue;
+        const cached = cache.lastStreamStates.get(stream.id);
+        const currentColor = toRgba(stream.color?.hex, 1) || '#00e0ff';
+        const currentVpKey = `${stream.viewport.x},${stream.viewport.y},${stream.viewport.w},${stream.viewport.h}`;
+        const currentIsActive = state.activeLayerId === stream.id;
+
+        if (!cached ||
+            cached.color !== currentColor ||
+            cached.vpKey !== currentVpKey ||
+            cached.isActive !== currentIsActive) {
+          cacheValid = false;
+          break;
+        }
+      }
     } else {
-      targetCtx.setTransform(
-        camera.zoom * worldScaleX * dpr,
-        0,
-        0,
-        camera.zoom * worldScaleY * dpr,
-        translateX * dpr,
-        translateY * dpr
-      );
+      cacheValid = false;
     }
+
+    // If cache is valid, use it instead of redrawing
+    if (cacheValid) {
+      targetCtx.save();
+      if (appliedMetrics.usesDomMatrix && appliedMetrics.worldToCanvasMatrix) {
+        const m = appliedMetrics.worldToCanvasMatrix;
+        targetCtx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
+      } else {
+        targetCtx.setTransform(
+          camera.zoom * worldScaleX * dpr,
+          0,
+          0,
+          camera.zoom * worldScaleY * dpr,
+          translateX * dpr,
+          translateY * dpr
+        );
+      }
+      targetCtx.drawImage(cache.offscreenCanvas, 0, 0);
+      targetCtx.restore();
+      targetCtx.setTransform(1, 0, 0, 1, 0, 0);
+      return;
+    }
+
+    // Cache miss: regenerate viewport overlay
+    const maxSize = Math.max(viewBox.width, viewBox.height) * 1.2;
+    const overlaySize = Math.ceil(maxSize);
+
+    if (!cache.offscreenCanvas ||
+        cache.offscreenCanvas.width !== overlaySize ||
+        cache.offscreenCanvas.height !== overlaySize) {
+      cache.offscreenCanvas = new OffscreenCanvas(overlaySize, overlaySize);
+      cache.offscreenCtx = cache.offscreenCanvas.getContext('2d');
+    }
+
+    const oCtx = cache.offscreenCtx;
+    oCtx.setTransform(1, 0, 0, 1, 0, 0);
+    oCtx.clearRect(0, 0, overlaySize, overlaySize);
 
     const dashPattern = [2 / camera.zoom, 8 / camera.zoom];
 
@@ -931,12 +998,12 @@ export function initDrawing({ editor }) {
       const layerColor = toRgba(stream.color?.hex, 1) || '#00e0ff';
       const isActive = state.activeLayerId === stream.id;
 
-      targetCtx.save();
-      targetCtx.globalAlpha = isActive ? 1 : 0.6;
-      targetCtx.strokeStyle = layerColor;
-      targetCtx.lineWidth = 2 / camera.zoom;
-      targetCtx.setLineDash(dashPattern);
-      targetCtx.strokeRect(scoreX, scoreY, scoreW, scoreH);
+      oCtx.save();
+      oCtx.globalAlpha = isActive ? 1 : 0.6;
+      oCtx.strokeStyle = layerColor;
+      oCtx.lineWidth = 2 / camera.zoom;
+      oCtx.setLineDash(dashPattern);
+      oCtx.strokeRect(scoreX, scoreY, scoreW, scoreH);
 
       if (isActive) {
         const handleSize = 12 / camera.zoom;
@@ -947,18 +1014,46 @@ export function initDrawing({ editor }) {
           { x: scoreX + scoreW, y: scoreY + scoreH }
         ];
         handles.forEach((handle) => {
-          targetCtx.fillStyle = layerColor;
-          targetCtx.fillRect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
-          targetCtx.strokeStyle = '#05070d';
-          targetCtx.lineWidth = 1.5 / camera.zoom;
-          targetCtx.setLineDash([]);
-          targetCtx.strokeRect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
+          oCtx.fillStyle = layerColor;
+          oCtx.fillRect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
+          oCtx.strokeStyle = '#05070d';
+          oCtx.lineWidth = 1.5 / camera.zoom;
+          oCtx.setLineDash([]);
+          oCtx.strokeRect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize);
         });
       }
 
-      targetCtx.restore();
+      oCtx.restore();
+
+      // Track stream state for cache invalidation
+      cache.lastStreamStates.set(stream.id, {
+        color: layerColor,
+        vpKey: `${stream.viewport.x},${stream.viewport.y},${stream.viewport.w},${stream.viewport.h}`,
+        isActive
+      });
     });
 
+    // Update cache state
+    cache.lastCameraZoom = camera.zoom;
+    cache.lastActiveLayerId = state.activeLayerId;
+    cache.lastViewBox = { ...viewBox };
+
+    // Composite cached overlay to main canvas
+    targetCtx.save();
+    if (appliedMetrics.usesDomMatrix && appliedMetrics.worldToCanvasMatrix) {
+      const m = appliedMetrics.worldToCanvasMatrix;
+      targetCtx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
+    } else {
+      targetCtx.setTransform(
+        camera.zoom * worldScaleX * dpr,
+        0,
+        0,
+        camera.zoom * worldScaleY * dpr,
+        translateX * dpr,
+        translateY * dpr
+      );
+    }
+    targetCtx.drawImage(cache.offscreenCanvas, 0, 0);
     targetCtx.restore();
     targetCtx.setTransform(1, 0, 0, 1, 0, 0);
   };
