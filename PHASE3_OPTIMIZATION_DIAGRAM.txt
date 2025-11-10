@@ -1,0 +1,325 @@
+╔════════════════════════════════════════════════════════════════════════════════════╗
+║                     MEDIAMIME PHASE 3 OPTIMIZATION ARCHITECTURE                    ║
+║                         OffscreenCanvas Pre-rendering Strategy                     ║
+╚════════════════════════════════════════════════════════════════════════════════════╝
+
+
+═══════════════════════════════════════════════════════════════════════════════════════
+  CURRENT RENDERING FLOW (Without OffscreenCanvas)
+═══════════════════════════════════════════════════════════════════════════════════════
+
+                        60 FPS requestAnimationFrame
+                                    │
+                                    ▼
+                    ┌─ render() [line 798]
+                    │
+                    ├─ ensureDisplayMetrics()
+                    │  └─ Calculate camera transforms
+                    │
+                    ├─ renderTo() [line 604]
+                    │  │
+                    │  ├─ Calculate dirty rectangle union
+                    │  │  └─ Clear only affected regions (optimized!)
+                    │  │
+                    │  ├─ Apply camera transform
+                    │  │
+                    │  └─ For each stream:
+                    │     │
+                    │     ├─ Pose layer?
+                    │     │  ├─ drawConnectorList() - all bones (per frame)
+                    │     │  └─ drawLandmarks() - all joints (per frame)
+                    │     │
+                    │     ├─ Hands layer?
+                    │     │  ├─ drawConnectorList() x2 (left+right)
+                    │     │  └─ drawLandmarks() x2 (per frame)
+                    │     │
+                    │     ├─ Face layer?
+                    │     │  └─ drawLandmarks() - 468 points (per frame)
+                    │     │
+                    │     ├─ Segmentation layer?
+                    │     │  └─ drawSegmentation() - apply mask (per frame)
+                    │     │
+                    │     └─ Bounds layer?
+                    │        └─ drawViewportBounds() - rect + fill (per frame) ← CAN OPTIMIZE
+                    │
+                    └─ renderViewportOverlay() [line 826]
+                       │
+                       └─ For each stream:
+                          │
+                          ├─ setLineDash() + strokeRect() (per frame) ← CAN OPTIMIZE
+                          │
+                          └─ If selected:
+                             └─ drawRect() for each corner handle (per frame) ← CAN OPTIMIZE
+
+
+═══════════════════════════════════════════════════════════════════════════════════════
+  OPTIMIZED RENDERING FLOW (With OffscreenCanvas - Phase 3)
+═══════════════════════════════════════════════════════════════════════════════════════
+
+                        60 FPS requestAnimationFrame
+                                    │
+                                    ▼
+                    ┌─ render() [modified]
+                    │
+                    ├─ ensureDisplayMetrics()
+                    │
+                    ├─ renderTo() [modified]
+                    │  │
+                    │  ├─ Clear dirty rectangle (unchanged)
+                    │  │
+                    │  ├─ For each stream:
+                    │  │  │
+                    │  │  └─ If has real-time data (pose/hands/face):
+                    │  │     ├─ drawConnectorList() (unchanged - must be real-time)
+                    │  │     └─ drawLandmarks() (unchanged - must be real-time)
+                    │  │  │
+                    │  │  └─ Else (fallback/static):
+                    │  │     └─ drawImage(offscreenCanvas) [NEW - fast!]
+                    │  │        ↑
+                    │  │        └─ Pre-rendered in OffscreenCanvas
+                    │  │           (cached, only redraw on color/viewport changes)
+                    │  │
+                    │  └─ Preview canvas (if enabled)
+                    │
+                    └─ renderViewportOverlay() [refactored]
+                       │
+                       └─ For each stream:
+                          │
+                          ├─ drawImage(overlayOffscreenCanvas) [NEW - cached!]
+                          │  └─ Pre-rendered viewport rectangle
+                          │     (cached, only redraw on color/viewport changes)
+                          │
+                          └─ If selected:
+                             └─ Draw handles only [NEW - selective!]
+                                (recalculate handle positions, don't redraw entire rect)
+
+
+═══════════════════════════════════════════════════════════════════════════════════════
+  OFFSCREENCANVAS CACHING STRATEGY
+═══════════════════════════════════════════════════════════════════════════════════════
+
+STATE STORAGE (in initDrawing state object):
+
+  state = {
+    // ... existing state ...
+    offscreenCanvases: {
+      bounds_<streamId>: OffscreenCanvas,  // Cached viewport bounds rectangles
+      overlay_<streamId>: OffscreenCanvas, // Cached viewport overlay rectangles
+      metrics_panel: OffscreenCanvas,      // (Phase 3c) Cached metrics background
+      metrics_fps: OffscreenCanvas         // (Phase 3c) Cached FPS number
+    },
+    cacheInvalidation: {
+      bounds_<streamId>: boolean,  // Mark for redraw if color/viewport changed
+      overlay_<streamId>: boolean  // Mark for redraw if color changed
+    }
+  };
+
+
+CACHE INVALIDATION TRIGGERS:
+
+  handleLayerUpdate(event):
+    • Invalidate bounds_* if viewport or enabled state changed
+    • Invalidate overlay_* if color or viewport changed
+
+  handleCameraChange():
+    • No invalidation needed (transform applied on composition)
+
+  handleLayerSelection(event):
+    • Invalidate overlay_* for previous/new activeLayerId
+    • Only redraw handles for selected stream
+
+
+═══════════════════════════════════════════════════════════════════════════════════════
+  LAYER OPTIMIZATION MATRIX
+═══════════════════════════════════════════════════════════════════════════════════════
+
+Layer Type          │ Update Freq  │ Best Approach              │ Gain   │ Priority
+────────────────────┼──────────────┼────────────────────────────┼────────┼──────────
+Pose                │ 10-30 FPS    │ Path2D batching (not cache)│ 5-10%  │ Low
+Hands               │ 10-30 FPS    │ Path2D batching (not cache)│ 5-10%  │ Low
+Face                │ 10-30 FPS    │ Landmark culling           │ 10-15% │ Medium
+Segmentation        │ 10-30 FPS    │ Already optimized          │ 0%     │ N/A
+Raw Video           │ up to 60 FPS │ Hardware decode            │ 10%    │ Low
+────────────────────┼──────────────┼────────────────────────────┼────────┼──────────
+Viewport Bounds     │ On change    │ OffscreenCanvas cache ✓    │ 10-20% │ HIGH
+Viewport Overlay    │ On change    │ OffscreenCanvas cache ✓    │ 15-25% │ HIGHEST
+Metrics Display     │ Every frame  │ Partial cache (complex)    │ 5-10%  │ MEDIUM
+
+
+═══════════════════════════════════════════════════════════════════════════════════════
+  PERFORMANCE ANALYSIS: WHAT'S SLOW?
+═══════════════════════════════════════════════════════════════════════════════════════
+
+PER-FRAME OPERATIONS (Repeated 60 times per second):
+
+  1. setLineDash() + strokeRect()  ← Expensive, changes canvas state
+     • Cost: ~0.2-0.5ms per stream
+     • Occurs in: renderViewportOverlay() [line 874-875]
+     • Optimization: Pre-render to OffscreenCanvas
+     • New cost: drawImage() = ~0.02-0.05ms (10x faster!)
+     • Gain per stream: 0.15-0.45ms
+
+  2. ctx.beginPath() + arc() + fill() per landmark  ← Very expensive
+     • Cost: ~1-3ms for face (468 landmarks)
+     • Occurs in: drawLandmarks() [line 119-131]
+     • Optimization: Path2D batching (not OffscreenCanvas)
+     • New cost: ~0.2-0.5ms
+     • Gain: 0.8-2.5ms
+
+  3. ctx.measureText() [multiple calls]  ← Moderately expensive
+     • Cost: ~0.01-0.02ms per call × 20 calls = ~0.2-0.4ms
+     • Occurs in: drawMetrics() [line 308, 313]
+     • Optimization: Cache measurements (Phase 3c)
+     • New cost: ~0.05ms
+     • Gain: 0.15-0.35ms
+
+  4. Dirty rectangle calculation  ← Already optimized!
+     • Cost: ~0.05-0.1ms
+     • Already in place [lines 620-655]
+     • No further optimization needed
+
+
+═══════════════════════════════════════════════════════════════════════════════════════
+  PHASE 3 IMPLEMENTATION TIMELINE
+═══════════════════════════════════════════════════════════════════════════════════════
+
+┌─ Phase 3a: Viewport Bounds Pre-rendering (Week 1)
+│  ├─ Effort: 2-3 hours
+│  ├─ Complexity: Low (2/5)
+│  ├─ Expected Gain: 10-20% FPS
+│  ├─ Files Modified:
+│  │  └─ scripts/drawing/index.js (state, renderTo, event handlers)
+│  ├─ Steps:
+│  │  1. Add offscreenCanvases Map to state object
+│  │  2. Create createBoundsOffscreenCanvas() helper
+│  │  3. Cache viewport bounds on stream creation/update
+│  │  4. Use cached bounds in renderTo() fallback path
+│  │  5. Invalidate cache on color/viewport/enabled changes
+│  └─ Testing: Measure FPS with disabled/fallback layers
+│
+├─ Phase 3b: Viewport Overlay Pre-rendering (Week 2)
+│  ├─ Effort: 4-6 hours
+│  ├─ Complexity: Medium (3/5)
+│  ├─ Expected Gain: 15-25% FPS
+│  ├─ Files Modified:
+│  │  └─ scripts/drawing/index.js (renderViewportOverlay refactor)
+│  ├─ Steps:
+│  │  1. Extract viewport rect rendering logic
+│  │  2. Create overlay OffscreenCanvas per stream
+│  │  3. Pre-render geometry (rect only, not handles)
+│  │  4. Refactor renderViewportOverlay() to:
+│  │     - Composite pre-rendered rects
+│  │     - Recalculate handle positions
+│  │     - Only redraw handles for active stream
+│  │  5. Invalidate cache on color/viewport changes
+│  └─ Testing: Measure FPS with viewport overlays visible
+│
+└─ Phase 3c: Metrics Panel Optimization (Week 3, optional)
+   ├─ Effort: 6-8 hours
+   ├─ Complexity: High (4/5)
+   ├─ Expected Gain: 5-10% FPS (when metrics enabled)
+   ├─ Files Modified:
+   │  └─ scripts/drawing/index.js (drawMetrics refactor)
+   ├─ Steps:
+   │  1. Separate static background to OffscreenCanvas
+   │  2. Create dynamic FPS text canvas
+   │  3. Cache text measurements
+   │  4. Reduce measureText() calls
+   │  5. Pre-render static labels
+   └─ Testing: Measure FPS with metrics enabled
+     Note: Only pursue if metrics overhead > 5%
+
+
+═══════════════════════════════════════════════════════════════════════════════════════
+  CODE MODIFICATION CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════════════
+
+Phase 3a - Bounds Caching:
+  [_] Add offscreenCanvases Map to state (line 422)
+  [_] Add cacheInvalidation Map to state (line 422)
+  [_] Create createBoundsOffscreenCanvas() helper function
+  [_] Modify renderTo() to use cached bounds (line 738-741)
+  [_] Add bounds cache creation in stream rendering path
+  [_] Invalidate cache in handleLayerUpdate (line 1228)
+  [_] Clean up cache when stream deleted
+  [_] Test with 3+ streams, 50% disabled
+
+Phase 3b - Overlay Caching:
+  [_] Extract viewport rect rendering to separate function
+  [_] Create createOverlayOffscreenCanvas() helper
+  [_] Pre-render overlays and cache them
+  [_] Refactor renderViewportOverlay() (line 826-900)
+  [_] Implement selective handle-only redraw
+  [_] Invalidate cache on color/viewport changes
+  [_] Handle camera transform on composition
+  [_] Test with multiple streams, drag/zoom interactions
+
+Phase 3c - Metrics Optimization:
+  [_] Analyze metrics rendering overhead with DevTools
+  [_] If overhead < 5%, mark as "low priority"
+  [_] Create metrics background OffscreenCanvas
+  [_] Create FPS number dynamic canvas
+  [_] Cache text measurement results
+  [_] Refactor drawMetrics() (line 229-362)
+  [_] Test with metrics visible
+
+
+═══════════════════════════════════════════════════════════════════════════════════════
+  EXPECTED RESULTS BY IMPLEMENTATION PHASE
+═══════════════════════════════════════════════════════════════════════════════════════
+
+                                 1080p @ 60FPS target
+────────────────────────────────────────────────────────────────────────────────
+Baseline (current)               ~25-35 FPS
+  └─ Reason: Full per-frame redraws, all geometry recalculated
+
+After Phase 3a                   ~27-42 FPS (+8-20%)
+  └─ Reason: Bounds fallback now uses cached drawImage()
+
+After Phase 3b                   ~31-52 FPS (+23-50%)
+  └─ Reason: Viewport overlay also uses cached geometry
+
+After Phase 3c (if needed)       ~32-54 FPS (+28-54%)
+  └─ Reason: Metrics rendering optimized
+
+Combined Phase 3 Gain:           +25-40% FPS
+────────────────────────────────────────────────────────────────────────────────
+
+
+                                 4K @ 60FPS target
+────────────────────────────────────────────────────────────────────────────────
+Baseline (current)               ~10-15 FPS
+  └─ Reason: High pixel count, full redraw every frame
+
+After Phase 3a+3b                ~15-21 FPS (+40-50%)
+  └─ Reason: Reduced path operations for geometry
+
+
+═══════════════════════════════════════════════════════════════════════════════════════
+  KEY INSIGHT: When to Use OffscreenCanvas
+═══════════════════════════════════════════════════════════════════════════════════════
+
+USE OffscreenCanvas when:
+  ✓ Rendering expensive geometry (paths, shadows, gradients)
+  ✓ Content changes infrequently (cached for multiple frames)
+  ✓ Reused in multiple places (amortizes cost)
+  ✓ Drawing/compositing is significantly faster than recalculation
+
+DON'T use OffscreenCanvas when:
+  ✗ Content changes every frame (no time to amortize)
+  ✗ Rendering is simple (drawImage() not faster than direct draw)
+  ✗ Memory overhead exceeds performance gain (huge canvases)
+  ✗ Additional complexity is not justified by gain (< 5% improvement)
+
+Viewport Overlay fits USE case:
+  • Complex path operations (setLineDash, strokeRect) → expensive
+  • Rarely changes except on interaction → infrequently updated
+  • Drawn every frame → reused every frame
+  • drawImage() significantly faster than strokes
+
+Pose/Hands/Face landmarks DON'T fit USE case:
+  • Simple arc paths → not expensive
+  • Changes every frame → no amortization benefit
+  • Per-frame recalculation is necessary
+
+

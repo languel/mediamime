@@ -1,0 +1,287 @@
+================================================================================
+                    OFFSCREENCANVAS OPTIMIZATION SUMMARY
+                         For Phase 3 Implementation
+================================================================================
+
+RENDERING ARCHITECTURE OVERVIEW
+================================================================================
+
+Current Flow:
+  requestAnimationFrame()
+    → render() [every frame, ~60 FPS]
+      → renderTo() [clears dirty regions, renders all streams]
+      → renderViewportOverlay() [draws viewport bounds + handles]
+
+Main Canvas: "layer-compositor" (1920×1080 to 3840×2160)
+
+Optimization Status:
+  ✓ Dirty Rectangle Clearing (implemented) - 40-80% pixel operation reduction
+  ✓ Frame Skipping (implemented) - Throttles to target FPS
+  ✓ Output Resolution Scaling (implemented) - Resolution presets available
+  ✗ OffscreenCanvas Caching (NOT implemented) - Opportunity for 10-25% gain
+
+
+LAYER UPDATE FREQUENCY ANALYSIS
+================================================================================
+
+REAL-TIME UPDATES (Every MediaPipe frame @ ~10-30 FPS):
+┌─ Pose: 33 landmarks + connections (10-30 FPS) → NOT pre-renderable
+├─ Hands: 42 landmarks (21 each, left+right) (10-30 FPS) → NOT pre-renderable
+├─ Face: 468 landmarks (10-30 FPS) → NOT pre-renderable
+├─ Segmentation: Mask texture (10-30 FPS) → NOT pre-renderable
+└─ Segmentation Stream: Mask + frame (10-30 FPS) → NOT pre-renderable
+
+STATIC/SEMI-STATIC UPDATES (Changes on interaction/config):
+┌─ Viewport Bounds: When viewport/color/state changes → YES, pre-renderable
+├─ Viewport Overlay: When selection/camera changes → YES, pre-renderable (partial)
+└─ Metrics Display: Every frame (FPS changes) → PARTIALLY pre-renderable
+
+VIDEO/LIVE UPDATES:
+└─ Raw: Per video frame (up to 60 FPS) → NOT pre-renderable
+
+
+OFFSCREENCANVAS OPPORTUNITIES RANKED
+================================================================================
+
+PRIORITY 1: VIEWPORT OVERLAY (Highest ROI)
+─────────────────────────────────────────
+Current rendering (lines 858-896):
+  • Draws dashed rectangle per stream (setLineDash + strokeRect)
+  • Draws corner handles if stream is active
+  • Applied transforms per stream
+
+Pre-rendering strategy:
+  ✓ Cache viewport rectangles to OffscreenCanvas per stream
+  ✓ Redraw cache only when:
+    - Stream color changes
+    - Viewport dimensions change
+    - Enable state changes
+  ✓ Each frame: composite cached rectangle + redraw handles if active
+
+Performance improvement: 15-25% FPS gain (overlay rendering)
+Implementation complexity: Medium (3/5)
+Effort: 4-6 hours
+
+Why it works:
+  • Path drawing (setLineDash + strokeRect) is per-frame overhead
+  • drawImage() from pre-rendered OffscreenCanvas is 3-5x faster
+  • Viewport rectangles unchanged most frames (only handles change)
+
+
+PRIORITY 2: VIEWPORT BOUNDS FALLBACK (High ROI)
+────────────────────────────────────────────────
+Current rendering (lines 738-741):
+  • Used when stream has no MediaPipe results
+  • Simple rectangle with color fill
+  • Rendered per frame even when unchanged
+
+Pre-rendering strategy:
+  ✓ Create OffscreenCanvas per stream viewport size
+  ✓ Draw bounds rectangle once (color + fill)
+  ✓ Composite using drawImage() each frame
+  ✓ Redraw cache only on:
+    - Stream color changes
+    - Viewport dimensions change
+    - Alpha/opacity changes
+
+Performance improvement: 10-20% FPS gain (for fallback layers)
+Implementation complexity: Low (2/5)
+Effort: 2-3 hours
+
+
+PRIORITY 3: METRICS PANEL (Medium ROI)
+───────────────────────────────────────
+Current rendering (lines 229-362):
+  • Text measurements (measureText) called 20+ times per frame
+  • Background rectangle drawn
+  • 10-15 text lines rendered
+
+Pre-rendering strategy:
+  ✓ OffscreenCanvas for static background panel
+  ✓ Separate canvas for FPS number (updates every frame)
+  ✓ Cache text measurements
+
+Performance improvement: 5-10% FPS gain (when metrics enabled)
+Implementation complexity: High (4/5)
+Effort: 6-8 hours
+
+
+LAYERS NOT SUITABLE FOR OFFSCREENCANVAS
+════════════════════════════════════════
+
+Pose/Hands/Face (Lines 744-756):
+  ✗ Landmarks change every frame
+  ✗ Need per-frame path calculations
+  ✗ Pre-rendering would require full redraw each frame (no benefit)
+  → Better optimization: Path2D batching, landmark culling
+
+Segmentation (Lines 771-779):
+  ✗ Mask updates frequently
+  ✗ drawImage() already optimized
+  ✗ Would require OffscreenCanvas recreation every frame
+  → Already at near-optimal performance
+
+
+VIEWPORT SYSTEM IMPACT
+═════════════════════════════════════════════════════════════════════════════
+
+Each stream has a viewport (normalized 0-1 coordinates):
+  viewport = {
+    x: 0-1 (left position),
+    y: 0-1 (top position),
+    w: 0.05-1 (width, min 5% of canvas),
+    h: 0.05-1 (height, min 5% of canvas)
+  }
+
+Conversion to pixels (renderTo, lines 481-489):
+  viewportPx.x = normalized.x * canvasWidth
+  viewportPx.y = normalized.y * canvasHeight
+  viewportPx.w = normalized.w * canvasWidth
+  viewportPx.h = normalized.h * canvasHeight
+
+Camera transform (lines 660-684):
+  • Applied only to overlay, not base layer
+  • Uses zoom (scale) + pan (translate)
+  • DOMMatrix if available, fallback to manual transform
+
+OffscreenCanvas strategy impact:
+  • Each stream gets independent pre-rendered cache
+  • Cache scales with viewport size (efficient)
+  • Camera transform applied on composition (not per-stream)
+  • Multi-viewport layout fully supported
+
+
+IMPLEMENTATION ROADMAP
+═════════════════════════════════════════════════════════════════════════════
+
+Phase 3a (Week 1 - 2-3 hours):
+  Priority: Viewport Bounds Pre-rendering
+  Files: scripts/drawing/index.js
+  Steps:
+    1. Add offscreenCanvases Map to state (line ~435)
+    2. Create helper: createBoundsOffscreenCanvas(viewportPx, color, alpha)
+    3. Modify renderTo() to use cache (line ~740)
+    4. Invalidate cache in event handlers (lines 1228-1276)
+  Expected: 10-20% FPS for non-data-driven layers
+
+Phase 3b (Week 2 - 4-6 hours):
+  Priority: Viewport Overlay Pre-rendering
+  Files: scripts/drawing/index.js
+  Steps:
+    1. Extract viewport rect rendering to separate function
+    2. Create OffscreenCanvas cache for overlay rectangles
+    3. Refactor renderViewportOverlay() to composite + handles
+    4. Selective handle redraw when activeLayerId changes
+  Expected: 15-25% FPS for overlay rendering
+
+Phase 3c (Week 3 - 6-8 hours, optional):
+  Priority: Metrics Panel Optimization
+  Files: scripts/drawing/index.js
+  Steps:
+    1. Separate static panel background to OffscreenCanvas
+    2. Create dynamic FPS canvas
+    3. Cache text measurements in state
+    4. Reduce measureText() calls
+  Expected: 5-10% FPS when metrics enabled
+  Note: Only pursue if metrics > 5% overhead detected
+
+
+CODE LOCATIONS REFERENCE
+═════════════════════════════════════════════════════════════════════════════
+
+Core Rendering:
+  Line 44:   DATA_DEPENDENT_PROCESSES set
+  Line 604:  renderTo() - main render function
+  Line 620:  dirty rectangle calculation (start)
+  Line 643:  dirty rectangle clearing
+  Line 686:  stream rendering loop
+  Line 798:  render() - animation frame handler
+  Line 826:  renderViewportOverlay() - overlay rendering
+
+Supporting Functions:
+  Line 96:   drawConnectorList()
+  Line 119:  drawLandmarks()
+  Line 133:  drawSegmentation()
+  Line 181:  drawViewportBounds()
+  Line 229:  drawMetrics()
+
+State Management:
+  Line 422:  initDrawing() state object
+  Line 1228: handleLayerUpdate event
+  Line 1252: handleLayerSelection event
+  Line 1263: handleCameraChange event
+
+Viewport Interaction:
+  Line 481:  getViewportPx()
+  Line 922:  getHoveredViewportHandle()
+  Line 1008: Viewport drag handling
+
+
+EXPECTED PERFORMANCE GAINS
+═════════════════════════════════════════════════════════════════════════════
+
+Baseline (current):         ~25-35 FPS @ 1080p, ~10-15 FPS @ 4K
+
+Phase 3a (Bounds cache):    +10-20% → 27-42 FPS @ 1080p, +20% @ 4K
+Phase 3b (Overlay cache):   +15-25% → 31-52 FPS @ 1080p, +25% @ 4K
+Combined Phase 3:           +25-40% → 31-49 FPS @ 1080p, +40-45% @ 4K
+
+Note: Gains vary by:
+  • Number of concurrent streams (more streams = higher gain)
+  • Viewport overlay visibility (hidden overlay = lower gain)
+  • Metrics panel state (metrics enabled = slight additional gain)
+  • Hardware capabilities (GPU memory, Canvas 2D acceleration)
+
+
+IMPLEMENTATION RECOMMENDATIONS
+═════════════════════════════════════════════════════════════════════════════
+
+DO:
+  ✓ Start with viewport bounds (simpler, lower risk)
+  ✓ Measure before/after with DevTools Performance
+  ✓ Cache only when it saves computation
+  ✓ Invalidate cache on relevant state changes
+  ✓ Keep OffscreenCanvas sizes reasonable (~512px max)
+  ✓ Profile with multiple streams to see real benefit
+
+DON'T:
+  ✗ Pre-cache data-dependent layers (pose/hands/face)
+  ✗ Assume all layers need caching (measure first!)
+  ✗ Create one huge OffscreenCanvas (memory inefficient)
+  ✗ Cache synchronously in render loop (cache outside)
+  ✗ Forget to clean up caches when streams deleted
+
+TESTING:
+  1. Measure baseline FPS: window.state?.fpsTracker
+  2. Implement Phase 3a
+  3. Measure improvement
+  4. Implement Phase 3b
+  5. Measure cumulative improvement
+  6. Profile with DevTools > Performance tab
+  7. Check for memory leaks in DevTools > Memory
+
+
+KEY FILES
+═════════════════════════════════════════════════════════════════════════════
+
+/scripts/drawing/index.js (1350 lines)
+  • Main rendering engine
+  • renderTo() function (lines 604-796)
+  • renderViewportOverlay() function (lines 826-900)
+  • render() frame handler (lines 798-824)
+  • Event handlers and state management
+
+/scripts/layers/index.js (970 lines)
+  • Layer/stream configuration UI
+  • Emits mediamime:layers-changed event
+  • Tracks active layer
+
+/scripts/mediapipe/index.js (250+ lines)
+  • MediaPipe processing
+  • Emits mediamime:holistic-results event
+  • Frame preprocessing
+
+
+================================================================================
+                            END OF SUMMARY
+================================================================================

@@ -178,17 +178,70 @@ const drawSegmentedFrame = (ctx, frame, mask, viewportPx, tintColor, tintAlpha =
   ctx.restore();
 };
 
-const drawViewportBounds = (ctx, viewportPx, strokeColor, fillAlpha = 0, fillColor = null) => {
-  ctx.save();
-  if (fillAlpha > 0 && fillColor) {
-    ctx.fillStyle = fillColor;
-    ctx.fillRect(viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
+const drawViewportBounds = (ctx, viewportPx, strokeColor, fillAlpha = 0, fillColor = null, streamId = null, cacheState = null) => {
+  // Phase 3A Optimization: Cache viewport bounds to OffscreenCanvas
+  // Only redraw when viewport or colors change
+  const shouldUseCacheOptimization = cacheState?.enabled && streamId;
+
+  if (shouldUseCacheOptimization) {
+    const cache = cacheState;
+    const viewportKey = `${Math.round(viewportPx.x)},${Math.round(viewportPx.y)},${Math.round(viewportPx.w)},${Math.round(viewportPx.h)}`;
+    const colorKey = `${strokeColor}|${fillColor}|${fillAlpha}`;
+
+    // Check if cache is still valid
+    const cacheValid = cache.cachedStreamId === streamId &&
+                       cache.cachedColor === colorKey &&
+                       cache.cachedViewport === viewportKey &&
+                       cache.offscreenCanvas &&
+                       cache.offscreenCtx;
+
+    if (!cacheValid) {
+      // Need to regenerate cache - allocate or resize OffscreenCanvas
+      const w = Math.ceil(viewportPx.w) + 2;
+      const h = Math.ceil(viewportPx.h) + 2;
+
+      if (!cache.offscreenCanvas ||
+          cache.offscreenCanvas.width !== w ||
+          cache.offscreenCanvas.height !== h) {
+        cache.offscreenCanvas = new OffscreenCanvas(w, h);
+        cache.offscreenCtx = cache.offscreenCanvas.getContext('2d');
+      }
+
+      const oCtx = cache.offscreenCtx;
+      oCtx.setTransform(1, 0, 0, 1, 0, 0);
+      oCtx.clearRect(0, 0, w, h);
+
+      // Draw bounds at origin in offscreen canvas
+      if (fillAlpha > 0 && fillColor) {
+        oCtx.fillStyle = fillColor;
+        oCtx.fillRect(1, 1, viewportPx.w, viewportPx.h);
+      }
+      oCtx.strokeStyle = strokeColor;
+      oCtx.lineWidth = 1;
+      oCtx.setLineDash([1, 12]);
+      oCtx.strokeRect(1, 1, viewportPx.w, viewportPx.h);
+
+      // Update cache state
+      cache.cachedStreamId = streamId;
+      cache.cachedColor = colorKey;
+      cache.cachedViewport = viewportKey;
+    }
+
+    // Composite cached bounds to main canvas
+    ctx.drawImage(cache.offscreenCanvas, viewportPx.x - 1, viewportPx.y - 1);
+  } else {
+    // Fallback: Direct rendering without cache (no OffscreenCanvas available)
+    ctx.save();
+    if (fillAlpha > 0 && fillColor) {
+      ctx.fillStyle = fillColor;
+      ctx.fillRect(viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
+    }
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([1, 12]);
+    ctx.strokeRect(viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
+    ctx.restore();
   }
-  ctx.strokeStyle = strokeColor;
-  ctx.lineWidth = 1;
-  ctx.setLineDash([1, 12]);
-  ctx.strokeRect(viewportPx.x, viewportPx.y, viewportPx.w, viewportPx.h);
-  ctx.restore();
 };
 
 const drawRawViewportFrame = (ctx, frame, viewportPx, tintColor, alpha) => {
@@ -453,7 +506,18 @@ export function initDrawing({ editor }) {
     },
     // Dirty rectangle tracking for optimized clearing
     dirtyRectangles: [],
-    lastStreamsHash: null
+    lastStreamsHash: null,
+    // OffscreenCanvas caching for viewport bounds
+    viewportBoundsCache: {
+      enabled: typeof OffscreenCanvas !== 'undefined',
+      offscreenCanvas: null,
+      offscreenCtx: null,
+      cachedStreamId: null,
+      cachedColor: null,
+      cachedFillColor: null,
+      cachedFillAlpha: null,
+      cachedViewport: null
+    }
   };
 
   const isSelectToolActive = () => {
@@ -717,7 +781,7 @@ export function initDrawing({ editor }) {
         if (frame) {
           drawRawViewportFrame(targetCtx, frame, viewportPx, strokeColor, fillAlpha);
         } else {
-          drawViewportBounds(targetCtx, viewportPx, strokeColor, fillAlpha, fillColor);
+          drawViewportBounds(targetCtx, viewportPx, strokeColor, fillAlpha, fillColor, stream.id, state.viewportBoundsCache);
         }
         targetCtx.restore();
         return;
@@ -736,7 +800,7 @@ export function initDrawing({ editor }) {
         targetCtx.restore();
         return;
       }
-      drawViewportBounds(targetCtx, viewportPx, strokeColor, fillAlpha, fillColor);
+      drawViewportBounds(targetCtx, viewportPx, strokeColor, fillAlpha, fillColor, stream.id, state.viewportBoundsCache);
       targetCtx.restore();
       return;
     }
@@ -778,14 +842,14 @@ export function initDrawing({ editor }) {
           break;
         }
         case "depth":
-          drawViewportBounds(targetCtx, viewportPx, strokeColor, fillAlpha, fillColor);
+          drawViewportBounds(targetCtx, viewportPx, strokeColor, fillAlpha, fillColor, stream.id, state.viewportBoundsCache);
           break;
         case "metrics":
           drawMetrics(targetCtx, viewportPx, strokeColor, frame, results, stream, zoom, state.fpsTracker);
           break;
         case "raw":
         default:
-          drawViewportBounds(targetCtx, viewportPx, strokeColor, fillAlpha, fillColor);
+          drawViewportBounds(targetCtx, viewportPx, strokeColor, fillAlpha, fillColor, stream.id, state.viewportBoundsCache);
           break;
       }
       targetCtx.restore();
