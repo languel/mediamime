@@ -450,7 +450,10 @@ export function initDrawing({ editor }) {
       width: null,
       height: null,
       appliedScale: 1.0
-    }
+    },
+    // Dirty rectangle tracking for optimized clearing
+    dirtyRectangles: [],
+    lastStreamsHash: null
   };
 
   const isSelectToolActive = () => {
@@ -591,9 +594,53 @@ export function initDrawing({ editor }) {
     const cssWidth = width / globalDpr;
     const cssHeight = height / globalDpr;
 
-    // Reset transform to identity and clear full buffer
+    // Reset transform to identity
     targetCtx.setTransform(1, 0, 0, 1, 0, 0);
-    targetCtx.clearRect(0, 0, width, height);
+
+    // Only clear if streams exist, otherwise clear full buffer for empty canvas
+    if (state.streams.length === 0) {
+      targetCtx.clearRect(0, 0, width, height);
+      return;
+    }
+
+    // Optimization: For most frames, only clear the regions occupied by streams
+    // instead of clearing the entire canvas. This is much faster at high resolutions.
+    // Calculate union of stream viewport rectangles for dirty rect clearing
+    let minX = width, minY = height, maxX = 0, maxY = 0;
+    let hasEnabledStream = false;
+
+    state.streams.forEach((stream) => {
+      if (!stream.enabled) return;
+      if (isPreview && stream.preview === false) return;
+      if (!isPreview && stream.showInMain === false) return;
+      hasEnabledStream = true;
+
+      // Estimate stream viewport in pixels
+      const vp = stream.viewport || { x: 0, y: 0, w: 1, h: 1 };
+      const vpX = vp.x * width;
+      const vpY = vp.y * height;
+      const vpW = vp.w * width;
+      const vpH = vp.h * height;
+
+      minX = Math.min(minX, vpX);
+      minY = Math.min(minY, vpY);
+      maxX = Math.max(maxX, vpX + vpW);
+      maxY = Math.max(maxY, vpY + vpH);
+    });
+
+    // Clear only the dirty regions (with padding for safety)
+    if (hasEnabledStream && minX < maxX && minY < maxY) {
+      const padding = 4; // Small padding for zoom/transform artifacts
+      targetCtx.clearRect(
+        Math.max(0, minX - padding),
+        Math.max(0, minY - padding),
+        Math.min(width, maxX - minX + padding * 2),
+        Math.min(height, maxY - minY + padding * 2)
+      );
+    } else {
+      // Fallback: clear full canvas if calculation fails
+      targetCtx.clearRect(0, 0, width, height);
+    }
 
     // Keep canvas transparent when no streams
     if (!state.streams.length) return;
