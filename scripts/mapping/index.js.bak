@@ -77,52 +77,6 @@ const HAND_LANDMARKS_LIST = [
   { key: "pinky_tip", label: "Pinky tip", index: 20 }
 ];
 
-// Combined list for layers with "hands" process that track both left and right hands
-const BOTH_HANDS_LANDMARKS_LIST = [
-  { key: "left_wrist", label: "L Wrist", index: 0 },
-  { key: "left_thumb_cmc", label: "L Thumb CMC", index: 1 },
-  { key: "left_thumb_mcp", label: "L Thumb MCP", index: 2 },
-  { key: "left_thumb_ip", label: "L Thumb IP", index: 3 },
-  { key: "left_thumb_tip", label: "L Thumb tip", index: 4 },
-  { key: "left_index_mcp", label: "L Index MCP", index: 5 },
-  { key: "left_index_pip", label: "L Index PIP", index: 6 },
-  { key: "left_index_dip", label: "L Index DIP", index: 7 },
-  { key: "left_index_tip", label: "L Index tip", index: 8 },
-  { key: "left_middle_mcp", label: "L Middle MCP", index: 9 },
-  { key: "left_middle_pip", label: "L Middle PIP", index: 10 },
-  { key: "left_middle_dip", label: "L Middle DIP", index: 11 },
-  { key: "left_middle_tip", label: "L Middle tip", index: 12 },
-  { key: "left_ring_mcp", label: "L Ring MCP", index: 13 },
-  { key: "left_ring_pip", label: "L Ring PIP", index: 14 },
-  { key: "left_ring_dip", label: "L Ring DIP", index: 15 },
-  { key: "left_ring_tip", label: "L Ring tip", index: 16 },
-  { key: "left_pinky_mcp", label: "L Pinky MCP", index: 17 },
-  { key: "left_pinky_pip", label: "L Pinky PIP", index: 18 },
-  { key: "left_pinky_dip", label: "L Pinky DIP", index: 19 },
-  { key: "left_pinky_tip", label: "L Pinky tip", index: 20 },
-  { key: "right_wrist", label: "R Wrist", index: 0 },
-  { key: "right_thumb_cmc", label: "R Thumb CMC", index: 1 },
-  { key: "right_thumb_mcp", label: "R Thumb MCP", index: 2 },
-  { key: "right_thumb_ip", label: "R Thumb IP", index: 3 },
-  { key: "right_thumb_tip", label: "R Thumb tip", index: 4 },
-  { key: "right_index_mcp", label: "R Index MCP", index: 5 },
-  { key: "right_index_pip", label: "R Index PIP", index: 6 },
-  { key: "right_index_dip", label: "R Index DIP", index: 7 },
-  { key: "right_index_tip", label: "R Index tip", index: 8 },
-  { key: "right_middle_mcp", label: "R Middle MCP", index: 9 },
-  { key: "right_middle_pip", label: "R Middle PIP", index: 10 },
-  { key: "right_middle_dip", label: "R Middle DIP", index: 11 },
-  { key: "right_middle_tip", label: "R Middle tip", index: 12 },
-  { key: "right_ring_mcp", label: "R Ring MCP", index: 13 },
-  { key: "right_ring_pip", label: "R Ring PIP", index: 14 },
-  { key: "right_ring_dip", label: "R Ring DIP", index: 15 },
-  { key: "right_ring_tip", label: "R Ring tip", index: 16 },
-  { key: "right_pinky_mcp", label: "R Pinky MCP", index: 17 },
-  { key: "right_pinky_pip", label: "R Pinky PIP", index: 18 },
-  { key: "right_pinky_dip", label: "R Pinky DIP", index: 19 },
-  { key: "right_pinky_tip", label: "R Pinky tip", index: 20 }
-];
-
 const createLandmarkIndexMap = (list) =>
   list.reduce((map, entry, defaultIndex) => {
     const index = Number.isFinite(entry.index) ? entry.index : defaultIndex;
@@ -132,7 +86,6 @@ const createLandmarkIndexMap = (list) =>
 
 const POSE_INDEX_BY_KEY = createLandmarkIndexMap(POSE_LANDMARKS_LIST);
 const HAND_INDEX_BY_KEY = createLandmarkIndexMap(HAND_LANDMARKS_LIST);
-const BOTH_HANDS_INDEX_BY_KEY = createLandmarkIndexMap(BOTH_HANDS_LANDMARKS_LIST);
 
 const FACE_REFERENCE_POINTS = [
   { key: "centroid", label: "Face centroid" },
@@ -571,8 +524,7 @@ const mergeInteraction = (input) => {
       if (layer.process === "pose") {
         streamDefinition = STREAM_DEFINITIONS.pose;
       } else if (layer.process === "hands") {
-        // Use combined list that includes both left and right hand landmarks
-        streamDefinition = { id: "hands", label: "Hands", options: BOTH_HANDS_LANDMARKS_LIST };
+        streamDefinition = STREAM_DEFINITIONS.leftHand;
       } else if (layer.process === "face") {
         streamDefinition = STREAM_DEFINITIONS.face;
       }
@@ -689,10 +641,14 @@ const layersState = {
 const populateStreamSelect = (selectEl, currentValue = null) => {
   if (!selectEl) return;
 
+  console.log('[mediamime] populateStreamSelect - layersState.streams:', layersState.streams.map(s => ({ id: s.id, name: s.name, process: s.process, enabled: s.enabled })));
+
   // Get landmark-producing layers (pose, hands, face)
   const landmarkLayers = layersState.streams.filter(
     stream => stream.enabled && ["pose", "hands", "face"].includes(stream.process)
   );
+
+  console.log('[mediamime] populateStreamSelect - landmarkLayers:', landmarkLayers.map(l => ({ id: l.id, name: l.name, process: l.process })));
 
   // Build options: layers first, then special streams (pointer, keyboard)
   const layerOptions = landmarkLayers.map(layer => {
@@ -730,25 +686,34 @@ const populateStreamSelect = (selectEl, currentValue = null) => {
       selectEl.value = "pointer";
     }
   }
+
+  console.log('[mediamime] populateStreamSelect - final value:', selectEl.value);
 };
 
 const populateLandmarkOptions = (streamId, selectedKey, selectEl) => {
   if (!selectEl) return "";
 
+  console.log('[mediamime] populateLandmarkOptions called with streamId:', streamId, 'selectedKey:', selectedKey);
+
   let definition = null;
 
   // Check if streamId is a layer ID
   if (streamId && streamId.startsWith("layer-")) {
+    console.log('[mediamime] Looking for layer:', streamId);
     const layer = layersState.streams.find(s => s.id === streamId);
+    console.log('[mediamime] Found layer:', layer ? { id: layer.id, name: layer.name, process: layer.process } : null);
     if (layer) {
       // Map layer process type to landmark definitions
       if (layer.process === "pose") {
         definition = STREAM_DEFINITIONS.pose;
+        console.log('[mediamime] Using pose landmarks');
       } else if (layer.process === "hands") {
-        // Use combined list that includes both left and right hand landmarks
-        definition = { id: "hands", label: "Hands", options: BOTH_HANDS_LANDMARKS_LIST };
+        // For hands, show combined hand landmarks (they work for both left/right)
+        definition = STREAM_DEFINITIONS.leftHand; // Use hand landmarks
+        console.log('[mediamime] Using hand landmarks');
       } else if (layer.process === "face") {
         definition = STREAM_DEFINITIONS.face;
+        console.log('[mediamime] Using face landmarks');
       }
     } else {
       console.warn(`[mediamime] Layer not found for landmark selection: ${streamId}`, {
@@ -757,6 +722,7 @@ const populateLandmarkOptions = (streamId, selectedKey, selectEl) => {
     }
   } else {
     // Backward compatibility: use old stream definitions
+    console.log('[mediamime] Using backward compatibility for stream:', streamId);
     definition = STREAM_DEFINITIONS[streamId];
   }
 
@@ -765,6 +731,8 @@ const populateLandmarkOptions = (streamId, selectedKey, selectEl) => {
     console.warn(`[mediamime] No landmark definition found for stream: ${streamId}, using pose fallback`);
     definition = STREAM_DEFINITIONS.pose;
   }
+
+  console.log('[mediamime] Final definition:', definition ? definition.id : null, 'with', definition?.options?.length || 0, 'options');
 
   const options = Array.isArray(definition.options) ? definition.options : [];
   selectEl.innerHTML = options
@@ -1989,14 +1957,17 @@ export function initMapping({ editor }) {
   const syncModal = () => {
     if (!state.modalOpen || state.isSyncing) return;
     const draft = state.draftInteraction ? mergeInteraction(state.draftInteraction) : createDefaultInteraction();
+    console.log('[mediamime] syncModal - draft stream:', draft.stream);
     state.isSyncing = true;
     if (shapeNameInput) {
       shapeNameInput.value = state.draftName;
     }
     if (streamSelect) {
       streamSelect.value = draft.stream;
+      console.log('[mediamime] syncModal - streamSelect.value set to:', streamSelect.value, 'actual value now:', streamSelect.value);
     }
     const landmark = populateLandmarkOptions(draft.stream, draft.landmark, landmarkSelect);
+    console.log('[mediamime] syncModal - populated landmarks for stream:', draft.stream, 'resolved landmark:', landmark);
     if (landmarkSelect) {
       landmarkSelect.value = landmark;
     }
@@ -2402,6 +2373,7 @@ export function initMapping({ editor }) {
   const handleAssignmentStreamChange = () => {
     if (state.isSyncing) return;
     const streamId = streamSelect?.value || "pose";
+    console.log('[mediamime] Assignment stream changed to:', streamId);
     if (!state.draftInteraction) {
       state.draftInteraction = { ...mergeInteraction({ stream: streamId }), name: state.draftName };
     } else {
@@ -2411,6 +2383,7 @@ export function initMapping({ editor }) {
       state.draftInteraction.events = merged.events;
     }
     state.draftInteraction = { ...mergeInteraction(state.draftInteraction), name: state.draftName };
+    console.log('[mediamime] Draft interaction after change:', state.draftInteraction);
     commitDraftInteraction();
     syncModal();
   };
@@ -2651,20 +2624,11 @@ export function initMapping({ editor }) {
       return clampLandmarkPoint(Array.isArray(holisticResults.poseLandmarks) ? holisticResults.poseLandmarks[index] : null);
     }
     if (processType === "hands") {
-      // Check if the key has a left/right prefix (new format)
-      if (key.startsWith("left_")) {
-        const baseKey = key.slice(5); // Remove "left_" prefix
-        const index = BOTH_HANDS_INDEX_BY_KEY[key] ?? HAND_INDEX_BY_KEY[baseKey] ?? HAND_INDEX_BY_KEY.wrist ?? 0;
-        return clampLandmarkPoint(Array.isArray(holisticResults.leftHandLandmarks) ? holisticResults.leftHandLandmarks[index] : null);
-      } else if (key.startsWith("right_")) {
-        const baseKey = key.slice(6); // Remove "right_" prefix
-        const index = BOTH_HANDS_INDEX_BY_KEY[key] ?? HAND_INDEX_BY_KEY[baseKey] ?? HAND_INDEX_BY_KEY.wrist ?? 0;
-        return clampLandmarkPoint(Array.isArray(holisticResults.rightHandLandmarks) ? holisticResults.rightHandLandmarks[index] : null);
-      } else {
-        // Legacy format without left/right prefix - default to left hand
-        const index = HAND_INDEX_BY_KEY[key] ?? HAND_INDEX_BY_KEY.wrist ?? 0;
-        return clampLandmarkPoint(Array.isArray(holisticResults.leftHandLandmarks) ? holisticResults.leftHandLandmarks[index] : null);
-      }
+      // For hands, check if landmark key suggests left or right
+      const isLeft = key.includes("left") || key === "wrist" || key === "thumb_cmc" || !key.includes("right");
+      const landmarks = isLeft ? holisticResults.leftHandLandmarks : holisticResults.rightHandLandmarks;
+      const index = HAND_INDEX_BY_KEY[key] ?? HAND_INDEX_BY_KEY.wrist ?? 0;
+      return clampLandmarkPoint(Array.isArray(landmarks) ? landmarks[index] : null);
     }
     if (processType === "face") {
       if (key === "centroid") {
@@ -2710,6 +2674,11 @@ export function initMapping({ editor }) {
 
       // Apply layer viewport transform
       const transformedPoint = applyLayerViewportTransform(rawPoint, layer.viewport);
+      console.log(`[mediamime] Resolved point for ${layer.name}:${landmarkKey}`, {
+        raw: { x: rawPoint.x.toFixed(3), y: rawPoint.y.toFixed(3) },
+        viewport: layer.viewport,
+        transformed: { x: transformedPoint.x.toFixed(3), y: transformedPoint.y.toFixed(3) }
+      });
       return transformedPoint;
     }
 

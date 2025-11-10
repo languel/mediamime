@@ -31,11 +31,11 @@ const init = async () => {
 
   // The downstream modules receive the editor API so they can subscribe to
   // shape/selection changes once they are ported into this modular architecture.
+  initInput({ editor: editorApi });
+  initLayers({ editor: editorApi }); // Initialize layers before mapping so streams are available
   initMediaPipeline({ editor: editorApi });
   initMapping({ editor: editorApi });
   initDrawing({ editor: editorApi });
-  initInput({ editor: editorApi });
-  initLayers({ editor: editorApi });
 };
 
 if (document.readyState === "loading") {

@@ -463,12 +463,7 @@
                       <label for="editor-stream-select">Input</label>
                       <div class="assignment-field-group">
                         <select id="editor-stream-select">
-                          <option value="pose">Pose Landmarks</option>
-                          <option value="leftHand">Left Hand</option>
-                          <option value="rightHand">Right Hand</option>
-                          <option value="face">Face (centroid)</option>
-                          <option value="pointer">Pointer Input</option>
-                          <option value="keyboard">Keyboard</option>
+                          <!-- Populated dynamically from layer streams -->
                         </select>
                         <select id="editor-landmark-select" title="Landmark select"></select>
                       </div>
@@ -591,12 +586,7 @@
         <label for="assignment-stream">Input</label>
         <div class="assignment-field-group">
           <select id="assignment-stream">
-            <option value="pose">Pose Landmarks</option>
-            <option value="leftHand">Left Hand</option>
-            <option value="rightHand">Right Hand</option>
-            <option value="face">Face (centroid)</option>
-            <option value="pointer">Pointer Input</option>
-            <option value="keyboard">Keyboard</option>
+            <!-- Populated dynamically from layer streams -->
           </select>
           <select id="assignment-landmark"></select>
         </div>

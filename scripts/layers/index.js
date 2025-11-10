@@ -185,6 +185,8 @@ const loadStoredStreams = () => {
 
 export function initLayers({ editor }) {
   void editor;
+  const panel = document.getElementById("modal-layers");
+  const panelHandle = panel?.querySelector("[data-modal-handle]");
   const listEl = document.getElementById("layer-stream-list");
   const emptyEl = document.getElementById("layer-empty");
   const detailForm = document.getElementById("layer-detail");
@@ -765,7 +767,11 @@ export function initLayers({ editor }) {
 
     // Handle stream selection
     const button = event.target.closest("[data-stream-id]");
-    if (!button) return;
+    if (!button) {
+      // Clicked on empty space - clear selection
+      setActiveStream(null);
+      return;
+    }
     const id = button.dataset.streamId;
     if (!id || id === state.activeId) return;
     setActiveStream(id);
@@ -773,6 +779,14 @@ export function initLayers({ editor }) {
 
   addListener(addButton, "click", () => addStream());
   addListener(duplicateButton, "click", () => duplicateStream());
+
+  // Clear selection when clicking panel handle
+  addListener(panelHandle, "click", (event) => {
+    // Only clear if clicking directly on the handle, not when dragging
+    if (event.target === panelHandle || panelHandle.contains(event.target)) {
+      setActiveStream(null);
+    }
+  });
 
   addListener(nameInput, "input", (event) => {
     if (state.isSyncing) return;
@@ -880,6 +894,11 @@ export function initLayers({ editor }) {
     state.streams = [];
     updateUI();
   }
+
+  // Dispatch initial state after a microtask to ensure other modules have registered listeners
+  Promise.resolve().then(() => {
+    dispatchLayersEvent(state.streams);
+  });
 
   inputListHandler = (event) => handleInputListChanged(event);
   window.addEventListener("mediamime:input-list-changed", inputListHandler);
