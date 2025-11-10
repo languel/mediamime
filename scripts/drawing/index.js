@@ -562,12 +562,24 @@ export function initDrawing({ editor }) {
         offsetY: svgRect.top - canvasRect.top,
         usesDomMatrix: false
       };
-    } else {
-      if (state.editor?.getViewBox) {
-        state.displayMetrics.viewBox = state.editor.getViewBox();
+    } else if (state.displayMetrics) {
+      // Cache hit: metrics are still valid
+      // Only update camera/viewBox if they've actually changed (avoid recalculation)
+      const currentViewBox = state.editor?.getViewBox?.();
+      const currentCamera = state.editor?.getCamera?.();
+
+      // Only update if values actually changed
+      if (currentViewBox &&
+          (currentViewBox.width !== state.displayMetrics.viewBox.width ||
+           currentViewBox.height !== state.displayMetrics.viewBox.height)) {
+        state.displayMetrics.viewBox = currentViewBox;
       }
-      if (state.editor?.getCamera) {
-        state.displayMetrics.camera = state.editor.getCamera();
+
+      if (currentCamera &&
+          (currentCamera.x !== state.displayMetrics.camera.x ||
+           currentCamera.y !== state.displayMetrics.camera.y ||
+           currentCamera.zoom !== state.displayMetrics.camera.zoom)) {
+        state.displayMetrics.camera = currentCamera;
       }
     }
 
