@@ -591,6 +591,16 @@ export function initDrawing({ editor }) {
       lastActiveLayerId: null,
       lastStreamStates: new Map(), // Map<streamId, {color, viewport, isActive}>
       lastViewBox: null
+    },
+    // Performance mode: Maximize FPS for editor interactions
+    performanceMode: {
+      enabled: false,
+      targetFPS: 120, // Higher FPS for editor responsiveness
+      disableMediaPipe: false,
+      disableLandmarkRendering: false,
+      disableMetrics: false,
+      disableViewportOverlay: false,
+      minimalResolution: false // When true, use 480p resolution
     }
   };
 
@@ -739,7 +749,7 @@ export function initDrawing({ editor }) {
     return { x: worldX, y: worldY };
   };
 
-  const renderTo = (targetCtx, width, height, metrics, { isPreview = false } = {}) => {
+  const renderTo = (targetCtx, width, height, metrics, { isPreview = false, skipOverlay = false } = {}) => {
     const globalDpr = window.devicePixelRatio || 1;
     const cssWidth = width / globalDpr;
     const cssHeight = height / globalDpr;
@@ -862,6 +872,11 @@ export function initDrawing({ editor }) {
       }
 
       if (stream.process === "metrics") {
+        // Skip metrics in performance mode if disabled
+        if (state.performanceMode.enabled && state.performanceMode.disableMetrics) {
+          targetCtx.restore();
+          return;
+        }
         // Metrics can be drawn even without MediaPipe results
         drawMetrics(targetCtx, viewportPx, strokeColor, frame, results, stream, zoom, state.fpsTracker);
         targetCtx.restore();
@@ -878,7 +893,16 @@ export function initDrawing({ editor }) {
       targetCtx.restore();
       return;
     }
-      switch (stream.process) {
+
+    // Performance mode: Skip landmark rendering if disabled
+    if (state.performanceMode.enabled && state.performanceMode.disableLandmarkRendering) {
+      // Only draw viewport bounds for reference
+      drawViewportBounds(targetCtx, viewportPx, strokeColor, fillAlpha, fillColor, stream.id, state.viewportBoundsCache);
+      targetCtx.restore();
+      return;
+    }
+
+    switch (stream.process) {
         case "pose":
           drawConnectorList(targetCtx, results.poseLandmarks, getPoseConnections(), viewportPx, strokeColor, zoom);
           drawLandmarks(targetCtx, results.poseLandmarks, viewportPx, strokeColor, 3, zoom);
@@ -953,9 +977,21 @@ export function initDrawing({ editor }) {
     state.frameSkipping.lastFrameTime = now;
     state.frameSkipping.frameCount++;
 
+    // Update target FPS if in performance mode
+    if (state.performanceMode.enabled) {
+      state.frameSkipping.targetFPS = state.performanceMode.targetFPS;
+    }
+
     const metrics = ensureDisplayMetrics();
-    renderTo(ctx, canvas.width, canvas.height, metrics, { isPreview: false });
-    renderViewportOverlay(ctx, metrics);
+
+    // Skip viewport overlay rendering in performance mode
+    if (state.performanceMode.enabled && state.performanceMode.disableViewportOverlay) {
+      renderTo(ctx, canvas.width, canvas.height, metrics, { isPreview: false, skipOverlay: true });
+    } else {
+      renderTo(ctx, canvas.width, canvas.height, metrics, { isPreview: false });
+      renderViewportOverlay(ctx, metrics);
+    }
+
     if (state.previewCtx && state.previewCanvas) {
       renderTo(state.previewCtx, state.previewCanvas.width, state.previewCanvas.height, null, { isPreview: true });
     }
@@ -1568,6 +1604,49 @@ export function initDrawing({ editor }) {
       } else {
         window.removeEventListener("resize", resizePreviewCanvas);
       }
+    },
+    // Performance Mode API
+    setPerformanceMode(enabled, options = {}) {
+      state.performanceMode.enabled = enabled;
+      if (enabled) {
+        // Set defaults for performance mode
+        state.performanceMode.targetFPS = options.targetFPS ?? 120;
+        state.performanceMode.disableMediaPipe = options.disableMediaPipe ?? true;
+        state.performanceMode.disableLandmarkRendering = options.disableLandmarkRendering ?? true;
+        state.performanceMode.disableMetrics = options.disableMetrics ?? true;
+        state.performanceMode.disableViewportOverlay = options.disableViewportOverlay ?? true;
+        state.performanceMode.minimalResolution = options.minimalResolution ?? true;
+
+        console.log('[mediamime] Performance mode ENABLED', {
+          targetFPS: state.performanceMode.targetFPS,
+          disableMediaPipe: state.performanceMode.disableMediaPipe,
+          disableLandmarkRendering: state.performanceMode.disableLandmarkRendering,
+          disableMetrics: state.performanceMode.disableMetrics,
+          disableViewportOverlay: state.performanceMode.disableViewportOverlay,
+          minimalResolution: state.performanceMode.minimalResolution
+        });
+
+        // Apply minimal resolution if enabled
+        if (state.performanceMode.minimalResolution) {
+          state.outputResolution.preset = '540p';
+          state.outputResolution.width = 960;
+          state.outputResolution.height = 540;
+          scheduleResize();
+        }
+      } else {
+        console.log('[mediamime] Performance mode DISABLED');
+        // Reset to defaults
+        state.performanceMode.targetFPS = 60;
+        state.performanceMode.disableMediaPipe = false;
+        state.performanceMode.disableLandmarkRendering = false;
+        state.performanceMode.disableMetrics = false;
+        state.performanceMode.disableViewportOverlay = false;
+        state.performanceMode.minimalResolution = false;
+      }
+      requestRender();
+    },
+    getPerformanceMode() {
+      return { ...state.performanceMode };
     }
   };
 }
