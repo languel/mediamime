@@ -104,26 +104,14 @@ const emitResults = (sourceId, results, frame = null) => {
     if (flip.vertical) {
       sourceYNorm = Math.max(0, Math.min(1 - sourceHNorm, 1 - cropYNorm - sourceHNorm));
     }
-    let cropW = Math.max(1, sourceWNorm * vw);
-    let cropH = Math.max(1, sourceHNorm * vh);
+
+    // IMPORTANT: Always draw full cropped resolution to canvas
+    // The display canvas must always be at full resolution (for proper display in layers)
+    // Input resolution scaling is ONLY for MediaPipe processing, not the display canvas
+    const cropW = Math.max(1, sourceWNorm * vw);
+    const cropH = Math.max(1, sourceHNorm * vh);
     const cropX = sourceXNorm * vw;
     const cropY = sourceYNorm * vh;
-
-    // Phase 4: Input resolution scaling for MediaPipe
-    // Reduce input resolution before sending to MediaPipe to save processing time
-    if (inputResolution.preset !== 'full' && inputResolution.width && inputResolution.height) {
-      const containerAspect = cropW / cropH;
-      const targetAspect = inputResolution.width / inputResolution.height;
-
-      // Scale while maintaining aspect ratio
-      if (containerAspect > targetAspect) {
-        cropH = Math.max(1, Math.floor(inputResolution.height));
-        cropW = Math.max(1, Math.floor(cropH * containerAspect));
-      } else {
-        cropW = Math.max(1, Math.floor(inputResolution.width));
-        cropH = Math.max(1, Math.floor(cropW / containerAspect));
-      }
-    }
 
     if (canvas.width !== cropW || canvas.height !== cropH) {
       canvas.width = cropW;
@@ -135,6 +123,46 @@ const emitResults = (sourceId, results, frame = null) => {
     ctx.scale(flip.horizontal ? -1 : 1, flip.vertical ? -1 : 1);
     ctx.drawImage(video, cropX, cropY, sourceWNorm * vw, sourceHNorm * vh, 0, 0, canvas.width, canvas.height);
     ctx.restore();
+
+    // Phase 4: Input resolution scaling for MediaPipe
+    // Create a separate canvas at the target resolution for MediaPipe processing
+    // This is SEPARATE from the display canvas
+    if (inputResolution.preset !== 'full' && inputResolution.width && inputResolution.height) {
+      if (!processor.mediapipeCanvas) {
+        processor.mediapipeCanvas = document.createElement('canvas');
+        processor.mediapipeCtx = processor.mediapipeCanvas.getContext('2d');
+      }
+
+      const containerAspect = cropW / cropH;
+      const targetAspect = inputResolution.width / inputResolution.height;
+
+      let scaledW = cropW;
+      let scaledH = cropH;
+
+      // Scale while maintaining aspect ratio
+      if (containerAspect > targetAspect) {
+        scaledH = Math.max(1, Math.floor(inputResolution.height));
+        scaledW = Math.max(1, Math.floor(scaledH * containerAspect));
+      } else {
+        scaledW = Math.max(1, Math.floor(inputResolution.width));
+        scaledH = Math.max(1, Math.floor(scaledW / containerAspect));
+      }
+
+      if (processor.mediapipeCanvas.width !== scaledW || processor.mediapipeCanvas.height !== scaledH) {
+        processor.mediapipeCanvas.width = scaledW;
+        processor.mediapipeCanvas.height = scaledH;
+      }
+
+      // Draw the full canvas to the scaled canvas (this creates the pixelated effect)
+      processor.mediapipeCtx.drawImage(canvas, 0, 0, scaledW, scaledH);
+
+      // Store reference to the scaled canvas for MediaPipe to use
+      processor.mediapipeFrameForHolistic = processor.mediapipeCanvas;
+    } else {
+      // No input resolution scaling - use the full canvas
+      processor.mediapipeFrameForHolistic = canvas;
+    }
+
     return true;
   };
 
@@ -181,7 +209,7 @@ const emitResults = (sourceId, results, frame = null) => {
         return;
       }
       processor.pending = processor.holistic
-        .send({ image: canvas })
+        .send({ image: processor.mediapipeFrameForHolistic })
         .catch((error) => {
           console.warn("[mediamime] Holistic frame failed", error);
         })
