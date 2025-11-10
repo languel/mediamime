@@ -11,11 +11,15 @@ const DEFAULT_OUTPUT_RESOLUTION = { preset: 'raw', width: null, height: null };
 const DEFAULT_INPUT_RESOLUTION = { preset: 'full', width: null, height: null };
 const INPUT_STORAGE_KEY = 'mediamime:inputs';
 const INPUT_BOOKMARKS_KEY = 'mediamime:url-bookmarks';
-const DEFAULT_URL_SOURCE = {
-  url: './scripts/input/default_input.mp4',
-  name: 'Sample Clip',
-  type: 'video'
-};
+const DEFAULT_URL_SOURCE = (typeof window !== 'undefined' && window.location?.protocol === 'file:')
+  ? null
+  : {
+      url: './scripts/input/default_input.mp4',
+      name: 'Sample Clip',
+      type: 'video'
+    };
+const hasDefaultSample = Boolean(DEFAULT_URL_SOURCE);
+const getDefaultBookmarks = () => (hasDefaultSample ? [{ url: DEFAULT_URL_SOURCE.url, name: DEFAULT_URL_SOURCE.name }] : []);
 const STATUS_TYPES = Object.freeze({ info: 'info', error: 'error', success: 'success' });
 const VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov', 'm4v', 'ogv', 'ogg'];
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
@@ -168,7 +172,7 @@ export function initInput({ editor }) {
 
   const loadBookmarks = () => {
     if (typeof localStorage === 'undefined') {
-      state.bookmarks = [{ url: DEFAULT_URL_SOURCE.url, name: DEFAULT_URL_SOURCE.name }];
+      state.bookmarks = getDefaultBookmarks();
       renderBookmarks();
       return;
     }
@@ -179,14 +183,14 @@ export function initInput({ editor }) {
         if (Array.isArray(parsed) && parsed.length) {
           state.bookmarks = parsed;
         } else {
-          state.bookmarks = [{ url: DEFAULT_URL_SOURCE.url, name: DEFAULT_URL_SOURCE.name }];
+          state.bookmarks = getDefaultBookmarks();
         }
       } else {
-        state.bookmarks = [{ url: DEFAULT_URL_SOURCE.url, name: DEFAULT_URL_SOURCE.name }];
+        state.bookmarks = getDefaultBookmarks();
       }
     } catch (error) {
       console.warn('[mediamime] Failed to load bookmarks', error);
-      state.bookmarks = [{ url: DEFAULT_URL_SOURCE.url, name: DEFAULT_URL_SOURCE.name }];
+      state.bookmarks = getDefaultBookmarks();
     }
     renderBookmarks();
     saveBookmarks();
@@ -492,7 +496,7 @@ export function initInput({ editor }) {
         console.warn('[mediamime] Failed to restore input', entry?.name || entry?.id, error);
       }
     }
-    if (!state.inputs.length) {
+    if (hasDefaultSample && !state.inputs.length) {
       try {
         await addUrlInputFromData({
           name: DEFAULT_URL_SOURCE.name,
@@ -503,6 +507,16 @@ export function initInput({ editor }) {
         });
       } catch (error) {
         console.warn('[mediamime] Failed to add default source', error);
+      }
+    }
+    if (!state.inputs.length && navigator.mediaDevices?.getUserMedia) {
+      try {
+        const camera = await addCameraInput({ persist: false, setActive: true });
+        if (!camera) {
+          console.warn('[mediamime] Default camera initialization returned no stream.');
+        }
+      } catch (error) {
+        console.warn('[mediamime] Failed to add default camera', error);
       }
     }
     if (state.inputs.length && !state.activeInputId) {
@@ -682,9 +696,8 @@ export function initInput({ editor }) {
         type: 'camera',
         stream,
         constraints,
-        persistable: true,
+        persistable: persist,
         origin: 'camera',
-        persistable: true,
         crop: { ...DEFAULT_CROP },
         flip: { ...DEFAULT_FLIP },
         outputResolution: { ...DEFAULT_OUTPUT_RESOLUTION },
@@ -1124,15 +1137,21 @@ export function initInput({ editor }) {
   }
 
   if (loadSampleButton) {
-    loadSampleButton.addEventListener('click', () => {
-      setUrlMessage('Loading sample clip…', 'info');
-      addBookmark(DEFAULT_URL_SOURCE.url, DEFAULT_URL_SOURCE.name);
-      void addUrlInputFromData({
-        sourceUrl: DEFAULT_URL_SOURCE.url,
-        name: DEFAULT_URL_SOURCE.name,
-        sourceKind: 'video'
+    if (!hasDefaultSample) {
+      loadSampleButton.disabled = true;
+      loadSampleButton.setAttribute('aria-disabled', 'true');
+      loadSampleButton.title = 'Sample clip unavailable when running locally.';
+    } else {
+      loadSampleButton.addEventListener('click', () => {
+        setUrlMessage('Loading sample clip…', 'info');
+        addBookmark(DEFAULT_URL_SOURCE.url, DEFAULT_URL_SOURCE.name);
+        void addUrlInputFromData({
+          sourceUrl: DEFAULT_URL_SOURCE.url,
+          name: DEFAULT_URL_SOURCE.name,
+          sourceKind: 'video'
+        });
       });
-    });
+    }
   }
 
   // Preview render loop

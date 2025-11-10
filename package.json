@@ -1,0 +1,13 @@
+{
+  "name": "mediamime",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:single": "node tools/build-single-html.mjs",
+    "package:single": "node tools/package-single.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.5"
+  }
+}

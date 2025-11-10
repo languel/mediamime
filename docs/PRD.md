@@ -20,7 +20,7 @@
 - MIDI-only dispatcher with `enter`, `exit`, `enter+exit`, and throttled `inside` triggers (120 ms minimum loop cadence).
 - Infinite canvas editor: pan with spacebar+drag, zoom with wheel/pinch or `±`, grid cycling on `G`, frame selection/all via `F` / `Shift+F`.
 - Toolbelt: select, temporary hand/pan, freehand, line, rectangle, ellipse, eraser, plus colour-paired stroke/fill derived from the RGBA picker.
-- Input panel with multi-source list, cropping (normalised 0–1), flip toggles, transport controls for video, and media bookmarks (including bundled sample clip).
+- Input panel with multi-source list, cropping (normalised 0–1), flip toggles, transport controls for video, and media bookmarks (including the bundled sample clip when served over `http(s)`).
 - Streams panel (Layers) with per-stream viewport controls, Holistic process selection, rgba colour chips, background opacity, and reset actions.
 - Mapping panel for shape metadata, stream assignment (pose, hands, face, pointer, keyboard), ordered MIDI event stacks, snapshot import/append/export, and SVG export with padded bounding box.
 - Layout system stores panel positions/sizes in `localStorage`, exposes keyboard toggles (`I`, `L`, `P`, `M`), and ships hidden-by-default panels for a clean stage view.
@@ -46,7 +46,7 @@
 ### 6.1 Inputs & Source Management
 
 - **UI structure.** The Input panel mirrors the editor pattern: source list with activity badges, detail form, media preview (video + canvas), crop sliders (`x`, `y`, `w`, `h` normalized to 0–1), and flip toggles.
-- **Supported sources.** Cameras (`getUserMedia`), local videos (via `captureStream()`), and arbitrary URLs (persisted bookmarks with remove buttons). A bundled clip (`scripts/input/default_input.mp4`) is always reachable.
+- **Supported sources.** Cameras (`getUserMedia`), local videos (via `captureStream()`), and arbitrary URLs (persisted bookmarks with remove buttons). The bundled clip (`scripts/input/default_input.mp4`) remains available when the app is hosted over `http(s)`; offline builds favour the camera because browsers block looped videos from `file://` for security.
 - **State.** `inputs[]` store `{id, name, type, stream, crop, flip, playbackRate, isPaused, sourceMeta}` and persist via `localStorage` (`mediamime:inputs`). Active source changes emit `mediamime:active-input-changed`; list mutations emit `mediamime:input-list-changed`.
 - **Feedback.** Inline status chips show bookmark/import errors (`STATUS_TYPES`), while the media preview canvas renders the live crop with flip transforms.
 - **Constraints.** Inputs only hold crop & flip metadata; spatial transforms happen later when a stream is placed on the canvas. Cleanup ensures streams are stopped and DOM nodes removed when deleting inputs.
@@ -64,7 +64,7 @@
 - **Pipeline orchestration.** `scripts/mediapipe/index.js` listens for input/layer events, instantiates one MediaPipe Holistic processor per active input, and maintains `processors` keyed by `sourceId`.
 - **Frame prep.** Each processor draws the cropped/flip-corrected frame into an offscreen canvas before calling `holistic.send({ image })`.
 - **Event bus.** Pipeline state and Holistic results emit via `mediamime:pipeline-state` and `mediamime:holistic-results`. Downstream modules (drawing, mapping) subscribe without tight coupling.
-- **Fallback behaviour.** If Holistic support is unavailable or a camera fails, processors log a warning and fall back to the sample clip when possible; the preview panel surfaces the status chip.
+- **Fallback behaviour.** If Holistic support is unavailable or a camera fails, processors log a warning and prompt the user to reconnect the camera. File-based builds now default to opening the camera on first load because the sample clip is blocked under `file://`; hosted sessions can still switch to the bundled clip if needed. The preview panel surfaces the status chip for each scenario.
 
 ### 6.4 Gesture Editor & Score Model
 

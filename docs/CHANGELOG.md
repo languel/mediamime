@@ -1,6 +1,20 @@
 # Changelog
 
-## [Unreleased] - 2025-11-06
+## [0.1.1] - 2025-11-10
+
+### Added
+- Packaging workflow (`npm run package:single`) that zips the single-file build into `dist/mediamime-<version>.zip` for distribution.
+- Distribution guide documenting how to build, package, and verify the standalone artifact.
+
+### Changed
+- Standalone launch now auto-selects the camera when no inputs are persisted so offline builds have an immediate preview.
+- README quick start updated with explicit instructions for generating and sharing the single-file bundle.
+- PRD references updated to clarify when the bundled sample clip is available.
+
+### Fixed
+- Prevented the sample clip from being referenced by default in `file://` contexts to avoid browser CORS blocks.
+
+## [0.1.0] - 2025-11-06
 
 ### Added - Infinite Canvas & Advanced Drawing Tools
 
