@@ -590,7 +590,9 @@ export function initDrawing({ editor }) {
       lastCameraZoom: null,
       lastActiveLayerId: null,
       lastStreamStates: new Map(), // Map<streamId, {color, viewport, isActive}>
-      lastViewBox: null
+      lastViewBox: null,
+      lastBounds: null,
+      previousBounds: null
     },
     // Performance mode: Maximize FPS for editor interactions
     performanceMode: {
@@ -791,6 +793,16 @@ export function initDrawing({ editor }) {
     // Clear only the dirty regions (with padding for safety)
     if (hasEnabledStream && minX < maxX && minY < maxY) {
       const padding = 4; // Small padding for zoom/transform artifacts
+      // Include previous overlay bounds so old dashed frames are cleared when moving quickly
+      if (!isPreview) {
+        const prev = state.viewportOverlayCache.previousBounds;
+        if (prev) {
+          minX = Math.min(minX, prev.minX - prev.margin - padding);
+          minY = Math.min(minY, prev.minY - prev.margin - padding);
+          maxX = Math.max(maxX, prev.maxX + prev.margin + padding);
+          maxY = Math.max(maxY, prev.maxY + prev.margin + padding);
+        }
+      }
       targetCtx.clearRect(
         Math.max(0, minX - padding),
         Math.max(0, minY - padding),
@@ -1063,29 +1075,22 @@ export function initDrawing({ editor }) {
           translateY * dpr
         );
       }
-      targetCtx.drawImage(cache.offscreenCanvas, 0, 0);
+      const cachedBounds = cache.lastBounds || { minX: 0, minY: 0, maxX: 0, maxY: 0, margin: 0 };
+      targetCtx.drawImage(cache.offscreenCanvas, cachedBounds.minX - cachedBounds.margin, cachedBounds.minY - cachedBounds.margin);
       targetCtx.restore();
       targetCtx.setTransform(1, 0, 0, 1, 0, 0);
       return;
     }
 
     // Cache miss: regenerate viewport overlay
-    const maxSize = Math.max(viewBox.width, viewBox.height) * 1.2;
-    const overlaySize = Math.ceil(maxSize);
-
-    if (!cache.offscreenCanvas ||
-        cache.offscreenCanvas.width !== overlaySize ||
-        cache.offscreenCanvas.height !== overlaySize) {
-      cache.offscreenCanvas = new OffscreenCanvas(overlaySize, overlaySize);
-      cache.offscreenCtx = cache.offscreenCanvas.getContext('2d');
-    }
-
-    const oCtx = cache.offscreenCtx;
-    oCtx.setTransform(1, 0, 0, 1, 0, 0);
-    oCtx.clearRect(0, 0, overlaySize, overlaySize);
-
+    // Compute world-space bounds of all visible viewports so offscreen canvas can include negatives
     const dashPattern = [2 / camera.zoom, 8 / camera.zoom];
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
 
+    const rects = [];
     state.streams.forEach((stream) => {
       if (!stream?.enabled) return;
       if (stream.showInMain === false) return;
@@ -1094,7 +1099,36 @@ export function initDrawing({ editor }) {
       const scoreY = normalized.y * viewBox.height;
       const scoreW = normalized.w * viewBox.width;
       const scoreH = normalized.h * viewBox.height;
+      rects.push({ stream, x: scoreX, y: scoreY, w: scoreW, h: scoreH });
+      minX = Math.min(minX, scoreX, scoreX + scoreW);
+      minY = Math.min(minY, scoreY, scoreY + scoreH);
+      maxX = Math.max(maxX, scoreX, scoreX + scoreW);
+      maxY = Math.max(maxY, scoreY, scoreY + scoreH);
+    });
 
+    if (!rects.length) {
+      // Nothing to draw
+      return;
+    }
+
+    const margin = 16 / camera.zoom; // add some padding around shapes
+    const overlayW = Math.ceil((maxX - minX) + margin * 2);
+    const overlayH = Math.ceil((maxY - minY) + margin * 2);
+
+    if (!cache.offscreenCanvas ||
+        cache.offscreenCanvas.width !== overlayW ||
+        cache.offscreenCanvas.height !== overlayH) {
+      cache.offscreenCanvas = new OffscreenCanvas(overlayW, overlayH);
+      cache.offscreenCtx = cache.offscreenCanvas.getContext('2d');
+    }
+
+    const oCtx = cache.offscreenCtx;
+    oCtx.setTransform(1, 0, 0, 1, 0, 0);
+    oCtx.clearRect(0, 0, overlayW, overlayH);
+    // Translate so that world minX/minY maps to a positive origin inside the offscreen buffer
+    oCtx.translate(-minX + margin, -minY + margin);
+
+    rects.forEach(({ stream, x: scoreX, y: scoreY, w: scoreW, h: scoreH }) => {
       const layerColor = toRgba(stream.color?.hex, 1) || '#00e0ff';
       const isActive = state.activeLayerId === stream.id;
 
@@ -1134,11 +1168,14 @@ export function initDrawing({ editor }) {
     });
 
     // Update cache state
-    cache.lastCameraZoom = camera.zoom;
-    cache.lastActiveLayerId = state.activeLayerId;
-    cache.lastViewBox = { ...viewBox };
+  cache.lastCameraZoom = camera.zoom;
+  cache.lastActiveLayerId = state.activeLayerId;
+  cache.lastViewBox = { ...viewBox };
+  // Keep previous bounds for one frame to expand clearing region and avoid trails
+  cache.previousBounds = cache.lastBounds || null;
+  cache.lastBounds = { minX, minY, maxX, maxY, margin };
 
-    // Composite cached overlay to main canvas
+    // Composite cached overlay to main canvas at correct world offset
     targetCtx.save();
     if (appliedMetrics.usesDomMatrix && appliedMetrics.worldToCanvasMatrix) {
       const m = appliedMetrics.worldToCanvasMatrix;
@@ -1153,7 +1190,7 @@ export function initDrawing({ editor }) {
         translateY * dpr
       );
     }
-    targetCtx.drawImage(cache.offscreenCanvas, 0, 0);
+    targetCtx.drawImage(cache.offscreenCanvas, minX - margin, minY - margin);
     targetCtx.restore();
     targetCtx.setTransform(1, 0, 0, 1, 0, 0);
   };
@@ -1439,6 +1476,9 @@ export function initDrawing({ editor }) {
     if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
       canvas.width = nextWidth;
       canvas.height = nextHeight;
+      // When canvas is resized, clear the entire canvas to prevent trails
+      // from old content when using dirty rectangle optimization
+      ctx.clearRect(0, 0, nextWidth, nextHeight);
     }
     state.displayMetrics = null;
     requestRender();
