@@ -120,14 +120,28 @@ const drawLandmarks = (ctx, landmarks, viewportPx, color, size = 4, zoom = 1) =>
   if (!Array.isArray(landmarks)) return;
   ctx.fillStyle = color;
   const adjustedSize = size / zoom;
-  landmarks.forEach((landmark) => {
-    if (!landmark || !Number.isFinite(landmark.x) || !Number.isFinite(landmark.y)) return;
-    const x = viewportPx.x + clampUnit(landmark.x) * viewportPx.w;
-    const y = viewportPx.y + clampUnit(landmark.y) * viewportPx.h;
-    ctx.beginPath();
-    ctx.arc(x, y, adjustedSize, 0, Math.PI * 2);
-    ctx.fill();
-  });
+
+  // Use Path2D for batched landmark rendering (performance optimization)
+  if (typeof Path2D !== 'undefined') {
+    const path = new Path2D();
+    landmarks.forEach((landmark) => {
+      if (!landmark || !Number.isFinite(landmark.x) || !Number.isFinite(landmark.y)) return;
+      const x = viewportPx.x + clampUnit(landmark.x) * viewportPx.w;
+      const y = viewportPx.y + clampUnit(landmark.y) * viewportPx.h;
+      path.arc(x, y, adjustedSize, 0, Math.PI * 2);
+    });
+    ctx.fill(path);
+  } else {
+    // Fallback for browsers without Path2D support
+    landmarks.forEach((landmark) => {
+      if (!landmark || !Number.isFinite(landmark.x) || !Number.isFinite(landmark.y)) return;
+      const x = viewportPx.x + clampUnit(landmark.x) * viewportPx.w;
+      const y = viewportPx.y + clampUnit(landmark.y) * viewportPx.h;
+      ctx.beginPath();
+      ctx.arc(x, y, adjustedSize, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
 };
 
 const drawSegmentation = (ctx, mask, viewportPx, color, alpha = 0, { overlay = false } = {}) => {
@@ -436,6 +450,13 @@ export function initDrawing({ editor }) {
       lastFrameTime: 0,
       frameTimes: [],
       maxSamples: 30
+    },
+    // Frame skipping optimization
+    frameSkipping: {
+      lastFrameTime: 0,
+      targetFPS: 60,
+      frameCount: 0,
+      skippedFrames: 0
     }
   };
 
@@ -724,6 +745,24 @@ export function initDrawing({ editor }) {
 
   const render = () => {
     state.pendingRender = false;
+
+    // Frame skipping optimization: skip rendering if we're ahead of target FPS
+    const now = performance.now();
+    if (state.frameSkipping.lastFrameTime > 0) {
+      const elapsed = now - state.frameSkipping.lastFrameTime;
+      const frameBudget = 1000 / state.frameSkipping.targetFPS;
+
+      // If we're running too fast and frame budget hasn't elapsed, skip this frame
+      if (elapsed < frameBudget * 0.9) {
+        state.frameSkipping.skippedFrames++;
+        requestAnimationFrame(render);
+        return;
+      }
+    }
+
+    state.frameSkipping.lastFrameTime = now;
+    state.frameSkipping.frameCount++;
+
     const metrics = ensureDisplayMetrics();
     renderTo(ctx, canvas.width, canvas.height, metrics, { isPreview: false });
     renderViewportOverlay(ctx, metrics);

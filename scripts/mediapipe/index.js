@@ -36,11 +36,11 @@ const createHolisticInstance = (onResults) => {
     locateFile: (file) => `${HOLISTIC_CDN}${file}`
   });
   holistic.setOptions({
-    modelComplexity: 1,
-    smoothLandmarks: true,
-    enableSegmentation: true,
-    smoothSegmentation: true,
-    refineFaceLandmarks: true,
+    modelComplexity: 0,
+    smoothLandmarks: false,
+    enableSegmentation: false,
+    smoothSegmentation: false,
+    refineFaceLandmarks: false,
     minDetectionConfidence: 0.5,
     minTrackingConfidence: 0.5
   });
