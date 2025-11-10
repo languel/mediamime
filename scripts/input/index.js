@@ -7,6 +7,7 @@ const createId = () => `input-${Date.now()}-${Math.random().toString(36).slice(2
 
 const DEFAULT_CROP = { x: 0, y: 0, w: 1, h: 1 };
 const DEFAULT_FLIP = { horizontal: false, vertical: false };
+const DEFAULT_OUTPUT_RESOLUTION = { preset: 'raw', width: null, height: null };
 const INPUT_STORAGE_KEY = 'mediamime:inputs';
 const INPUT_BOOKMARKS_KEY = 'mediamime:url-bookmarks';
 const DEFAULT_URL_SOURCE = {
@@ -56,11 +57,17 @@ export function initInput({ editor }) {
   const cropH = document.getElementById('input-crop-h');
   const flipH = document.getElementById('input-flip-horizontal');
   const flipV = document.getElementById('input-flip-vertical');
+  const aspectRatioDisplay = document.getElementById('input-aspect-ratio');
+  const resRawBtn = document.getElementById('input-res-raw');
+  const res1kBtn = document.getElementById('input-res-1k');
+  const resHdBtn = document.getElementById('input-res-hd');
+  const outW = document.getElementById('input-out-width');
+  const outH = document.getElementById('input-out-height');
   const deleteSourceButton = document.getElementById('input-delete-source');
 
   // State
   const state = {
-    inputs: [], // Array of {id, name, type, stream, crop:{x,y,w,h}, flip:{horizontal,vertical}}
+  inputs: [], // Array of {id, name, type, stream, crop:{x,y,w,h}, flip:{horizontal,vertical}, outputResolution}
     activeInputId: null,
     isSyncing: false,
     bookmarks: []
@@ -95,6 +102,7 @@ export function initInput({ editor }) {
       stream: input.stream,
       crop: { ...input.crop },
       flip: { ...input.flip },
+      outputResolution: input.outputResolution ? { ...input.outputResolution } : { ...DEFAULT_OUTPUT_RESOLUTION },
       origin: input.origin,
       sourceUrl: input.sourceUrl || null,
       sourceKind: input.sourceKind || null,
@@ -218,6 +226,7 @@ export function initInput({ editor }) {
           origin: input.origin || input.type,
           crop: { ...input.crop },
           flip: { ...input.flip },
+          outputResolution: input.outputResolution ? { ...input.outputResolution } : { ...DEFAULT_OUTPUT_RESOLUTION },
           sourceUrl: input.sourceUrl || null,
           sourceKind: input.sourceKind || null,
           constraints: input.constraints || null
@@ -452,6 +461,9 @@ export function initInput({ editor }) {
             setActive: false
           });
           if (created) {
+            if (entry.crop) Object.assign(created.crop, entry.crop);
+            if (entry.flip) Object.assign(created.flip, entry.flip);
+            if (entry.outputResolution) created.outputResolution = { ...created.outputResolution, ...entry.outputResolution };
             created.playbackRate = entry.playbackRate ?? 1;
             created.isPaused = entry.isPaused ?? false;
             applyPlaybackState(created);
@@ -466,6 +478,9 @@ export function initInput({ editor }) {
             setActive: false
           });
           if (created) {
+            if (entry.crop) Object.assign(created.crop, entry.crop);
+            if (entry.flip) Object.assign(created.flip, entry.flip);
+            if (entry.outputResolution) created.outputResolution = { ...created.outputResolution, ...entry.outputResolution };
             created.playbackRate = entry.playbackRate ?? 1;
             created.isPaused = entry.isPaused ?? false;
             applyPlaybackState(created);
@@ -586,12 +601,49 @@ export function initInput({ editor }) {
       inputSourceTypeIcon.textContent = input.type === 'camera' ? 'videocam' : 'video_library';
       inputSourceTypeIcon.title = input.type === 'camera' ? 'Camera' : 'Video';
     }
-  if (cropX) cropX.value = input.crop.x.toFixed(2);
-  if (cropY) cropY.value = input.crop.y.toFixed(2);
-  if (cropW) cropW.value = input.crop.w.toFixed(2);
-  if (cropH) cropH.value = input.crop.h.toFixed(2);
-  if (flipH) flipH.checked = !!input.flip.horizontal;
-  if (flipV) flipV.checked = !!input.flip.vertical;
+    if (cropX) cropX.value = input.crop.x.toFixed(2);
+    if (cropY) cropY.value = input.crop.y.toFixed(2);
+    if (cropW) cropW.value = input.crop.w.toFixed(2);
+    if (cropH) cropH.value = input.crop.h.toFixed(2);
+    if (flipH) flipH.checked = !!input.flip.horizontal;
+    if (flipV) flipV.checked = !!input.flip.vertical;
+
+    // Aspect ratio of CROPPED region
+    if (aspectRatioDisplay) {
+      const video = input.videoElement || inputPreviewVideo;
+      if (video && video.videoWidth && video.videoHeight) {
+        const cropWpx = Math.round(video.videoWidth * input.crop.w);
+        const cropHpx = Math.round(video.videoHeight * input.crop.h);
+        if (cropWpx > 0 && cropHpx > 0) {
+          const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
+            const divisor = gcd(cropWpx, cropHpx);
+            const rw = cropWpx / divisor;
+            const rh = cropHpx / divisor;
+            aspectRatioDisplay.textContent = `${rw}:${rh}`;
+        } else {
+          aspectRatioDisplay.textContent = '';
+        }
+      } else {
+        aspectRatioDisplay.textContent = '';
+      }
+    }
+
+    // Output resolution fields - prepopulate RAW if empty
+    const video = input.videoElement || inputPreviewVideo;
+    let or = input.outputResolution || { ...DEFAULT_OUTPUT_RESOLUTION };
+    if (video && video.videoWidth && video.videoHeight) {
+      const cropWpx = Math.round(video.videoWidth * input.crop.w);
+      const cropHpx = Math.round(video.videoHeight * input.crop.h);
+      if (!or.width || !or.height) {
+        or = { preset: 'raw', width: cropWpx, height: cropHpx };
+        input.outputResolution = { ...or };
+      }
+      if (outW) outW.value = or.width ?? cropWpx;
+      if (outH) outH.value = or.height ?? cropHpx;
+    } else {
+      if (outW && or.width) outW.value = or.width;
+      if (outH && or.height) outH.value = or.height;
+    }
 
     // Update preview if stream exists
     if (input.stream && inputPreviewVideo) {
@@ -632,7 +684,8 @@ export function initInput({ editor }) {
         origin: 'camera',
         persistable: true,
         crop: { ...DEFAULT_CROP },
-        flip: { ...DEFAULT_FLIP }
+        flip: { ...DEFAULT_FLIP },
+        outputResolution: { ...DEFAULT_OUTPUT_RESOLUTION }
       };
 
       ensureTransportState(input);
@@ -681,7 +734,8 @@ export function initInput({ editor }) {
         stream,
         videoElement: video, // Keep reference to video element
         crop: { ...DEFAULT_CROP },
-        flip: { ...DEFAULT_FLIP }
+        flip: { ...DEFAULT_FLIP },
+        outputResolution: { ...DEFAULT_OUTPUT_RESOLUTION }
       };
 
       ensureTransportState(input);
@@ -734,7 +788,8 @@ export function initInput({ editor }) {
         videoElement,
         stopRender,
         crop: { ...DEFAULT_CROP },
-        flip: { ...DEFAULT_FLIP }
+        flip: { ...DEFAULT_FLIP },
+        outputResolution: { ...DEFAULT_OUTPUT_RESOLUTION }
       };
       ensureTransportState(input);
       applyPlaybackState(input);
@@ -798,12 +853,18 @@ export function initInput({ editor }) {
     console.log('[mediamime] Deleted input');
   };
 
-  // Update input transform
+  // Update input transform/meta
   const updateInputMeta = (inputId, patch) => {
     const input = state.inputs.find(i => i.id === inputId);
     if (!input) return;
     if (patch.crop) Object.assign(input.crop, patch.crop);
     if (patch.flip) Object.assign(input.flip, patch.flip);
+    if (patch.outputResolution) {
+      input.outputResolution = {
+        ...(input.outputResolution || {}),
+        ...patch.outputResolution
+      };
+    }
     updateUI();
     persistInputs();
   };
@@ -882,6 +943,56 @@ export function initInput({ editor }) {
   attachCropField(cropY, 'y');
   attachCropField(cropW, 'w');
   attachCropField(cropH, 'h');
+  const applyResolutionPreset = (preset) => {
+    if (!state.activeInputId) return;
+    const input = state.inputs.find(i => i.id === state.activeInputId);
+    if (!input) return;
+    const video = input.videoElement || inputPreviewVideo;
+    let width = null, height = null;
+    if (video && video.videoWidth && video.videoHeight) {
+      const cropWpx = Math.round(video.videoWidth * input.crop.w);
+      const cropHpx = Math.round(video.videoHeight * input.crop.h);
+      if (preset === 'raw') {
+        width = cropWpx;
+        height = cropHpx;
+      } else if (preset === '1k') {
+        const maxSide = 1024;
+        const scale = Math.min(1, maxSide / Math.max(cropWpx, cropHpx));
+        width = Math.round(cropWpx * scale);
+        height = Math.round(cropHpx * scale);
+      } else if (preset === 'hd') {
+        width = 1920;
+        height = 1080;
+        // Maintain aspect if crop differs significantly
+        const cropAspect = cropWpx / cropHpx;
+        const targetAspect = width / height;
+        if (Math.abs(cropAspect - targetAspect) > 0.2) {
+          // Fit within HD while preserving crop aspect
+          if (cropAspect > targetAspect) {
+            height = Math.round(width / cropAspect);
+          } else {
+            width = Math.round(height * cropAspect);
+          }
+        }
+      }
+    }
+    updateInputMeta(state.activeInputId, { outputResolution: { preset, width, height } });
+  };
+
+  const applyManualResolution = () => {
+    if (!state.activeInputId) return;
+    const wVal = parseInt(outW?.value, 10);
+    const hVal = parseInt(outH?.value, 10);
+    const width = Number.isFinite(wVal) ? wVal : null;
+    const height = Number.isFinite(hVal) ? hVal : null;
+    updateInputMeta(state.activeInputId, { outputResolution: { preset: 'custom', width, height } });
+  };
+
+  if (resRawBtn) resRawBtn.addEventListener('click', () => applyResolutionPreset('raw'));
+  if (res1kBtn) res1kBtn.addEventListener('click', () => applyResolutionPreset('1k'));
+  if (resHdBtn) resHdBtn.addEventListener('click', () => applyResolutionPreset('hd'));
+  if (outW) outW.addEventListener('change', applyManualResolution);
+  if (outH) outH.addEventListener('change', applyManualResolution);
   if (flipH) flipH.addEventListener('change', (e) => {
     if (!state.activeInputId || state.isSyncing) return;
     updateInputMeta(state.activeInputId, { flip: { horizontal: e.target.checked } });

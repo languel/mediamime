@@ -142,7 +142,9 @@
                   </div>
                 </div>
                 <div class="assignment-row">
-                  <label>Flip</label>
+                  <label title="Geometry" aria-label="Geometry">
+                    <span class="material-icons-outlined" aria-hidden="true">crop_square</span>
+                  </label>
                   <div class="assignment-field-group assignment-field-group--compact">
                     <label class="stream-toggle" title="Flip horizontal">
                       <input type="checkbox" id="input-flip-horizontal" aria-label="Flip horizontal">
@@ -152,18 +154,32 @@
                       <input type="checkbox" id="input-flip-vertical" aria-label="Flip vertical">
                       <span class="material-icons-outlined" aria-hidden="true">swap_vert</span>
                     </label>
+                    <div class="input-field-pair" title="Manual output resolution">
+                      <input type="number" id="input-out-width" min="16" max="7680" step="1" placeholder="W" aria-label="Output width">
+                      <span class="input-hint">×</span>
+                      <input type="number" id="input-out-height" min="16" max="4320" step="1" placeholder="H" aria-label="Output height">
+                    </div>
+                    <span id="input-aspect-ratio" class="input-hint aspect-chip" aria-live="polite"></span>
+                  </div>
+                </div>
+                <div class="assignment-row">
+                  <label for="input-output-resolution">Output</label>
+                  <div class="assignment-field-group assignment-field-group--compact">
+                    <button type="button" id="input-res-raw" class="pill-button small" title="Use source resolution">RAW</button>
+                    <button type="button" id="input-res-1k" class="pill-button small" title="~1024px max side">1K</button>
+                    <button type="button" id="input-res-hd" class="pill-button small" title="1920x1080">HD</button>
                   </div>
                 </div>
                 <!-- Delete action moved to the input list row as an icon button -->
                 <div class="input-subpanel">
                   <div class="input-subpanel-header">
                     <div>
-                      <strong id="input-bookmark-title">Media bookmarks & sample clip</strong>
-                      <p class="input-hint">Store frequently used URLs or load the built-in sample clip.</p>
+                      <strong id="input-bookmark-title" title="Store frequently used URLs or load the built-in sample clip." aria-label="Bookmarks">
+                        <span class="material-icons-outlined" aria-hidden="true">bookmarks</span>
+                      </strong>
                     </div>
-                    <button type="button" id="input-load-sample" class="pill-button small">
+                    <button type="button" id="input-load-sample" class="pill-button small" title="Load sample clip">
                       <span class="material-icons-outlined" aria-hidden="true">movie</span>
-                      <span>Sample clip</span>
                     </button>
                   </div>
                   <label for="input-url-field" class="input-hint">Add media URL</label>

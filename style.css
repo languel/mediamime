@@ -943,6 +943,22 @@ html, body {
     .editor-selection__marquee.is-hidden {
       display: none;
     }
+      /* Input aspect ratio chip spacing */
+      .aspect-chip {
+        margin-left: 8px;
+      }
+
+      /* Ensure manual output W × H fields match the crop fields' width */
+      .input-field-pair {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        flex: 1 1 100%;
+      }
+      .input-field-pair input[type="number"] {
+        flex: 1 1 0;
+        width: 100%;
+      }
     .editor-placeholder {
       position: relative;
       min-height: 300px;
