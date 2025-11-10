@@ -13,3 +13,5 @@ dist/
 # Local environment
 .DS_Store
 .env
+.todo
+.vscode
