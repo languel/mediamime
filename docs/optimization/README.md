@@ -28,6 +28,11 @@
 - [PHASE3_IMPLEMENTATION_GUIDE.md](PHASE3_IMPLEMENTATION_GUIDE.md) - Step-by-step guide
 - [PHASE3_OPTIMIZATION_DIAGRAM.txt](PHASE3_OPTIMIZATION_DIAGRAM.txt) - Visual diagrams and flowcharts
 
+### Phase 4: Input Resolution Reduction (+1.8-3x MediaPipe improvement)
+- [INPUT_RESOLUTION.md](INPUT_RESOLUTION.md) - Input resolution scaling implementation
+- [INPUT_RESOLUTION_TESTING.md](INPUT_RESOLUTION_TESTING.md) - ✅ **Testing guide** for validation
+- [PERFORMANCE_MODE.md](PERFORMANCE_MODE.md) - Editor interaction optimization
+
 ### Complete Technical Analysis
 - [PERFORMANCE_ANALYSIS.md](PERFORMANCE_ANALYSIS.md) - 20-30 min comprehensive bottleneck analysis
 - [RENDERING_ARCHITECTURE_ANALYSIS.md](RENDERING_ARCHITECTURE_ANALYSIS.md) - Deep dive into rendering pipeline

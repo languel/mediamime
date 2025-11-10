@@ -1,8 +1,9 @@
 # Input Resolution Reduction - Phase 4 Optimization
 
 **Date:** November 10, 2025
-**Status:** ✅ Implemented and Ready
+**Status:** ✅ Implemented, Tested, and Ready
 **Purpose:** Reduce MediaPipe processing overhead by scaling input before ML processing
+**Last Update:** Bug fix applied - display canvas now separate from MediaPipe processing canvas
 
 ---
 
@@ -20,6 +21,24 @@ Input Resolution Reduction allows you to reduce the resolution of video frames *
 - **Quality:** Minimal impact (480p is usually sufficient for pose detection)
 - **Display:** Full resolution maintained (doesn't affect what user sees)
 - **Memory:** Lower ML memory footprint
+
+---
+
+## Critical Bug Fix (v2.0)
+
+**Issue:** Input resolution changes were resizing the output canvas, causing zoom effects
+**Root Cause:** Same canvas used for both display and MediaPipe processing
+**Solution:** Separated into two canvases:
+- `canvas`: Full-resolution display (shown in streams/layers)
+- `processor.mediapipeCanvas`: Reduced-resolution processing (MediaPipe only)
+
+**Result:**
+- ✅ Output display quality unchanged
+- ✅ No zoom/resize effects when changing input W/H
+- ✅ RAW stream shows pixelation at reduced resolution
+- ✅ FPS improvement from reduced ML processing, not display artifacts
+
+**See:** [INPUT_RESOLUTION_TESTING.md](INPUT_RESOLUTION_TESTING.md) for validation procedures
 
 ---
 
