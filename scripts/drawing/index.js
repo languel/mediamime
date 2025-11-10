@@ -94,40 +94,104 @@ const getHandConnections = () => {
 };
 
 const drawConnectorList = (ctx, landmarks, connections, viewportPx, strokeColor, zoom = 1) => {
+  // Phase 3C: Visibility culling for connectors
+  // Skip lines where both endpoints are outside the viewport
   if (!landmarks || !connections) return;
   ctx.strokeStyle = strokeColor;
   ctx.lineWidth = 2 / zoom;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
+
+  // Pre-compute viewport bounds with margin for line thickness
+  const lineMargin = 4 / zoom;
+  const vpLeft = viewportPx.x - lineMargin;
+  const vpRight = viewportPx.x + viewportPx.w + lineMargin;
+  const vpTop = viewportPx.y - lineMargin;
+  const vpBottom = viewportPx.y + viewportPx.h + lineMargin;
+
   ctx.beginPath();
+  let culledLines = 0;
+  let renderedLines = 0;
+
   connections.forEach(([startIndex, endIndex]) => {
     const start = landmarks[startIndex];
     const end = landmarks[endIndex];
     if (!start || !end) return;
     if (!Number.isFinite(start.x) || !Number.isFinite(start.y)) return;
     if (!Number.isFinite(end.x) || !Number.isFinite(end.y)) return;
+
     const startX = viewportPx.x + clampUnit(start.x) * viewportPx.w;
     const startY = viewportPx.y + clampUnit(start.y) * viewportPx.h;
     const endX = viewportPx.x + clampUnit(end.x) * viewportPx.w;
     const endY = viewportPx.y + clampUnit(end.y) * viewportPx.h;
+
+    // Phase 3C: Quick culling test - skip if both endpoints and their bounding box are outside
+    // If both points are on the same side of the viewport bounds, line definitely doesn't intersect
+    const bothLeft = startX < vpLeft && endX < vpLeft;
+    const bothRight = startX > vpRight && endX > vpRight;
+    const bothTop = startY < vpTop && endY < vpTop;
+    const bothBottom = startY > vpBottom && endY > vpBottom;
+
+    if (bothLeft || bothRight || bothTop || bothBottom) {
+      culledLines++;
+      return;
+    }
+
+    renderedLines++;
     ctx.moveTo(startX, startY);
     ctx.lineTo(endX, endY);
   });
+
   ctx.stroke();
+
+  // Store culling stats for monitoring
+  if (typeof ctx.cullingStats === 'undefined') {
+    ctx.cullingStats = { culled: 0, rendered: 0 };
+  }
+  ctx.cullingStats.culled += culledLines;
+  ctx.cullingStats.rendered += renderedLines;
 };
 
 const drawLandmarks = (ctx, landmarks, viewportPx, color, size = 4, zoom = 1) => {
+  // Phase 3C: Visibility culling for landmarks
+  // Skip landmarks that are clearly outside the viewport to reduce rendering overhead
   if (!Array.isArray(landmarks)) return;
   ctx.fillStyle = color;
   const adjustedSize = size / zoom;
+
+  // Pre-compute viewport bounds with culling margin for early rejection
+  const vpLeft = viewportPx.x - adjustedSize;
+  const vpRight = viewportPx.x + viewportPx.w + adjustedSize;
+  const vpTop = viewportPx.y - adjustedSize;
+  const vpBottom = viewportPx.y + viewportPx.h + adjustedSize;
+
+  let culledCount = 0;
+  let renderedCount = 0;
+
   landmarks.forEach((landmark) => {
     if (!landmark || !Number.isFinite(landmark.x) || !Number.isFinite(landmark.y)) return;
     const x = viewportPx.x + clampUnit(landmark.x) * viewportPx.w;
     const y = viewportPx.y + clampUnit(landmark.y) * viewportPx.h;
+
+    // Phase 3C: Quick visibility test - skip if clearly outside viewport
+    // Uses AABB (Axis-Aligned Bounding Box) collision detection
+    if (x < vpLeft || x > vpRight || y < vpTop || y > vpBottom) {
+      culledCount++;
+      return;
+    }
+
+    renderedCount++;
     ctx.beginPath();
     ctx.arc(x, y, adjustedSize, 0, Math.PI * 2);
     ctx.fill();
   });
+
+  // Store culling stats for monitoring (optional)
+  if (typeof ctx.cullingStats === 'undefined') {
+    ctx.cullingStats = { culled: 0, rendered: 0 };
+  }
+  ctx.cullingStats.culled += culledCount;
+  ctx.cullingStats.rendered += renderedCount;
 };
 
 const drawSegmentation = (ctx, mask, viewportPx, color, alpha = 0, { overlay = false } = {}) => {
