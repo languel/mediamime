@@ -193,8 +193,20 @@ export function initLayers({ editor }) {
   const detailForm = document.getElementById("layer-detail");
   const nameInput = document.getElementById("layer-stream-name");
   const enabledToggleBtn = document.getElementById("layer-stream-enabled-toggle");
-  const previewToggleBtn = document.getElementById("layer-stream-preview-toggle");
-  const mainToggleBtn = document.getElementById("layer-stream-main-toggle");
+  const previewToggleBtn = (() => {
+    const button = document.getElementById("layer-stream-preview-toggle");
+    if (button) {
+      button.remove(); // Preview toggles live in the stream list only.
+    }
+    return null;
+  })();
+  const mainToggleBtn = (() => {
+    const button = document.getElementById("layer-stream-main-toggle");
+    if (button) {
+      button.remove(); // Main view toggle stays in the stream list only.
+    }
+    return null;
+  })();
   const sourceSelect = document.getElementById("layer-stream-source");
   const processSelect = document.getElementById("layer-stream-process");
   const fitToggle = document.getElementById("layer-viewport-fit");
@@ -425,7 +437,7 @@ export function initLayers({ editor }) {
       return;
     }
     state.isSyncing = true;
-    if (mainToggleBtn) mainToggleBtn.disabled = false;
+  // mainToggleBtn is intentionally absent in the detail panel.
     if (nameInput) nameInput.value = stream.name || "";
     if (enabledToggleBtn) {
       const on = Boolean(stream.enabled);
@@ -445,15 +457,7 @@ export function initLayers({ editor }) {
       previewToggleBtn.title = show ? "Hide in Preview" : "Show in Preview";
       previewToggleBtn.setAttribute("aria-label", show ? "Hide in preview panel" : "Show in preview panel");
     }
-    if (mainToggleBtn) {
-      const showMain = stream.showInMain !== false;
-      mainToggleBtn.setAttribute("aria-pressed", String(showMain));
-      mainToggleBtn.classList.toggle("is-active", showMain);
-      const iconEl = mainToggleBtn.querySelector(".material-icons-outlined");
-      if (iconEl) iconEl.textContent = showMain ? "grid_on" : "grid_off";
-      mainToggleBtn.title = showMain ? "Hide in main view" : "Show in main view";
-      mainToggleBtn.setAttribute("aria-label", showMain ? "Hide on main canvas" : "Show on main canvas");
-    }
+    // Main-view toggle handled from the list; detail panel mirrors name, color, and state only.
     populateSourceOptions(stream);
     if (processSelect) {
       processSelect.disabled = false;

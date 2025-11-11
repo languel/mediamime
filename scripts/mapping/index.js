@@ -942,7 +942,13 @@ export function initMapping({ editor }) {
   const editorShapeNameInput = document.getElementById("editor-shape-name");
   // Detail panel now uses a single enable/disable toggle (originally main view toggle location)
   const editorShapeEnabledToggle = document.getElementById("editor-shape-enabled-toggle");
-  const editorShapePreviewToggle = document.getElementById("editor-shape-preview-toggle");
+  const editorShapePreviewToggle = (() => {
+    const button = document.getElementById("editor-shape-preview-toggle");
+    if (button) {
+      button.remove(); // Preview visibility is controlled from the shape list.
+    }
+    return null;
+  })();
   // Import/Export controls in the Map panel header
   const snapshotImportInput = document.getElementById("snapshot-import-input");
   const snapshotImportButton = document.getElementById("snapshot-import-button");
