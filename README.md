@@ -2,21 +2,26 @@
 
 Mediamime lets you draw shapes over a live camera feed and map every shape to MIDI messages—no installs, servers, or extra tooling required.
 
-## Quick Start (no build tools required)
+## Quick Start
 
-1. Download or clone this folder.
-2. Double-click `index.html` (or drop it onto a browser window).
-3. Approve the camera prompt so the preview has a live source. You can add local videos or URLs later from the **Streams** panel.
-4. Use the toolbar at the bottom of the canvas to draw shapes, then open the **Map** panel to assign MIDI notes or CC values.
+Choose the path that matches how you received Mediamime:
 
-That’s it—you can rehearse, tweak shapes, and save snapshots without touching Node.js.
+### Option A – You downloaded the packaged single file (recommended for students)
 
-### When you are ready to share a single file
+1. Grab the latest `mediamime-<version>.zip` from the GitHub Releases page or from your instructor.
+2. Unzip the archive and open the folder.
+3. Double-click `index.html`.
+4. Approve the MIDI and camera prompt so the preview has a live source. Add local videos or URLs later from the **Streams** panel if needed.
 
-1. Install Node.js 18 or later (only needed for packaging).
-2. Run `npm install` once.
-3. Run `npm run package:single` to rebuild and zip `dist/mediamime-<version>.zip`.
-4. Hand the zip (or the `build/index.html` it was created from) to your students or collaborators—they only need to double-click it.
+### Option B – You cloned/downloaded the source repository
+
+The repository version references multiple modules, so opening it directly from `file://` may be blocked by your browser. Use one of these approaches:
+
+1. **Serve the folder:** run `npx serve .` (or any static file server) and open the reported `http://localhost` URL.
+2. **Package the single file yourself:**
+	- Install Node.js 18 or later.
+	- Run `npm install` once.
+	- Run `npm run package:single` to produce `dist/mediamime-<version>.zip` (and `build/index.html`). Double-click the generated `index.html` or share the zip with others.
 
 More detail lives in `docs/DISTRIBUTION.md`.
 
@@ -38,13 +43,14 @@ More detail lives in `docs/DISTRIBUTION.md`.
 | Drawing | Hold `Shift` | Snap to the 50px grid while drawing or moving points |
 | Drawing | Hold `Cmd/Ctrl` | Snap to nearby shape vertices while drawing |
 | Drawing | `Alt + Click` on a curve point | Remove the point (curve edit mode) |
-| Editing | `Delete` | Remove selected shapes |
+| Editing | `Fn + Delete` (macOS) / `Delete` (Windows/Linux) | Remove selected shapes |
 | Editing | `Esc` | Cancel the current action or clear the selection |
 
 Tips:
 
-- Double-tap a tool shortcut (for example, press `R` twice quickly) to toggle tool lock without touching the UI.
+- Double-tap a tool shortcut (for example, `DD` for Draw, `LL` for Line, `RR` for Rectangle) to toggle tool lock without touching the UI.
 - While you are drawing, hold `Space` to pan, then release to continue sketching from the same tool.
+- Hover over toolbar buttons or panel tabs to see quick tips for each control.
 
 ## Troubleshooting
 
@@ -58,4 +64,4 @@ Tips:
 - `docs/DISTRIBUTION.md` – packaging and verification checklist for the single-file build.
 - `docs/CHANGELOG.md` – history of recent features and fixes.
 
-Mediamime is a teaching prototype—expect rough edges, share feedback, and fork freely for your own classes.
+Mediamime is a teaching prototype—expect rough edges, share feedback, and fork freely.

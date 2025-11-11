@@ -21,7 +21,7 @@ The command invokes `tools/build-single-html.mjs` which produces `build/index.ht
 - The project stylesheet inlined inside the `<head>`.
 - No external asset references, so it can be opened directly from `file://`.
 
-> Tip: the file is safe to commit alongside source – it will be overwritten next time you run the build.
+> Note: we intentionally keep this generated file out of `main` to avoid noisy diffs and merge conflicts. Treat it as a release artifact.
 
 ## 3. Package for Distribution
 
@@ -37,13 +37,17 @@ The packaging script:
 
 You can attach the ZIP to emails, shared drives, or a release page. Recipients simply unzip and double-click `index.html`.
 
-## 4. Running the Standalone Build
+## 4. Why the Single-File Build Isn’t Committed
+
+Keeping `build/index.html` out of git keeps the commit history readable and prevents merge conflicts on generated code. Publish the zipped artifact through GitHub Releases (or another delivery channel) whenever you tag a version, and point students to the release download instead of the repository clone when possible.
+
+## 5. Running the Standalone Build
 
 - Double-click `build/index.html` or the extracted `dist/mediamime-<version>/index.html`.
 - Approve the camera permission request on first load. Offline builds default to the camera because browsers block remote video URLs when running under `file://`.
 - Once the app is running you can add local files or network URLs from the **Streams** panel (the bookmarks UI remains available for hosted sessions over `http(s)`).
 
-## 5. Verifying a Release
+## 6. Verifying a Release
 
 Before tagging a release:
 
