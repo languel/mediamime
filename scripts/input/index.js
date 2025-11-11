@@ -4,6 +4,8 @@
  */
 
 const createId = () => `input-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  state.cameraDevices = [];
+  state.hasRequestedCameraAccess = false;
 
 const DEFAULT_CROP = { x: 0, y: 0, w: 1, h: 1 };
 const DEFAULT_FLIP = { horizontal: false, vertical: false };
@@ -55,6 +57,9 @@ export function initInput({ editor }) {
   const urlAddButton = document.getElementById('input-url-add');
   const urlBookmarksList = document.getElementById('input-url-bookmarks');
   const urlMessage = document.getElementById('input-url-message');
+  const cameraDeviceRow = document.getElementById('input-camera-device-row');
+  const cameraDeviceSelect = document.getElementById('input-camera-device');
+  const cameraDeviceRefreshButton = document.getElementById('input-camera-refresh');
   const loadSampleButton = document.getElementById('input-load-sample');
   const cropX = document.getElementById('input-crop-x');
   const cropY = document.getElementById('input-crop-y');
@@ -75,8 +80,13 @@ export function initInput({ editor }) {
   inputs: [], // Array of {id, name, type, stream, crop:{x,y,w,h}, flip:{horizontal,vertical}, outputResolution}
     activeInputId: null,
     isSyncing: false,
-    bookmarks: []
+    bookmarks: [],
+    cameraDevices: [],
+    hasRequestedCameraAccess: false
   };
+
+  let cameraDeviceEnumerationPromise = null;
+  let removeMediaDeviceChangeListener = null;
 
   const ACTIVE_INPUT_EVENT = 'mediamime:active-input-changed';
   const INPUT_LIST_EVENT = 'mediamime:input-list-changed';
@@ -113,6 +123,7 @@ export function initInput({ editor }) {
       sourceUrl: input.sourceUrl || null,
       sourceKind: input.sourceKind || null,
       constraints: input.constraints || null,
+      deviceId: input.deviceId || null,
       persistable: Boolean(input.persistable),
       playbackRate: typeof input.playbackRate === 'number' ? input.playbackRate : 1,
       isPaused: Boolean(input.isPaused)
@@ -220,6 +231,132 @@ export function initInput({ editor }) {
     }
   };
 
+  const updateCameraDeviceOptions = (selectedDeviceId = null) => {
+    if (!cameraDeviceSelect) return;
+    const currentSelection = selectedDeviceId ?? cameraDeviceSelect.value ?? '';
+    cameraDeviceSelect.innerHTML = '';
+
+    if (!state.cameraDevices.length) {
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = state.hasRequestedCameraAccess ? 'No cameras found' : 'Scanning cameras…';
+      cameraDeviceSelect.appendChild(option);
+      cameraDeviceSelect.disabled = true;
+      return;
+    }
+
+    cameraDeviceSelect.disabled = false;
+
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Default camera';
+    cameraDeviceSelect.appendChild(defaultOption);
+
+    let hasMatch = false;
+    state.cameraDevices.forEach((device, index) => {
+      const option = document.createElement('option');
+      const value = device.deviceId || '';
+      option.value = value;
+      option.textContent = device.label || `Camera ${index + 1}`;
+      cameraDeviceSelect.appendChild(option);
+      if (value && currentSelection && value === currentSelection) {
+        hasMatch = true;
+      }
+    });
+
+    if (currentSelection && hasMatch) {
+      cameraDeviceSelect.value = currentSelection;
+    } else if (!currentSelection && state.cameraDevices.length === 1 && state.cameraDevices[0].deviceId) {
+      cameraDeviceSelect.value = state.cameraDevices[0].deviceId;
+    } else {
+      cameraDeviceSelect.value = '';
+    }
+  };
+
+  const refreshCameraDevices = async ({ promptForAccess = false } = {}) => {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) {
+      return;
+    }
+
+    if (cameraDeviceEnumerationPromise) {
+      try {
+        await cameraDeviceEnumerationPromise;
+      } catch {
+        /* noop */
+      }
+      return;
+    }
+
+    cameraDeviceEnumerationPromise = (async () => {
+      if (promptForAccess && navigator.mediaDevices?.getUserMedia) {
+        state.hasRequestedCameraAccess = true;
+        try {
+          const temp = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          temp.getTracks().forEach((track) => track.stop());
+        } catch (error) {
+          console.warn('[mediamime] Camera access request was denied or failed.', error);
+        }
+      }
+
+      let devices = [];
+      try {
+        devices = await navigator.mediaDevices.enumerateDevices();
+      } catch (error) {
+        console.warn('[mediamime] Failed to enumerate media devices.', error);
+        return;
+      }
+
+      let videoDevices = devices.filter((device) => device.kind === 'videoinput');
+      const labelsAvailable = videoDevices.some((device) => Boolean(device.label));
+
+      if (!labelsAvailable && navigator.mediaDevices?.getUserMedia && !promptForAccess && !state.hasRequestedCameraAccess) {
+        try {
+          const temp = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          temp.getTracks().forEach((track) => track.stop());
+          state.hasRequestedCameraAccess = true;
+        } catch (error) {
+          console.warn('[mediamime] Unable to pre-authorize camera labels.', error);
+        }
+        try {
+          devices = await navigator.mediaDevices.enumerateDevices();
+          videoDevices = devices.filter((device) => device.kind === 'videoinput');
+        } catch (error) {
+          console.warn('[mediamime] Failed to enumerate media devices after requesting access.', error);
+        }
+      }
+
+      const seen = new Set();
+      state.cameraDevices = videoDevices
+        .filter((device) => {
+          const key = device.deviceId || `${device.kind}-${device.groupId || ''}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .map((device, index) => ({
+          deviceId: device.deviceId || '',
+          label: device.label || `Camera ${index + 1}`
+        }));
+
+      const activeCamera = state.inputs.find((input) => input.id === state.activeInputId && input.type === 'camera');
+      const activeDeviceId = activeCamera ? (activeCamera.deviceId || '') : null;
+      if (activeDeviceId && !state.cameraDevices.some((device) => device.deviceId === activeDeviceId)) {
+        state.cameraDevices.unshift({
+          deviceId: activeDeviceId,
+          label: activeCamera.name || 'Current camera'
+        });
+      }
+
+      updateCameraDeviceOptions(activeDeviceId);
+    })();
+
+    try {
+      await cameraDeviceEnumerationPromise;
+    } finally {
+      cameraDeviceEnumerationPromise = null;
+    }
+  };
+
   const persistInputs = () => {
     if (typeof localStorage === 'undefined') return;
     try {
@@ -233,6 +370,7 @@ export function initInput({ editor }) {
           crop: { ...input.crop },
           flip: { ...input.flip },
           outputResolution: input.outputResolution ? { ...input.outputResolution } : { ...DEFAULT_OUTPUT_RESOLUTION },
+          deviceId: input.deviceId || null,
           sourceUrl: input.sourceUrl || null,
           sourceKind: input.sourceKind || null,
           constraints: input.constraints || null
@@ -463,6 +601,7 @@ export function initInput({ editor }) {
             id: entry.id,
             name: entry.name,
             constraints: entry.constraints || { video: { width: 1280, height: 720 }, audio: false },
+            deviceId: entry.deviceId || null,
             persist: false,
             setActive: false
           });
@@ -617,6 +756,30 @@ export function initInput({ editor }) {
       inputSourceTypeIcon.textContent = input.type === 'camera' ? 'videocam' : 'video_library';
       inputSourceTypeIcon.title = input.type === 'camera' ? 'Camera' : 'Video';
     }
+
+    if (cameraDeviceRow) {
+      cameraDeviceRow.hidden = input.type !== 'camera';
+    }
+    if (input.type === 'camera') {
+      const track = input.stream?.getVideoTracks?.()[0];
+      const trackSettings = track?.getSettings ? track.getSettings() : null;
+      if (trackSettings?.deviceId && trackSettings.deviceId !== input.deviceId) {
+        input.deviceId = trackSettings.deviceId;
+        if (input.constraints && typeof input.constraints.video === 'object') {
+          input.constraints.video = { ...input.constraints.video, deviceId: { exact: trackSettings.deviceId } };
+        }
+      }
+      updateCameraDeviceOptions(input.deviceId || '');
+      if (cameraDeviceSelect) {
+        cameraDeviceSelect.value = input.deviceId || '';
+        cameraDeviceSelect.disabled = state.cameraDevices.length === 0;
+      }
+      const shouldPromptForAccess = !state.cameraDevices.length && !state.hasRequestedCameraAccess;
+      void refreshCameraDevices({ promptForAccess: shouldPromptForAccess });
+    } else if (cameraDeviceSelect) {
+      cameraDeviceSelect.value = '';
+    }
+
     if (cropX) cropX.value = input.crop.x.toFixed(2);
     if (cropY) cropY.value = input.crop.y.toFixed(2);
     if (cropW) cropW.value = input.crop.w.toFixed(2);
@@ -684,24 +847,48 @@ export function initInput({ editor }) {
       id = createId(),
       name = generateInputName('camera'),
       constraints = { video: { width: 1280, height: 720 }, audio: false },
+      deviceId = null,
       persist = true,
       setActive = true
     } = options;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      const normalizedConstraints = (() => {
+        const result = {
+          audio: constraints?.audio ?? false,
+          video: typeof constraints?.video === 'object'
+            ? { ...constraints.video }
+            : constraints?.video === true
+              ? {}
+              : { width: 1280, height: 720 }
+        };
+        if (deviceId) {
+          result.video.deviceId = { exact: deviceId };
+        }
+        return result;
+      })();
+
+      const stream = await navigator.mediaDevices.getUserMedia(normalizedConstraints);
+  state.hasRequestedCameraAccess = true;
+      const videoTrack = stream.getVideoTracks()[0] || null;
+      const trackSettings = videoTrack?.getSettings ? videoTrack.getSettings() : null;
+      const resolvedDeviceId = trackSettings?.deviceId
+        || (typeof normalizedConstraints.video === 'object' && normalizedConstraints.video.deviceId && normalizedConstraints.video.deviceId.exact)
+        || deviceId
+        || null;
 
       const input = {
         id,
         name,
         type: 'camera',
         stream,
-        constraints,
+        constraints: normalizedConstraints,
         persistable: persist,
         origin: 'camera',
         crop: { ...DEFAULT_CROP },
         flip: { ...DEFAULT_FLIP },
         outputResolution: { ...DEFAULT_OUTPUT_RESOLUTION },
-        inputResolution: { ...DEFAULT_INPUT_RESOLUTION }
+        inputResolution: { ...DEFAULT_INPUT_RESOLUTION },
+        deviceId: resolvedDeviceId
       };
 
       ensureTransportState(input);
@@ -713,6 +900,12 @@ export function initInput({ editor }) {
       updateUI();
       if (persist) persistInputs();
       console.log('[mediamime] Added camera input:', input.name);
+      if (videoTrack) {
+        videoTrack.addEventListener('ended', () => {
+          updateSourceStatus(input, 'Camera disconnected.', STATUS_TYPES.error);
+        });
+      }
+      void refreshCameraDevices({ promptForAccess: true });
       return input;
     } catch (error) {
       console.error('[mediamime] Failed to add camera:', error);
@@ -763,6 +956,73 @@ export function initInput({ editor }) {
       console.log('[mediamime] Added video input:', input.name);
     };
     fileInput.click();
+  };
+
+  const switchCameraDevice = async (input, targetDeviceId) => {
+    if (!input || input.type !== 'camera') return;
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return;
+
+    const previousDeviceId = input.deviceId || '';
+    const normalizedConstraints = {
+      audio: input.constraints?.audio ?? false,
+      video: typeof input.constraints?.video === 'object'
+        ? { ...input.constraints.video }
+        : { width: 1280, height: 720 }
+    };
+
+    if (targetDeviceId) {
+      normalizedConstraints.video.deviceId = { exact: targetDeviceId };
+    } else if (normalizedConstraints.video && typeof normalizedConstraints.video === 'object') {
+      delete normalizedConstraints.video.deviceId;
+    }
+
+    try {
+      updateSourceStatus(input, 'Switching camera…', STATUS_TYPES.info);
+      const newStream = await navigator.mediaDevices.getUserMedia(normalizedConstraints);
+      state.hasRequestedCameraAccess = true;
+      const newTrack = newStream.getVideoTracks()[0] || null;
+      const newSettings = newTrack?.getSettings ? newTrack.getSettings() : null;
+
+      if (input.stream) {
+        input.stream.getTracks().forEach((track) => track.stop());
+      }
+
+      input.stream = newStream;
+      input.constraints = normalizedConstraints;
+      input.deviceId = newSettings?.deviceId || targetDeviceId || null;
+
+      ensureTransportState(input);
+      applyPlaybackState(input);
+
+      if (state.activeInputId === input.id && inputPreviewVideo) {
+        inputPreviewVideo.srcObject = newStream;
+        inputPreviewVideo.play().catch(() => {});
+      }
+
+      if (newTrack) {
+        newTrack.addEventListener('ended', () => {
+          updateSourceStatus(input, 'Camera disconnected.', STATUS_TYPES.error);
+        });
+      }
+
+      updateSourceStatus(input, 'Camera ready.', STATUS_TYPES.success);
+      persistInputs();
+      queuePreviewResize();
+      updateTransportUI(input);
+      updateCameraDeviceOptions(input.deviceId || '');
+      if (cameraDeviceSelect) {
+        cameraDeviceSelect.value = input.deviceId || '';
+        cameraDeviceSelect.disabled = state.cameraDevices.length === 0;
+      }
+      void refreshCameraDevices();
+    } catch (error) {
+      console.error('[mediamime] Failed to switch camera device.', error);
+      updateSourceStatus(input, 'Could not switch camera.', STATUS_TYPES.error);
+      if (cameraDeviceSelect) {
+        cameraDeviceSelect.value = previousDeviceId || '';
+      }
+      throw error;
+    }
   };
 
   const addUrlInputFromData = async (options = {}) => {
@@ -1154,6 +1414,50 @@ export function initInput({ editor }) {
     }
   }
 
+  if (cameraDeviceSelect) {
+    cameraDeviceSelect.addEventListener('focus', () => {
+      if (!state.cameraDevices.length) {
+        void refreshCameraDevices();
+      }
+    });
+    cameraDeviceSelect.addEventListener('change', async (event) => {
+      if (state.isSyncing) return;
+      const activeInput = state.inputs.find((item) => item.id === state.activeInputId);
+      if (!activeInput || activeInput.type !== 'camera') return;
+      const selectedValue = event.target.value || '';
+      if ((activeInput.deviceId || '') === selectedValue) return;
+      const previousDisabled = cameraDeviceSelect.disabled;
+      cameraDeviceSelect.disabled = true;
+      try {
+        await switchCameraDevice(activeInput, selectedValue || null);
+      } catch (error) {
+        console.warn('[mediamime] Camera switch aborted.', error);
+      } finally {
+        if (state.cameraDevices.length) {
+          cameraDeviceSelect.disabled = false;
+        } else {
+          cameraDeviceSelect.disabled = true;
+        }
+        if (!previousDisabled && state.cameraDevices.length) {
+          cameraDeviceSelect.focus({ preventScroll: true });
+        }
+      }
+    });
+  }
+
+  if (cameraDeviceRefreshButton) {
+    cameraDeviceRefreshButton.addEventListener('click', () => {
+      if (cameraDeviceSelect) {
+        cameraDeviceSelect.disabled = true;
+      }
+      void refreshCameraDevices({ promptForAccess: true }).finally(() => {
+        if (cameraDeviceSelect) {
+          cameraDeviceSelect.disabled = state.cameraDevices.length === 0;
+        }
+      });
+    });
+  }
+
   // Preview render loop
   const queuePreviewResize = () => {
     if (pendingPreviewResize) return;
@@ -1498,6 +1802,28 @@ export function initInput({ editor }) {
   }
   resizePreview();
 
+  if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
+    const handleDeviceChange = () => {
+      void refreshCameraDevices();
+    };
+    if (typeof navigator.mediaDevices.addEventListener === 'function') {
+      navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+      removeMediaDeviceChangeListener = () => {
+        navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+      };
+    } else if ('ondevicechange' in navigator.mediaDevices) {
+      const previousHandler = navigator.mediaDevices.ondevicechange;
+      navigator.mediaDevices.ondevicechange = handleDeviceChange;
+      removeMediaDeviceChangeListener = () => {
+        if (navigator.mediaDevices.ondevicechange === handleDeviceChange) {
+          navigator.mediaDevices.ondevicechange = previousHandler || null;
+        }
+      };
+    }
+  }
+
+  void refreshCameraDevices();
+
   // Initialize
   updateUI();
   startPreviewLoop();
@@ -1542,6 +1868,10 @@ export function initInput({ editor }) {
       if (previewResizeObserver) {
         previewResizeObserver.disconnect();
         previewResizeObserver = null;
+      }
+      if (removeMediaDeviceChangeListener) {
+        removeMediaDeviceChangeListener();
+        removeMediaDeviceChangeListener = null;
       }
       console.log('[mediamime] Input system disposed');
     },

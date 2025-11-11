@@ -66,9 +66,6 @@
             <button id="input-add-video" type="button" class="icon-button" title="Add video input" aria-label="Add video input">
               <span class="material-icons-outlined" aria-hidden="true">video_library</span>
             </button>
-            <button id="input-add-url" type="button" class="icon-button" title="Add media by URL" aria-label="Add media by URL">
-              <span class="material-icons-outlined" aria-hidden="true">link</span>
-            </button>
             <button type="button" class="icon-button panel-close" data-modal-close="input" title="Hide Input panel" aria-label="Hide Input panel">
               <span class="material-icons-outlined" aria-hidden="true">close</span>
             </button>
@@ -89,6 +86,18 @@
                   <div class="input-name-with-icon">
                     <input type="text" id="input-source-name" placeholder="Input name">
                     <span class="material-icons-outlined" id="input-source-type-icon" aria-hidden="true">videocam</span>
+                  </div>
+                </div>
+                <div class="assignment-row" id="input-camera-device-row" hidden>
+                  <label for="input-camera-device">Camera Source</label>
+                  <div class="assignment-field-group assignment-field-group--compact">
+
+                    <select id="input-camera-device" aria-label="Camera source">
+                      <option value="">Loading cameras…</option>
+                    </select>
+                    <button type="button" id="input-camera-refresh" class="icon-button" title="Refresh camera list" aria-label="Refresh camera list">
+                      <span class="material-icons-outlined" aria-hidden="true">refresh</span>
+                    </button>
                   </div>
                 </div>
                 <div class="input-preview-wrapper">
@@ -161,18 +170,6 @@
                     </div>
                     <span id="input-aspect-ratio" class="input-hint aspect-chip" aria-live="polite"></span>
                   </div>
-                </div>
-                <!-- Delete action moved to the input list row as an icon button -->
-                <div class="input-subpanel">
-                  <label for="input-url-field" class="input-hint">Add media URL</label>
-                  <div class="input-url-field">
-                    <input type="url" id="input-url-field" placeholder="https://example.com/video.mp4" autocomplete="off">
-                    <button type="button" id="input-url-add" class="pill-button small">
-                      <span class="material-icons-outlined" aria-hidden="true">library_add</span>
-                      <span>Add</span>
-                    </button>
-                  </div>
-                  <p id="input-url-message" class="input-hint" role="status" aria-live="polite"></p>
                 </div>
               </div>
             </div>

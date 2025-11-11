@@ -65,3 +65,5 @@ Tips:
 - `docs/CHANGELOG.md` – history of recent features and fixes.
 
 Mediamime is a teaching prototype—expect rough edges, share feedback, and fork freely.
+
+![](docs/fig-mediamime.jpg)
