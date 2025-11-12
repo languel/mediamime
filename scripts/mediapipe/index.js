@@ -73,11 +73,12 @@ export function initMediaPipeline({ editor }) {
     });
   };
 
-const emitResults = (sourceId, results, frame = null) => {
+const emitResults = (sourceId, results, frame = null, flip = null) => {
   dispatchCustomEvent(HOLISTIC_RESULTS_EVENT, {
     results,
     frame,
     source: buildSourceMeta(sourceId),
+    flip: flip || { horizontal: false, vertical: false },
     updatedAt: typeof performance !== "undefined" && performance.now ? performance.now() : Date.now()
   });
 };
@@ -172,7 +173,10 @@ const emitResults = (sourceId, results, frame = null) => {
     video.play().catch(() => {});
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
-    const holistic = createHolisticInstance((results) => emitResults(input.id, results, canvas));
+    const holistic = createHolisticInstance((results) => {
+      const flip = processor.input?.flip || DEFAULT_FLIP;
+      emitResults(input.id, results, canvas, flip);
+    });
     if (!holistic) {
       console.warn("[mediamime] Holistic not available; skipping processor.");
       return null;

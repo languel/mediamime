@@ -958,6 +958,25 @@ export function initLayers({ editor }) {
         color: { ...stream.color },
         showInMain: stream.showInMain !== false
       })),
+    createStream: (options = {}) => {
+      const stream = createStream(options, state.inputs);
+      if (!stream) return null;
+      state.streams.push(stream);
+      state.activeStreamId = stream.id;
+      updateUI();
+      persistStreams(state.streams);
+      dispatchLayersEvent(state.streams);
+      console.log('[mediamime] Created stream:', stream.name);
+      return stream;
+    },
+    clearAll: () => {
+      state.streams = [];
+      state.activeStreamId = null;
+      updateUI();
+      persistStreams(state.streams);
+      dispatchLayersEvent(state.streams);
+      console.log('[mediamime] Cleared all streams');
+    },
     dispose() {
       listeners.forEach((off) => off());
       popoverDisposers.forEach((dispose) => dispose());

@@ -834,7 +834,8 @@ export function initInput({ editor }) {
       constraints = { video: { width: 1280, height: 720 }, audio: false },
       deviceId = null,
       persist = true,
-      setActive = true
+      setActive = true,
+      flip = null
     } = options;
     try {
       const normalizedConstraints = (() => {
@@ -870,7 +871,7 @@ export function initInput({ editor }) {
         persistable: persist,
         origin: 'camera',
         crop: { ...DEFAULT_CROP },
-        flip: { ...DEFAULT_FLIP },
+        flip: flip ? { ...flip } : { ...DEFAULT_FLIP },
         outputResolution: { ...DEFAULT_OUTPUT_RESOLUTION },
         inputResolution: { ...DEFAULT_INPUT_RESOLUTION },
         deviceId: resolvedDeviceId
@@ -1819,11 +1820,23 @@ export function initInput({ editor }) {
 
   // Public API
   return {
-  getInputs: () => state.inputs.map(i => ({ ...i })),
+    getInputs: () => state.inputs.map(i => ({ ...i })),
     getActiveInput: () => {
       if (!state.activeInputId) return null;
       const input = state.inputs.find(i => i.id === state.activeInputId);
       return input ? { ...input } : null;
+    },
+    addCameraInput: async (options = {}) => {
+      const input = await addCameraInput(options);
+      return input;
+    },
+    clearAll: () => {
+      // Remove all inputs
+      const inputsToRemove = [...state.inputs];
+      inputsToRemove.forEach(input => {
+        removeInput(input.id);
+      });
+      console.log('[mediamime] Cleared all inputs');
     },
     dispose: () => {
       // Cleanup all streams

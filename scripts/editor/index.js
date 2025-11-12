@@ -574,6 +574,10 @@ class Editor {
     this.notifyShapesChanged();
     this.notifySelectionChanged();
     this.commitHistory("clear");
+    
+    // Dispatch custom event so other modules can reset to defaults
+    const clearEvent = new CustomEvent('mediamime:clear-all', { bubbles: true });
+    window.dispatchEvent(clearEvent);
   }
 
   // New: programmatically add a shape

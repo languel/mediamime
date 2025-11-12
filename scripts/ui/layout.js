@@ -1,9 +1,9 @@
 const MODAL_LAYOUT_KEY = "mediamime:modal-layout";
 const DEFAULT_MODAL_POSITIONS = {
-  input: { top: 16, align: "right" },
-  layers: { top: 176, align: "right" },
-  preview: { top: 336, align: "right" },
-  map: { top: 496, align: "right" }
+  input: { top: 16, left: 16 },
+  preview: { bottom: 16, left: 16 },
+  layers: { top: 16, right: 16 },
+  map: { top: 176, right: 16 }
 };
 const MODAL_MARGIN = 0;
 const RESIZE_MARGIN = 12;
@@ -155,17 +155,34 @@ export function initLayout() {
     if (Number.isFinite(saved.top)) {
       modal.style.top = `${saved.top}px`;
     }
+    if (Number.isFinite(saved.bottom)) {
+      modal.style.bottom = `${saved.bottom}px`;
+      modal.style.top = 'auto';
+    }
+    if (Number.isFinite(saved.right)) {
+      modal.style.right = `${saved.right}px`;
+      modal.style.left = 'auto';
+    }
     const rect = modal.getBoundingClientRect();
     const defaults = DEFAULT_MODAL_POSITIONS[id];
-    if (!Number.isFinite(saved.top) && defaults?.top !== undefined) {
-      modal.style.top = `${defaults.top}px`;
+    
+    // Apply default positions if not saved
+    if (!Number.isFinite(saved.top) && !Number.isFinite(saved.bottom)) {
+      if (defaults?.top !== undefined) {
+        modal.style.top = `${defaults.top}px`;
+        modal.style.bottom = 'auto';
+      } else if (defaults?.bottom !== undefined) {
+        modal.style.bottom = `${defaults.bottom}px`;
+        modal.style.top = 'auto';
+      }
     }
-    if (!Number.isFinite(saved.left)) {
-      if (defaults?.align === "right") {
-        const alignedLeft = Math.max(MODAL_MARGIN, window.innerWidth - rect.width - MODAL_MARGIN);
-        modal.style.left = `${alignedLeft}px`;
-      } else {
-        modal.style.left = `${defaults?.left ?? MODAL_MARGIN}px`;
+    if (!Number.isFinite(saved.left) && !Number.isFinite(saved.right)) {
+      if (defaults?.left !== undefined) {
+        modal.style.left = `${defaults.left}px`;
+        modal.style.right = 'auto';
+      } else if (defaults?.right !== undefined) {
+        modal.style.right = `${defaults.right}px`;
+        modal.style.left = 'auto';
       }
     }
     ensureModalInViewport(modal);
@@ -442,9 +459,47 @@ export function initLayout() {
 
   window.addEventListener('mediamime:editor-mode-changed', handleEditorModeChange);
 
+  const resetLayout = () => {
+    // Clear saved layout
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(MODAL_LAYOUT_KEY);
+    }
+    
+    // Reset all modals to default positions
+    modals.forEach((modal) => {
+      const id = modal.dataset.modal;
+      const defaults = DEFAULT_MODAL_POSITIONS[id];
+      if (!defaults) return;
+      
+      // Clear existing positioning
+      modal.style.left = 'auto';
+      modal.style.right = 'auto';
+      modal.style.top = 'auto';
+      modal.style.bottom = 'auto';
+      
+      // Apply defaults
+      if (defaults.left !== undefined) {
+        modal.style.left = `${defaults.left}px`;
+      }
+      if (defaults.right !== undefined) {
+        modal.style.right = `${defaults.right}px`;
+      }
+      if (defaults.top !== undefined) {
+        modal.style.top = `${defaults.top}px`;
+      }
+      if (defaults.bottom !== undefined) {
+        modal.style.bottom = `${defaults.bottom}px`;
+      }
+      
+      // Clear saved layout data
+      Object.keys(modalLayout).forEach(key => delete modalLayout[key]);
+    });
+  };
+
   return {
     setModalVisibility,
     toggleModal,
+    resetLayout,
     dispose() {
       window.removeEventListener("resize", resizeListener);
       window.removeEventListener('mediamime:editor-mode-changed', handleEditorModeChange);

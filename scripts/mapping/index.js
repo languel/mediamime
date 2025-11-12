@@ -134,6 +134,34 @@ const POSE_INDEX_BY_KEY = createLandmarkIndexMap(POSE_LANDMARKS_LIST);
 const HAND_INDEX_BY_KEY = createLandmarkIndexMap(HAND_LANDMARKS_LIST);
 const BOTH_HANDS_INDEX_BY_KEY = createLandmarkIndexMap(BOTH_HANDS_LANDMARKS_LIST);
 
+// Create swap maps for horizontal flip (left <-> right)
+const POSE_FLIP_SWAP = {};
+const BOTH_HANDS_FLIP_SWAP = {};
+
+// Build pose swap map
+POSE_LANDMARKS_LIST.forEach(landmark => {
+  const key = landmark.key;
+  if (key.startsWith("left_")) {
+    const rightKey = "right_" + key.slice(5);
+    POSE_FLIP_SWAP[key] = rightKey;
+  } else if (key.startsWith("right_")) {
+    const leftKey = "left_" + key.slice(6);
+    POSE_FLIP_SWAP[key] = leftKey;
+  }
+});
+
+// Build hands swap map
+BOTH_HANDS_LANDMARKS_LIST.forEach(landmark => {
+  const key = landmark.key;
+  if (key.startsWith("left_")) {
+    const rightKey = "right_" + key.slice(5);
+    BOTH_HANDS_FLIP_SWAP[key] = rightKey;
+  } else if (key.startsWith("right_")) {
+    const leftKey = "left_" + key.slice(6);
+    BOTH_HANDS_FLIP_SWAP[key] = leftKey;
+  }
+});
+
 const FACE_REFERENCE_POINTS = [
   { key: "centroid", label: "Face centroid" },
   { key: "nose_tip", label: "Nose tip", index: 1 }
@@ -2651,7 +2679,17 @@ export function initMapping({ editor }) {
   // Helper: Get raw landmark from MediaPipe results by process type
   const getRawLandmark = (processType, landmarkKey, holisticResults) => {
     if (!holisticResults) return null;
-    const key = landmarkKey || "";
+    let key = landmarkKey || "";
+
+    // Apply horizontal flip swap if flip is active
+    const flip = inputState.flip || { horizontal: false, vertical: false };
+    if (flip.horizontal) {
+      if (processType === "pose" && POSE_FLIP_SWAP[key]) {
+        key = POSE_FLIP_SWAP[key];
+      } else if (processType === "hands" && BOTH_HANDS_FLIP_SWAP[key]) {
+        key = BOTH_HANDS_FLIP_SWAP[key];
+      }
+    }
 
     if (processType === "pose") {
       const index = POSE_INDEX_BY_KEY[key] ?? POSE_INDEX_BY_KEY.nose ?? 0;
@@ -3000,8 +3038,10 @@ export function initMapping({ editor }) {
 
   const handleHolisticResults = (event) => {
     const nextResults = event?.detail?.results || null;
+    const nextFlip = event?.detail?.flip || { horizontal: false, vertical: false };
     if (inputState.holistic === nextResults) return;
     inputState.holistic = nextResults;
+    inputState.flip = nextFlip;
     evaluateShapeInteractions();
   };
 
@@ -3544,6 +3584,53 @@ export function initMapping({ editor }) {
   evaluateShapeInteractions();
 
   return {
+    createDefaultShape(streamId) {
+      if (!streamId || typeof editor.addShape !== 'function') return null;
+      
+      // Create a default rectangle shape with interaction
+      const defaultShape = {
+        type: 'rect',
+        x: 0.3,
+        y: 0.3,
+        width: 0.4,
+        height: 0.4,
+        rotation: 0,
+        name: 'Default Shape',
+        style: {
+          stroke: 'rgba(255, 255, 255, 1)',
+          fill: 'rgba(255, 255, 255, 0.5)',
+          strokeWidth: 2
+        },
+        interaction: {
+          enabled: true,
+          showInPreview: true,
+          stream: streamId,
+          landmark: 'nose',
+          events: [
+            {
+              trigger: 'enter',
+              action: 'note',
+              channel: 1,
+              note: 60, // C60
+              velocity: 100,
+              duration: null
+            },
+            {
+              trigger: 'exit',
+              action: 'note',
+              channel: 1,
+              note: 60, // C60
+              velocity: 100,
+              duration: null
+            }
+          ]
+        }
+      };
+      
+      const shapeId = editor.addShape(defaultShape);
+      console.log('[mediamime] Created default shape:', shapeId);
+      return shapeId;
+    },
     dispose() {
       if (editorColorPicker && typeof editorColorPicker.destroy === "function") {
         editorColorPicker.destroy();

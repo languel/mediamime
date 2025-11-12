@@ -26,16 +26,58 @@ const init = async () => {
     import("./ui/layout.js")
   ]);
 
-  initLayout();
+  const layoutApi = initLayout();
   const editorApi = initEditor({ root, svg, toolbar });
 
   // The downstream modules receive the editor API so they can subscribe to
   // shape/selection changes once they are ported into this modular architecture.
-  initInput({ editor: editorApi });
-  initLayers({ editor: editorApi }); // Initialize layers before mapping so streams are available
+  const inputApi = initInput({ editor: editorApi });
+  const layersApi = initLayers({ editor: editorApi }); // Initialize layers before mapping so streams are available
   initMediaPipeline({ editor: editorApi });
-  initMapping({ editor: editorApi });
+  const mappingApi = initMapping({ editor: editorApi });
   initDrawing({ editor: editorApi });
+
+  // Set up reset to default score functionality
+  window.addEventListener('mediamime:clear-all', async () => {
+    console.log('[mediamime] Resetting to default score...');
+    
+    // 1. Reset panel positions
+    if (layoutApi && typeof layoutApi.resetLayout === 'function') {
+      layoutApi.resetLayout();
+    }
+    
+    // 2. Clear existing inputs and streams
+    if (inputApi && typeof inputApi.clearAll === 'function') {
+      inputApi.clearAll();
+    }
+    if (layersApi && typeof layersApi.clearAll === 'function') {
+      layersApi.clearAll();
+    }
+    
+    // 3. Create default camera input (flipped horizontally)
+    if (inputApi && typeof inputApi.addCameraInput === 'function') {
+      const cameraInput = await inputApi.addCameraInput({ 
+        persist: true, 
+        setActive: true,
+        flip: { horizontal: true, vertical: false }
+      });
+      
+      if (cameraInput && layersApi && typeof layersApi.createStream === 'function') {
+        // 4. Create default stream mapped to pose
+        const stream = layersApi.createStream({
+          name: 'Pose',
+          process: 'pose',
+          source: cameraInput.id,
+          enabled: true
+        });
+        
+        if (stream && mappingApi && typeof mappingApi.createDefaultShape === 'function') {
+          // 5. Create default rectangle shape with C60 note on enter/exit
+          mappingApi.createDefaultShape(stream.id);
+        }
+      }
+    }
+  });
 };
 
 if (document.readyState === "loading") {
