@@ -633,19 +633,6 @@ export function initInput({ editor }) {
         console.warn('[mediamime] Failed to restore input', entry?.name || entry?.id, error);
       }
     }
-    if (hasDefaultSample && !state.inputs.length) {
-      try {
-        await addUrlInputFromData({
-          name: DEFAULT_URL_SOURCE.name,
-          sourceUrl: DEFAULT_URL_SOURCE.url,
-          sourceKind: 'video',
-          persist: true,
-          setActive: true
-        });
-      } catch (error) {
-        console.warn('[mediamime] Failed to add default source', error);
-      }
-    }
     if (!state.inputs.length && navigator.mediaDevices?.getUserMedia) {
       try {
         const camera = await addCameraInput({ persist: false, setActive: true });
