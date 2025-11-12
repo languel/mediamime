@@ -4,8 +4,6 @@
  */
 
 const createId = () => `input-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-  state.cameraDevices = [];
-  state.hasRequestedCameraAccess = false;
 
 const DEFAULT_CROP = { x: 0, y: 0, w: 1, h: 1 };
 const DEFAULT_FLIP = { horizontal: false, vertical: false };
