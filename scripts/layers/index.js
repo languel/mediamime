@@ -92,13 +92,18 @@ const clampViewport = (viewport = DEFAULT_VIEWPORT) => {
 };
 
 const createStream = (overrides = {}, inputs = []) => {
-  const firstSource = overrides.sourceId || inputs[0]?.id || null;
+  let selectedSource = overrides.sourceId || null;
+  if (!selectedSource && inputs.length === 1) {
+    selectedSource = inputs[0].id;
+  } else if (!selectedSource && inputs.length > 1) {
+    selectedSource = inputs[0]?.id || null;
+  }
   return {
     id: createId(),
     name: overrides.name || `Stream ${Math.floor(Math.random() * 90) + 10}`,
     enabled: overrides.enabled ?? true,
     preview: overrides.preview ?? true,
-    sourceId: firstSource,
+    sourceId: selectedSource,
     process: overrides.process || PROCESS_OPTIONS[0].id,
     color: {
       hex: normalizeHex(overrides.color?.hex ?? DEFAULT_STREAM_COLOR),
