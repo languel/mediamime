@@ -25,6 +25,15 @@ The repository version references multiple modules, so opening it directly from 
 
 More detail lives in `docs/DISTRIBUTION.md`.
 
+### Hosted on GitHub Pages (single-file build)
+
+This repo is set up to publish the standalone build via GitHub Pages using Actions—no `docs/` folder needed:
+
+- On pushes to `main`, GitHub Actions builds `build/index.html` and deploys it to Pages.
+- Visit: https://languel.github.io/mediamime/
+
+If Pages isn’t enabled yet: in the repo Settings → Pages, set “Source” to “GitHub Actions” and the workflow in `.github/workflows/deploy-pages.yml` will publish automatically.
+
 ## Keyboard Shortcuts
 
 | Context | Shortcut | Action |

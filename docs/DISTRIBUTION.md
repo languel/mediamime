@@ -56,3 +56,14 @@ Before tagging a release:
 3. Optionally run through the keyboard shortcuts in the README to double-check overlays and MIDI mapping interactions.
 
 That’s it – the `dist/` zip is the hand-off artifact for performers, educators, or collaborators who just need the app without the repo.
+
+## 7. Hosting on GitHub Pages (no docs/ folder)
+
+If you want a live hosted version without committing generated files, use the provided GitHub Actions workflow:
+
+1. Ensure Pages are enabled for the repository (Settings → Pages → Source: GitHub Actions).
+2. The workflow at `.github/workflows/deploy-pages.yml` builds the single-file artifact and publishes the `build/` directory to Pages.
+3. Push to `main` (or trigger the workflow manually). The app will be available at:
+	- `https://languel.github.io/mediamime/` (replace with your GitHub username/repo if forked).
+
+This keeps `main` clean (no committed build output) and always serves the latest single-file build.
